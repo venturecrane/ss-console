@@ -151,9 +151,7 @@ def _billing_dates(plan: Plan) -> list[str]:
             for item in bill.get("line_items") or []:
                 d = item["date"]
                 iso = f"{d[6:10]}-{d[0:2]}-{d[3:5]}"
-                rows.add(
-                    f"{iso} | {bill['provider']} | {item.get('description') or ''} | {_cite(plan, doc.id, pg.number)}"
-                )
+                rows.add(f"{iso} | {bill['provider']} | {_cite(plan, doc.id, pg.number)}")
     return sorted(rows)
 
 
@@ -198,22 +196,49 @@ _BILLED_PARA = re.compile(r"^(?P<text>.*?) \(FILE: (?P<file>.+), p\. (?P<page>\d
 
 
 def _billed_citations(plan: Plan) -> list[dict[str, Any]]:
-    """Each billed date of service no encounter is dated on, as assemble
-    carries it (``medchron/billed_rows.py``): every paragraph cites the bill
-    page whose printed line states the date."""
-    by_file = {d.file_name: d for d in plan.documents}
-    billed = billed_rows.parse("\n".join(_billing_dates(plan)))
-    rows = billed_rows.carry(billed, {e.date for e in plan.encounters}, billed_rows.heading_of(plan.headings))
+    """Each billed visit after the incident that no encounter is dated on and
+    no record page prints the date of (dos_check's ``billed_no_record``), as assemble carries it
+    (``medchron/billed_rows.py``): a sentence per service, cited to the bill
+    page whose line item shows it. Decided here from the spec, independently
+    of the extraction the production stage reads."""
+    from .. import dos_check
+
+    incident = str(plan.matter.get("incident_date") or "")
+    dated = {e.date for e in plan.encounters}
+    # dos_check's record pages: every page but a bill or ledger's (an EOB prints dates too)
+    record = [
+        transcription(plan, d, pg)
+        for d in plan.documents
+        for pg in d.pages
+        if (pg.bill or {}).get("doc_type") not in dos_check.DOS_TYPES
+    ]
+    items = []
+    for doc in plan.documents:
+        for pg in doc.pages:
+            bill = pg.bill or {}
+            if bill.get("doc_type") not in dos_check.DOS_TYPES:
+                continue
+            for it in bill.get("line_items") or []:
+                d = it["date"]
+                iso = f"{d[6:10]}-{d[0:2]}-{d[3:5]}"
+                if not dos_check._item_is_visit(it) or iso in dated or iso < incident:
+                    continue
+                if any(dos_check._date_pattern(iso).search(t) for t in record):
+                    continue
+                items.append({"iso": iso, "provider": str(bill.get("provider") or ""), "file": doc.name,
+                              "page": pg.number, "service": billed_rows.service(it.get("description"))})  # fmt: skip
+    heading = billed_rows.heading_of(plan.headings)
+    rows, _ = billed_rows.carry(items, [], {}, heading, lambda _f: True)
     out = []
     for r in rows:
         for para in r["text"].split("\n\n")[1:]:
             m = _BILLED_PARA.match(para.strip())
             if m is None:
                 continue
-            doc = by_file[m.group("file")]
-            out.append({"date": r["iso"], "provider": r["provider"], "heading": billed_rows.heading_of(plan.headings),
-                        "text": m.group("text"), "file": doc.file_name, "file_id": doc.file_id,
-                        "page": int(m.group("page")), "evidence": us_date(r["iso"])})  # fmt: skip
+            doc = next(x for x in plan.documents if x.name == m.group("file"))
+            out.append({"date": r["iso"], "provider": r["provider"], "heading": heading, "text": m.group("text"),
+                        "file": doc.file_name, "file_id": doc.file_id, "page": int(m.group("page")),
+                        "evidence": us_date(r["iso"])})  # fmt: skip
     return out
 
 
