@@ -86,8 +86,8 @@ def added_entries(slug_dir: Path, unit: str) -> int:
     doc, base = rd / "final-chronology.md", rd / "update" / "base.md"
     if not doc.is_file() or not base.is_file():
         return 0
-    try:
-        return len(B.entries_of(doc.read_text(encoding="utf-8"))[1])
+    try:  # the step's input (``source``), so a rerun after it removed every entry is the same run
+        return len(B.entries_of(source(slug_dir, unit))[1])
     except ValueError:
         return 0
 

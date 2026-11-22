@@ -158,12 +158,17 @@ def bodiless(ents: list[str], headings: set[str], o: Outcome) -> list[str]:
 
     out = []
     for e in ents:
-        body = [ln.strip() for ln in e.split("\n")[2:] if ln.strip()]
-        if EE.is_fold(e) or any(ln not in headings for ln in body):
+        lines = e.split("\n")
+        provider = lines[1] if len(lines) > 1 else ""
+        body = [ln.strip() for ln in lines[2:] if ln.strip()]
+        heading_line = " | " in provider and provider.rpartition(" | ")[2].strip() in headings
+        if EE.is_fold(e) or B.cited(e) or not heading_line or any(ln not in headings for ln in body):
             out.append(e)
             continue
         o.counts["bodiless entries removed"] += 1
-        o.ops.append({"op": "bodiless", "entry": E.key(e), "applied": True, "named": sorted(numbers(e))})
+        # Only the date line's values are named: proof 10's named set is global, and a digit in a
+        # provider's name ("Suite 200") must not excuse that number lost from another entry.
+        o.ops.append({"op": "bodiless", "entry": E.key(e), "applied": True, "named": sorted(numbers(lines[0]))})
     return out
 
 

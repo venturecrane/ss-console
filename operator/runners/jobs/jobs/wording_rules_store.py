@@ -237,9 +237,7 @@ def block(rules: list[dict[str, Any]]) -> str:
         return ""
     lines = [BLOCK_HEADING, ""]
     for rule in rules:
-        lines.append(
-            f"- [rule {rule['rule_id']}] " + " ".join(str(w).strip() for w in rule["wording"])
-        )
+        lines.append(f"- [rule {rule['rule_id']}] " + " ".join(str(w).strip() for w in rule["wording"]))
     return "\n".join(lines)
 
 
