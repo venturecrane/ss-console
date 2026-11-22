@@ -86,8 +86,8 @@ def added_entries(slug_dir: Path, unit: str) -> int:
     doc, base = rd / "final-chronology.md", rd / "update" / "base.md"
     if not doc.is_file() or not base.is_file():
         return 0
-    try:
-        return len(B.entries_of(doc.read_text(encoding="utf-8"))[1])
+    try:  # the step's input (``source``), so a rerun after it removed every entry is the same run
+        return len(B.entries_of(source(slug_dir, unit))[1])
     except ValueError:
         return 0
 
@@ -188,6 +188,16 @@ def ran(ud: Path) -> bool:
     if mark.get("no_added_entries") is True:  # the document it saw, or none, must still be the one there
         return "out_sha" in mark and mark.get("out_sha") == now
     return now is not None and mark.get("out_sha") == now
+
+
+def named(ud: Path) -> set[str]:
+    """The values the final set named when it removed an entry that said
+    nothing (rule 0, ``final_set.bodiless``), for proof 10; only while the
+    document is still its output (``ran``)."""
+    mark = _json(ud / REPORT, None)
+    if not isinstance(mark, dict) or not ran(ud):
+        return set()
+    return {str(v) for op in mark.get("ops") or [] if op.get("op") == "bodiless" for v in op.get("named") or []}
 
 
 def read_rows(ud: Path) -> list[dict[str, Any]]:

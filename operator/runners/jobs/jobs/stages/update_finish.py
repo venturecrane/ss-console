@@ -295,7 +295,7 @@ def run_proofs(sr: StageRun) -> int:
         gate_passed=gate,
         pre_note_itemized=bool(rep.get("pre_note_itemized")),
         respelled=dict(rep.get("provider_spelling_from_audit") or {}),
-        review_named=RR.named_values(read_json(ud / "review_repair.json", {})) | redate_named,
+        review_named=RR.named_values(read_json(ud / "review_repair.json", {})) | redate_named | FIO.named(ud),
         redate_moves=redate_moves,
         retired_controls=retired.keys(out),
     )

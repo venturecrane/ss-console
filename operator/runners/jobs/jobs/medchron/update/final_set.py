@@ -146,6 +146,32 @@ def _drop_line(e: str, k: int) -> tuple[str, str]:
     return out, ""
 
 
+def bodiless(ents: list[str], headings: set[str], o: Outcome) -> list[str]:
+    """Rule 0: an added entry that says nothing (its date and provider lines,
+    and at most section headings, under them) is removed, and the values its
+    two lines carry are named for proof 10. 2026-11-22, on a real update: the
+    review found an entry was not a visit and dropped every claim of it, which
+    left the heading standing; proof 8 then failed the update. The entry
+    carries no claim and no citation, so no key changes and no exhibit is
+    uncited by removing it."""
+    from .values import numbers
+
+    out = []
+    for e in ents:
+        lines = e.split("\n")
+        provider = lines[1] if len(lines) > 1 else ""
+        body = [ln.strip() for ln in lines[2:] if ln.strip()]
+        heading_line = " | " in provider and provider.rpartition(" | ")[2].strip() in headings
+        if EE.is_fold(e) or B.cited(e) or not heading_line or any(ln not in headings for ln in body):
+            out.append(e)
+            continue
+        o.counts["bodiless entries removed"] += 1
+        # Only the date line's values are named: proof 10's named set is global, and a digit in a
+        # provider's name ("Suite 200") must not excuse that number lost from another entry.
+        o.ops.append({"op": "bodiless", "entry": E.key(e), "applied": True, "named": sorted(numbers(lines[0]))})
+    return out
+
+
 def strays(ents: list[str], headings: set[str], o: Outcome) -> list[str]:
     """Rule 1, over the added entries (a fold's delivered part is not in
     them). No edit changes a claim key."""
@@ -405,6 +431,7 @@ def run(x: Inputs) -> Outcome:
     _, base_ents = B.entries_of(x.base_md)
     o = Outcome(x.md)
     keys0 = keys_of(x.md)
+    ents = bodiless(ents, x.headings, o)
     ents = strays(ents, x.headings, o)
     checks = headings_check(ents, x, o)
     ents = repeats(ents, base_ents, x, o)
