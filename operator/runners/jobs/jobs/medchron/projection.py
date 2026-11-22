@@ -64,9 +64,97 @@ def update_review_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Prici
 
 
 def expected_finish(drv: Any, st: Any, extracted: Path) -> None:
-    """The run's expected finish, written once after extract (``eta.stamp``);
-    a dry run or a rehearsal writes none."""
+    """The run's expected finish, written once per attempt after extract
+    (``eta.stamp``): a resume or a redo stamps it again from its own start,
+    over the stages still to run; a dry run or a rehearsal writes none."""
     from . import eta
 
     if not (drv.dry_run or drv.rehearse):
-        eta.stamp(st, extracted, drv.log)
+        eta.stamp(st, extracted, drv.log, since=getattr(drv, "started", None))
+
+
+# ---- the check before a paid stage (moved out of ``driver.py``, 2026-11-22) -------
+#: The word a stage with no projection carries on the job's notes and in a hold's reason.
+UNPROJECTED = "unprojected"
+
+
+def stage_usd(drv: Any, stage: Any, ctx: Any, extracted: Path) -> float | None:
+    """What this paid stage is projected to add, in dollars, from THIS
+    matter's own artifacts. None for a stage with no measured rate -- never
+    0.0, which a report would print as "$0" (``checked_usd`` marks such a
+    stage UNPROJECTED and checks it at ``bound_usd`` where one exists)."""
+    if stage.name == "vision":
+        return read_usd(extracted, drv.limits.usd_per_scanned_page, drv.budget)
+    if stage.name == "audit" and not drv.job.update:  # the entries still to read (``stages/entry_audit_io``)
+        return entry_audit_usd(drv.slug_dir, ctx.unit.unit, drv.cfg, drv.pricing)
+    if stage.name == "audit":  # the claims still to verify
+        n = claims_to_verify(drv.slug_dir, ctx.unit.unit, drv.cfg)
+        return None if n is None else n * drv.limits.usd_per_audit_claim
+    if stage.name == "update_review":
+        return update_review_usd(drv.slug_dir, ctx.unit.unit, drv.cfg, drv.pricing)
+    return None
+
+
+def bound_usd(drv: Any, stage: Any, extracted: Path) -> float | None:
+    """A conservative figure for a paid stage that has no projection yet,
+    where one can be computed: the update review before ``update_collect``
+    has named the new exhibits is bounded by every page the update read,
+    reviewed as a picture (``update_review_cost.bound_usd``). None elsewhere."""
+    if stage.name == "update_review" and extracted.is_file():
+        from ..stages import update_review_cost
+
+        return update_review_cost.bound_usd(budget.pages_read(extracted), drv.cfg, drv.pricing)
+    return None
+
+
+def checked_usd(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[str] | None) -> tuple[float, bool]:
+    """(the dollars the limits are asked about, whether they are a projection).
+    A paid stage with no projection is never checked as a silent $0.00: it is
+    marked UNPROJECTED in the log and on the job's notes, and checked at its
+    bound where one exists, else against what is already spent. It PROCEEDS:
+    no job was ever held by a missing projection, so a hold would be a new way
+    for a job to stop, and the per-call check still stops it at the cap."""
+    usd = stage_usd(drv, stage, ctx, extracted)
+    if usd is not None:
+        return usd, True
+    bound = bound_usd(drv, stage, extracted)
+    how = f"checked at a bound of {bound:.2f} USD" if bound else "no bound computable; checked against what is spent"
+    line = f"{stage.name}: {UNPROJECTED} ({how})"
+    drv.log(f"[limits] {line}")
+    if notes is not None:
+        notes.append(line)
+    return bound or 0.0, False
+
+
+def check_limits(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[str] | None = None) -> None:
+    """Before a paid stage (``Driver._check_limits``). Each unit's first paid
+    stage in this process also asks the page question, which costs nothing to
+    answer. A hold on a stage with no projection says so in its reason (no
+    dollar figure: the daemon relays the reason)."""
+    from .. import limits as limits_mod
+    from .update import charged as update_charged
+
+    spent = drv.budget.refresh()
+    projected, measured = checked_usd(drv, stage, ctx, extracted, notes)
+    try:
+        if ctx.unit.unit in drv._page_checked:
+            drv.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
+            return
+        drv._page_checked.add(ctx.unit.unit)
+        try:
+            drv.limits.check_before_first_paid(
+                pages=update_charged.question_pages(drv.slug_dir, ctx.unit.unit, extracted, drv.job.update),
+                projected_usd=projected,
+                spent_usd=spent,
+                stage=stage.name,
+                approved_pages=drv._approved_pages,
+            )
+        except limits_mod.LimitHold as hold:
+            if hold.allowance is not None:
+                usd = read_usd(extracted, drv.limits.usd_per_scanned_page, drv.budget)
+                hold.allowance["projected_cents"] = int(round(usd * 100))
+            raise
+    except limits_mod.LimitHold as hold:
+        if not measured:
+            hold.reason += f" ({stage.name} had no projection: {UNPROJECTED})"
+        raise

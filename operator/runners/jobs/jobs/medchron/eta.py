@@ -1,7 +1,7 @@
 """The chronology's expected finish: minutes per stage from the matter's size.
 
 One pure function, :func:`expected`, from MEASURED serial rates (each constant
-names its basis), and :func:`stamp`, which writes the answer once on the run's
+names its basis), and :func:`stamp`, which writes the answer once per attempt on the run's
 state after extract and logs it. It is for SMD, never shown to the firm.
 
 The rates were read off three real runs' stage timestamps (494, 986 and 3,821
@@ -12,6 +12,7 @@ so a figure never falls as pages rise.
 
 from __future__ import annotations
 
+import calendar
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -70,9 +71,29 @@ def expected(pages: int, scanned: int, workers: int, done: Iterable[str] = ()) -
     return out
 
 
-def stamp(st: Any, extracted: Path, log: Callable[[str], None], workers: int | None = None) -> None:
-    """Write `st.expected_finish` once, when extract's rows exist, and log it."""
-    if st.expected_finish is not None or not extracted.is_file():
+def _stamped_since(st: Any, since: float | None) -> bool:
+    """True when the run already carries a stamp written at or after `since`
+    (None: any stamp counts)."""
+    if st.expected_finish is None:
+        return False
+    if since is None:
+        return True
+    try:
+        at = calendar.timegm(time.strptime(str(st.expected_finish.get("computed_at")), "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return at >= int(since)
+
+
+def stamp(
+    st: Any, extracted: Path, log: Callable[[str], None], workers: int | None = None, since: float | None = None
+) -> None:
+    """Write `st.expected_finish` once per attempt, when extract's rows exist,
+    and log it. `since` is the attempt's start (``Driver.started``): a stamp an
+    EARLIER attempt wrote is replaced, over the stages still to run, so a
+    resume or a redo never carries the first attempt's finish (2026-11-22: a
+    job resumed 26 hours later still showed its first day's time)."""
+    if _stamped_since(st, since) or not extracted.is_file():
         return
     done = [n for n, r in st.stages.items() if r.status == "done"]
     w = compose_pool.COMPOSE_WORKERS if workers is None else workers
