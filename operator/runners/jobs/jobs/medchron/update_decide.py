@@ -236,9 +236,12 @@ def load_repeats(path: Path) -> list[dict[str, str]]:
 def _drop_repeats(md: str, entries: list[str], repeats: list[dict[str, str]]) -> str:
     """The document with each repeated paragraph removed from the one entry
     named. Refused unless every line of the paragraph is, word for word, a line
-    of ONE other added entry (so no fact, citation or heading leaves the
-    update), and the entry keeps a citation of its own."""
+    of ONE other added entry ON THE SAME DATE (so no fact, citation or
+    heading leaves that date, which proof 10 reads per date), the entry keeps
+    a citation of its own, and no paragraph that follows is left without the
+    section heading the removed paragraph opened."""
     from .audit import claims as CL
+    from .update import body as B
 
     for n, r in enumerate(repeats, 1):
         hits = [i for i, e in enumerate(entries) if "\n".join(e.split("\n")[:2]) == r["entry"]]
@@ -249,10 +252,18 @@ def _drop_repeats(md: str, entries: list[str], repeats: list[dict[str, str]]) ->
         if r["paragraph"] not in paras[1:]:
             raise Refused(f"repeat {n}: the paragraph is not a paragraph of that entry, exactly")
         lines = [ln for ln in r["paragraph"].split("\n") if ln.strip()]
-        others = [set(e.split("\n")) for j, e in enumerate(entries) if j != i]
+        others = [set(e.split("\n")) for j, e in enumerate(entries) if j != i and B.iso(e) == B.iso(entries[i])]
         if not any(all(ln in o for ln in lines) for o in others):
-            raise Refused(f"repeat {n}: no other added entry states every line of the paragraph word for word")
-        kept = "\n\n".join(p for k, p in enumerate(paras) if not (k and p == r["paragraph"]))
+            raise Refused(
+                f"repeat {n}: no other added entry of the same date states every line of the paragraph word for word"
+            )
+        at = paras.index(r["paragraph"], 1)
+        going = {x["paragraph"] for x in repeats if x["entry"] == r["entry"]}
+        nxt = next((q for q in paras[at + 1 :] if q not in going), "")
+        # A paragraph that opens with a cited line continues the section above it.
+        if any(not CL.CITE.search(ln) for ln in lines) and nxt and CL.CITE.search(nxt.split("\n", 1)[0]):
+            raise Refused(f"repeat {n}: it would leave the next paragraph without its section heading")
+        kept = "\n\n".join(p for k, p in enumerate(paras) if k != at)
         if not CL.CITE.search(kept):
             raise Refused(f"repeat {n}: the entry would keep no citation of its own")
         md = md.replace(entries[i], kept, 1)
@@ -647,7 +658,7 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
 _SHAPE = (
     '{"corrections": [{"old": ..., "new": ..., "covers": ["N7.c2"] (optional)}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
     '"composed_in": {"added": "N89"} or {"delivered": "<date line>\\n<heading line>, verbatim, once in the delivered '
-    'chronology>"}, "why": ...}]}; either list may be empty, not both'
+    'chronology>"}, "why": ...}]}; either list may be empty, not both; optional "repeats": [{"entry", "paragraph", "why"}] and "confirmed_drops": [{"key", "why"}]'
 )
 
 
@@ -688,6 +699,7 @@ def main(argv: list[str] | None = None) -> int:
     # Counts only: the corrected text and the closures' words stay in the job's files.
     summary = {"corrections": len(p["corrections"]), "closures": len(p["closures"])}
     summary |= {"sentences_attested": len(p["attested"]), "values_named": len(p["removed"])}
+    summary |= {"repeats_removed": len(p.get("repeats") or []), "drops_confirmed": len(p.get("confirmed") or [])}
     print(json.dumps({"dry_run": a.dry_run, **summary}, indent=1))
     if a.dry_run:
         return 0

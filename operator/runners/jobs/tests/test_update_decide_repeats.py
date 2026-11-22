@@ -20,12 +20,14 @@ from jobs.medchron.update import review_repair as RR, values as V
 from test_update_decide import HEAD, LATER, RIGHT, WRONG, _doc, _plan, _seat
 
 SHARED = "Urine drug screen was negative. (Exhibit 3 - p. 1)"
-SECOND = "09/10/2026\nSample Therapy | All Other Information"
+LAB = "08/27/2026\nSample Lab | All Other Information"
+SECOND = LAB  # the entry a repeat is removed from: same date as HEAD's entry
+LAB_ENTRY = LAB + "\n\nAll Other Information\nA basic metabolic panel was drawn. (Exhibit 3 - p. 2)"
 
 
 def _with_repeat(d, sd):
     """The held document with SHARED in both added entries."""
-    md = _doc([HEAD + WRONG + "\n\n" + SHARED, LATER + "\n\n" + SHARED])
+    md = _doc([HEAD + WRONG + "\n\n" + SHARED, LAB_ENTRY + "\n\n" + SHARED, LATER])
     rd = sd / "runs" / "alpha"
     (rd / "final-chronology.md").write_text(md)
     rec_p = rd / "update" / UD.RECORD
@@ -65,7 +67,7 @@ def test_a_repeat_is_refused_when_it_would_lose_anything(tmp_path, job_dir, data
 def test_a_paragraph_no_other_entry_states_is_never_removed(tmp_path, job_dir, data_root) -> None:
     """Fails if a repeat removes a paragraph whose words exist only there."""
     d, sd, _paths = _seat(tmp_path, job_dir, data_root)
-    md = _doc([HEAD + WRONG, LATER + "\n\n" + SHARED])  # SHARED only in the second entry
+    md = _doc([HEAD + WRONG, LAB_ENTRY + "\n\n" + SHARED, LATER + "\n\n" + SHARED])  # elsewhere only ON ANOTHER DATE
     (sd / "runs" / "alpha" / "final-chronology.md").write_text(md)
     rec_p = sd / "runs" / "alpha" / "update" / UD.RECORD
     rec = json.loads(rec_p.read_text())
@@ -104,3 +106,39 @@ def test_both_are_read_from_the_decisions_file(tmp_path) -> None:
     f.write_text(json.dumps({**body, "repeats": [{"entry": SECOND}]}))
     with pytest.raises(UD.Refused, match="all required"):
         UD.load_repeats(f)
+
+
+def _held(sd, md: str) -> None:
+    rd = sd / "runs" / "alpha"
+    (rd / "final-chronology.md").write_text(md)
+    rec_p = rd / "update" / UD.RECORD
+    rec = json.loads(rec_p.read_text())
+    rec["doc_sha_out"] = UD._sha(md)
+    rec_p.write_text(json.dumps(rec))
+
+
+HEADED = "All Other Information\n" + SHARED
+TAIL = "Toxicology was sent out. (Exhibit 3 - p. 1)"
+
+
+def test_a_heading_paragraph_goes_only_with_the_paragraphs_under_it(tmp_path, job_dir, data_root) -> None:
+    """The shape of the real case: heading + sentence A, then sentence B, both
+    repeated in another entry of the day. Removing A alone would leave B
+    headless (refused); removing A and B together is taken."""
+    d, sd, paths = _seat(tmp_path, job_dir, data_root)
+    keeper = HEAD + WRONG + "\n\n" + HEADED + "\n\n" + TAIL
+    copy = (
+        LAB
+        + "\n\nMedical Diagnoses\nA basic metabolic panel was drawn. (Exhibit 3 - p. 2)\n\n"
+        + HEADED
+        + "\n\n"
+        + TAIL
+    )
+    _held(sd, _doc([keeper, copy, LATER]))
+    with pytest.raises(UD.Refused, match="without its section heading"):
+        _plan(d, corrections=_fix(), repeats=[{"entry": LAB, "paragraph": HEADED, "why": "x"}])
+    both = [{"entry": LAB, "paragraph": HEADED, "why": "x"}, {"entry": LAB, "paragraph": TAIL, "why": "x"}]
+    p = _plan(d, corrections=_fix(), repeats=both)
+    UD.apply(d, p)
+    md = paths.doc.read_text()
+    assert md.count(TAIL) == 1 and md.count(SHARED) == 1 and "metabolic panel" in md
