@@ -47,8 +47,12 @@ def test_a_correction_may_add_a_cited_sentence_from_the_same_exhibit(tmp_path, j
     ("new", "needle"),
     [
         (WRONG + "\n\n" + ADDED.replace("Exhibit 2", "Exhibit 3"), "an exhibit the entry does not cite"),
-        (WRONG + "\n\nThe exams were normal.", "an added paragraph needs its own citation"),
+        (WRONG + "\n\nThe exams were normal.", "adds a paragraph with no citation"),
         (ADDED, "changes a citation"),  # the old sentence and its citation are gone
+        # the old sentence moved onto another page, its page given to a new sentence after it
+        (WRONG.replace("p. 4", "p. 5") + "\n\n" + ADDED.replace("p. 5", "p. 4"), "changes a citation"),
+        # a new citation slipped in front of the old one inside the rewritten paragraph
+        (ADDED + " " + WRONG, "changes a citation"),
     ],
 )
 def test_an_addition_is_still_refused_when_it_leaves_the_record(tmp_path, job_dir, data_root, new, needle) -> None:
@@ -71,6 +75,30 @@ def test_covers_settles_a_finding_whose_anchor_the_fold_shifted(tmp_path, job_di
         _plan(d, corrections=[{**fix, "covers": ["N9.c1"]}])
     p = _plan(d, corrections=[{**fix, "covers": ["N2.c1"]}])
     assert len(p["attested"]) == 1
+
+
+def test_once_covers_is_used_no_finding_is_settled_by_its_number_alone(tmp_path, job_dir, data_root) -> None:
+    """Fails if an open finding whose stale number happens to name the touched
+    entry is marked corrected without being named: it would reach the firm
+    uncorrected with the record saying SMD fixed it."""
+    d, _sd, _paths = _seat(tmp_path, job_dir, data_root, open_=[_omission("N2.c1"), _omission("N1.c4")])
+    fix = {"old": WRONG, "new": WRONG + "\n\n" + ADDED}
+    with pytest.raises(UD.Refused, match="entry N1.c4"):
+        _plan(d, corrections=[{**fix, "covers": ["N2.c1"]}])
+    assert _plan(d, corrections=[{**fix, "covers": ["N2.c1", "N1.c4"]}])["attested"]
+
+
+def test_an_added_citation_past_the_exhibits_last_page_is_refused(tmp_path, job_dir, data_root) -> None:
+    import pymupdf
+
+    d, sd, _paths = _seat(tmp_path, job_dir, data_root, open_=[_omission()])
+    doc = pymupdf.open()
+    for _ in range(6):
+        doc.new_page()
+    (sd / "out" / "alpha" / "Exhibit 2 - Sample.pdf").write_bytes(doc.tobytes())
+    with pytest.raises(UD.Refused, match="does not have"):
+        _plan(d, corrections=[{"old": WRONG, "new": WRONG + "\n\n" + ADDED.replace("p. 5", "p. 9")}])
+    assert _plan(d, corrections=[{"old": WRONG, "new": WRONG + "\n\n" + ADDED}])["attested"]  # p. 5 of 6
 
 
 def test_covers_is_read_from_the_decisions_file(tmp_path) -> None:

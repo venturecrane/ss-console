@@ -192,34 +192,41 @@ def _anchor_index(anchor: str) -> int | None:
     return int(head[1:]) - 1 if head.startswith("N") and head[1:].isdigit() else None
 
 
-def _cites_kept(old: str, new: str, entry: str, n: int) -> None:
-    """Every citation of `old` stays in `new`. A citation `new` adds must name
-    an exhibit the entry already cites: SMD adds a sentence read from a page
-    of the same record (2026-11-22: a review found a physical exam left out,
-    on the page after the one the entry cited), never a new source."""
-    from collections import Counter
+def _kept_and_added(old: str, new: str, entry: str, n: int, npages: Any) -> None:
+    """`new` is a rewrite of `old` followed by any paragraphs SMD adds.
 
-    from .audit import claims as CL
-
-    was, now = Counter(CL.CITE.findall(old)), Counter(CL.CITE.findall(new))
-    if was - now:
-        raise Refused(f"correction {n}: it changes a citation; a correction keeps every citation as it was")
-    cited = {m.group(1) for m in CL.CITE.finditer(entry)}
-    if any(exhibit not in cited for exhibit, _pages in now - was):  # findall gives (exhibit, pages)
-        raise Refused(f"correction {n}: it adds a citation to an exhibit the entry does not cite")
-
-
-def _paragraphs_kept(old: str, new: str, n: int) -> None:
-    """No paragraph is removed; a paragraph added carries its own citation."""
+    The rewrite (the first as many paragraphs as `old` has) keeps every
+    citation of `old`, in order, and adds none: a correction never moves an
+    old sentence onto another page. Each added paragraph, after it, carries
+    its own citation to an exhibit the entry already cites and a page that
+    exhibit has (2026-11-22: a review found a physical exam left out, on the
+    page after the one the entry cited). A new source, an uncited added
+    paragraph or a removed paragraph is refused."""
     from .audit import claims as CL
 
     was, now = old.split("\n\n"), new.split("\n\n")
-    added = [p for p in now if p not in was]
-    if len(now) < len(was) or (len(now) > len(was) and any(not CL.CITE.search(p) for p in added)):
-        raise Refused(f"correction {n}: it adds or removes a paragraph; an added paragraph needs its own citation")
+    if len(now) < len(was):
+        raise Refused(f"correction {n}: it removes a paragraph; a correction rewrites words or adds paragraphs")
+    rewrite, added = "\n\n".join(now[: len(was)]), now[len(was) :]
+    if CL.CITE.findall(rewrite) != CL.CITE.findall(old):
+        raise Refused(f"correction {n}: it changes a citation; a correction keeps every citation as it was")
+    cited = {m.group(1) for m in CL.CITE.finditer(entry)}
+    for para in added:
+        cites = list(CL.CITE.finditer(para))
+        if not cites:
+            raise Refused(f"correction {n}: it adds a paragraph with no citation; an added paragraph needs its own")
+        for m in cites:
+            if m.group(1) not in cited:
+                raise Refused(f"correction {n}: it adds a citation to an exhibit the entry does not cite")
+            last = npages(int(m.group(1)))
+            pages = CL.parse_pages(m.group(2) or "") or [1]
+            if last and any(not 1 <= pg <= last for pg in pages):
+                raise Refused(f"correction {n}: it cites a page Exhibit {m.group(1)} does not have (it has {last})")
 
 
-def _edit(md: str, base: str, entries: list[str], corrections: list[dict[str, str]]) -> tuple[str, set[int], list]:
+def _edit(
+    md: str, base: str, entries: list[str], corrections: list[dict[str, str]], npages: Any = lambda _ex: 0
+) -> tuple[str, set[int], list]:
     """The corrected document, the entries touched, and the values each edit removed."""
     from .update import values as V
 
@@ -232,8 +239,7 @@ def _edit(md: str, base: str, entries: list[str], corrections: list[dict[str, st
         if old in base:
             raise Refused(f"correction {n}: its old text is in the delivered chronology, which an update never edits")
         i = _entry_index(entries, old, n)
-        _cites_kept(old, new, entries[i], n)
-        _paragraphs_kept(old, new, n)
+        _kept_and_added(old, new, entries[i], n, npages)
         if entries[i].split("\n", 1)[0] != entries[i].replace(old, new).split("\n", 1)[0]:
             raise Refused(f"correction {n}: it changes the entry's date line")
         md = md.replace(old, new)
@@ -311,12 +317,14 @@ def _close(
         taken[hits[0]] = n
         out.append({**c, "finding": hits[0], "where": _where(c, entries, base, n)})
     named = _covered(rec, covers or [])
+
+    def by_number(f: Any) -> bool:  # the anchor's number names a touched entry; never once covers is used
+        return not covers and isinstance(f, dict) and _anchor_index(str(f.get("anchor") or "")) in touched
+
     uncovered = [
         f"entry {f.get('anchor') if isinstance(f, dict) else '?'}"
         for i, f in enumerate(rec["open"])
-        if i not in taken
-        and i not in named
-        and (not isinstance(f, dict) or _anchor_index(str(f.get("anchor") or "")) not in touched)
+        if i not in taken and i not in named and not by_number(f)
     ]
     if uncovered:
         raise Refused(
@@ -381,7 +389,9 @@ def plan(
     if rec.get("doc_sha_out") != _sha(md):
         raise Refused("the document changed since the review held on it; correct the document the review read")
     entries, base = B.entries_of(md)[1], base_p.read_text(encoding="utf-8")
-    new_md, touched, removed = _edit(md, base, list(entries), corrections)
+    from ..stages.update_review_io import page_counts
+
+    new_md, touched, removed = _edit(md, base, list(entries), corrections, page_counts(slug_dir / "out" / unit))
     if len(B.entries_of(new_md)[1]) != len(entries):
         raise Refused("the corrections change how many entries the document holds")
     closed = _close(
