@@ -22,7 +22,12 @@ This is SMD's act, as root on the seat, with the jobs venv's python::
 The corrections file is ``{"corrections": [{"old": "...", "new": "..."}]}``:
 each ``old`` is text of an ADDED entry exactly as the held document has it
 (once in the document, never in the delivered chronology), each ``new`` keeps
-its citations, its paragraphs and the entry's date line. Every open finding
+every citation and paragraph of ``old`` and the entry's date line; it may ADD
+a paragraph carrying its own citation to an exhibit the entry already cites (a
+sentence read from a page of the same record). ``"covers": ["N139.c31"]`` on a
+correction names the open findings it settles by anchor, for a record whose
+anchors no longer number the entries (the review folds duplicates after it
+anchors its findings). Every open finding
 must sit on an entry a correction touches, or be closed (below), or nothing
 is written. What is written, in one act:
 
@@ -127,7 +132,10 @@ def _corrections(rows: object) -> list[dict[str, str]]:
             raise Refused(f"correction {i + 1}: old and new must both be non-empty text")
         if old == new:
             raise Refused(f"correction {i + 1}: new is the same as old")
-        out.append({"old": old, "new": new})
+        covers = r.get("covers") or []
+        if not isinstance(covers, list) or not all(isinstance(a, str) and a.strip() for a in covers):
+            raise Refused(f"correction {i + 1}: covers must be a list of open findings' anchors")
+        out.append({"old": old, "new": new, "covers": [a.strip() for a in covers]})
     return out
 
 
@@ -184,9 +192,35 @@ def _anchor_index(anchor: str) -> int | None:
     return int(head[1:]) - 1 if head.startswith("N") and head[1:].isdigit() else None
 
 
+def _cites_kept(old: str, new: str, entry: str, n: int) -> None:
+    """Every citation of `old` stays in `new`. A citation `new` adds must name
+    an exhibit the entry already cites: SMD adds a sentence read from a page
+    of the same record (2026-11-22: a review found a physical exam left out,
+    on the page after the one the entry cited), never a new source."""
+    from collections import Counter
+
+    from .audit import claims as CL
+
+    was, now = Counter(CL.CITE.findall(old)), Counter(CL.CITE.findall(new))
+    if was - now:
+        raise Refused(f"correction {n}: it changes a citation; a correction keeps every citation as it was")
+    cited = {m.group(1) for m in CL.CITE.finditer(entry)}
+    if any(exhibit not in cited for exhibit, _pages in now - was):  # findall gives (exhibit, pages)
+        raise Refused(f"correction {n}: it adds a citation to an exhibit the entry does not cite")
+
+
+def _paragraphs_kept(old: str, new: str, n: int) -> None:
+    """No paragraph is removed; a paragraph added carries its own citation."""
+    from .audit import claims as CL
+
+    was, now = old.split("\n\n"), new.split("\n\n")
+    added = [p for p in now if p not in was]
+    if len(now) < len(was) or (len(now) > len(was) and any(not CL.CITE.search(p) for p in added)):
+        raise Refused(f"correction {n}: it adds or removes a paragraph; an added paragraph needs its own citation")
+
+
 def _edit(md: str, base: str, entries: list[str], corrections: list[dict[str, str]]) -> tuple[str, set[int], list]:
     """The corrected document, the entries touched, and the values each edit removed."""
-    from .audit import claims as CL
     from .update import values as V
 
     touched: set[int] = set()
@@ -198,10 +232,8 @@ def _edit(md: str, base: str, entries: list[str], corrections: list[dict[str, st
         if old in base:
             raise Refused(f"correction {n}: its old text is in the delivered chronology, which an update never edits")
         i = _entry_index(entries, old, n)
-        if CL.CITE.findall(old) != CL.CITE.findall(new):
-            raise Refused(f"correction {n}: it changes a citation; a correction keeps every citation as it was")
-        if old.count("\n\n") != new.count("\n\n"):
-            raise Refused(f"correction {n}: it adds or removes a paragraph; a correction rewrites words only")
+        _cites_kept(old, new, entries[i], n)
+        _paragraphs_kept(old, new, n)
         if entries[i].split("\n", 1)[0] != entries[i].replace(old, new).split("\n", 1)[0]:
             raise Refused(f"correction {n}: it changes the entry's date line")
         md = md.replace(old, new)
@@ -239,8 +271,28 @@ def _where(c: dict[str, Any], entries: list[str], base: str, n: int) -> str:
     return "the delivered entry for " + " ".join(text.split())
 
 
+def _covered(rec: dict[str, Any], covers: list[str]) -> set[int]:
+    """The open findings a correction names by anchor (``covers``): a finding
+    whose anchor no longer numbers the entry it is on. The review folds
+    duplicate entries after it anchors its findings, so a held record can
+    name N139 for what the document now holds as N138 (2026-11-22). Each
+    anchor named must be exactly one open finding's."""
+    out: set[int] = set()
+    for a in covers:
+        hits = [i for i, f in enumerate(rec["open"]) if isinstance(f, dict) and str(f.get("anchor") or "") == a]
+        if len(hits) != 1:
+            raise Refused(f"covers {a}: it names {len(hits)} open findings, not one")
+        out.add(hits[0])
+    return out
+
+
 def _close(
-    rec: dict[str, Any], closures: list[dict[str, Any]], entries: list[str], base: str, touched: set[int]
+    rec: dict[str, Any],
+    closures: list[dict[str, Any]],
+    entries: list[str],
+    base: str,
+    touched: set[int],
+    covers: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Each closure with its one open finding and where its content is.
     Refused when a closure matches none or several, two close one finding,
@@ -258,10 +310,13 @@ def _close(
             raise Refused(f"closures {taken[hits[0]]} and {n} close the same open finding")
         taken[hits[0]] = n
         out.append({**c, "finding": hits[0], "where": _where(c, entries, base, n)})
+    named = _covered(rec, covers or [])
     uncovered = [
         f"entry {f.get('anchor') if isinstance(f, dict) else '?'}"
         for i, f in enumerate(rec["open"])
-        if i not in taken and (not isinstance(f, dict) or _anchor_index(str(f.get("anchor") or "")) not in touched)
+        if i not in taken
+        and i not in named
+        and (not isinstance(f, dict) or _anchor_index(str(f.get("anchor") or "")) not in touched)
     ]
     if uncovered:
         raise Refused(
@@ -329,7 +384,9 @@ def plan(
     new_md, touched, removed = _edit(md, base, list(entries), corrections)
     if len(B.entries_of(new_md)[1]) != len(entries):
         raise Refused("the corrections change how many entries the document holds")
-    closed = _close(rec, list(closures or []), entries, base, touched)
+    closed = _close(
+        rec, list(closures or []), entries, base, touched, [a for c in corrections for a in c.get("covers", [])]
+    )
     keep = set(exhibit_paths(slug_dir / "out" / unit))
     old_keys = {c["key"] for c in CL.extract_claims(CL.body_of(md), keep)}
     attested = [c for c in CL.extract_claims(CL.body_of(new_md), keep) if c["key"] not in old_keys]
@@ -474,7 +531,7 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
 
 
 _SHAPE = (
-    '{"corrections": [{"old": ..., "new": ...}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
+    '{"corrections": [{"old": ..., "new": ..., "covers": ["N7.c2"] (optional)}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
     '"composed_in": {"added": "N89"} or {"delivered": "<date line>\\n<heading line>, verbatim, once in the delivered '
     'chronology>"}, "why": ...}]}; either list may be empty, not both'
 )
