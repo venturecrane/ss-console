@@ -121,7 +121,7 @@ def test_an_over_limit_call_is_never_sent_and_writes_a_zero_row(ledger: ledger_m
 
 
 def test_streamed_calls_are_stopped_the_same_way(ledger: ledger_mod.Ledger) -> None:
-    d = _door(ledger, _NeverCalled(counted=999_500))  # 999,500 + 1,000 output room > 1,000,000
+    d = _door(ledger, _NeverCalled(counted=999_000))  # 999,000 + 16,000 output room > 1,000,000
     with pytest.raises(llm.RequestTooLarge):
         d.call("compose", model=BIG, messages=_pages(200), max_tokens=128_000, stream=True)
 
@@ -182,13 +182,20 @@ def test_an_unknown_model_gets_the_200k_window(ledger: ledger_mod.Ledger) -> Non
     assert len(c.messages.calls) == 1 and not c.messages.counts
 
 
-def test_a_near_window_request_with_a_short_answer_is_lowered_not_refused(ledger: ledger_mod.Ledger) -> None:
-    """994,000 input tokens and an 8,000-token answer: the API takes it today
-    (6,000 tokens of room), so the stop must not refuse it; the ceiling is lowered."""
-    c = _Client(counted=994_000)
-    d = _door(ledger, c)
-    d.call("audit", model=BIG, messages=_pages(400), max_tokens=8_000)
-    assert len(c.messages.calls) == 1 and c.messages.calls[0]["max_tokens"] == 6_000
+def test_a_near_window_request_with_a_short_answer_is_held_not_cut(ledger: ledger_mod.Ledger) -> None:
+    """994,000 input tokens and an 8,000-token answer leave 6,000: lowering the
+    ceiling there would cut off a stage that never reads stop_reason, so the
+    request is not sent and the job ends cleanly (review 11-22)."""
+    d = _door(ledger, _NeverCalled(counted=994_000))
+    with pytest.raises(llm.RequestTooLarge):
+        d.call("audit", model=BIG, messages=_pages(400), max_tokens=8_000)
+
+
+def test_a_reply_stopped_at_the_context_window_reads_as_cut_off() -> None:
+    class M:
+        content, stop_reason, usage = [_Block()], "model_context_window_exceeded", _Usage()
+
+    assert llm.make_result(M(), []).stop_reason == "max_tokens"
 
 
 @pytest.mark.parametrize(

@@ -65,11 +65,13 @@ TOKENS_PER_BYTE = 0.6
 #: (``medchron/update/review_pages.PAGE_TOKENS``); 6,000 is over three times that.
 IMAGE_TOKENS = 6_000
 #: The least output room a request must keep. A request whose input leaves less
-#: than this (or than its own ``max_tokens``, if smaller) cannot answer usefully
-#: and is not sent. Kept small (review 11-22): a 994,000-token audit call with an
-#: 8,000-token answer fits today and must not be refused; between this and its
-#: own ``max_tokens`` the ceiling is lowered instead.
-OUTPUT_FLOOR = 1_000
+#: than this (or than its own ``max_tokens``, if smaller) is not sent: it ends
+#: cleanly (a chronology hold, a resumable failure). Between this and its own
+#: ``max_tokens`` the ceiling is lowered. Not lower (review 11-22): four stages
+#: (scope's filter, the update summary, summarize, condense) never read
+#: stop_reason, so a ceiling lowered below what they asked for would be cut off
+#: and kept as finished.
+OUTPUT_FLOOR = 16_000
 #: Seconds the exact count may take before the request is sent uncounted.
 COUNT_TIMEOUT_S = 60.0
 #: A model this module cannot place gets the smallest window any current model

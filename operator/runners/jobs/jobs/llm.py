@@ -191,6 +191,10 @@ def _input_chars(messages: list[dict[str, Any]]) -> int:
 def make_result(message: Any, messages: list[dict[str, Any]], batch: bool = False) -> Result:
     text = _text_of(message)
     stop = getattr(message, "stop_reason", None) or ""
+    # A reply stopped at the model's context window is cut off exactly as one
+    # stopped at max_tokens; every stage tests only for "max_tokens" (review 11-22).
+    if stop == "model_context_window_exceeded":
+        stop = "max_tokens"
     empty = stop == "end_turn" and len(text.strip()) < 0.02 * _input_chars(messages)
     return Result(
         text=text, message=message, stop_reason=stop, usage=getattr(message, "usage", None), batch=batch, empty=empty
