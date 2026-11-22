@@ -36,6 +36,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from .. import summary_budget
 from . import evidence_config
 from .evidence import prompts as ev_prompts
 from .verify import config as verify_config
@@ -56,7 +57,8 @@ COMPOSE_FRAME_CHARS = 160_000
 DRAFT_TOKENS = 30_000
 REPAIR_OUT, REVIEW_OUT, NOTES_OUT = 20_000, 10_000, 8_000
 LINT_REPAIRS = 2
-INDEX_BUDGET_CHARS = 1_600_000  # run.DIGEST_BUDGET_CHARS
+#: The index the compose reads, at most the summary budget (``summary_budget``).
+INDEX_BUDGET_CHARS = summary_budget.DRAFTING_BUDGET_CHARS
 #: The rate card off a seat: the tree's copy of the file the seat bills from.
 TREE_CARD = ("adapter", "cost_telemetry", "anthropic_pricing.json")
 

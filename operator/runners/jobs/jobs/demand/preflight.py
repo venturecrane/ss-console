@@ -34,6 +34,7 @@ from ..matter.readable import (  # demand's rules (``matter/readable``), under t
     not_english as not_english,
 )
 from .firm import DemandFirm
+from .summarize import budget_chars
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 docx_text = word.record_docx_text
@@ -170,7 +171,7 @@ def estimate(extracted: list[dict[str, Any]], firm: DemandFirm, tail: Tail | Non
     usd += b["usd_drafting_fixed"]
     # Condense runs only when the digests exceed the compose budget; a dense
     # record digests to near its own length, so the summarized size stands in.
-    if summarized > int(firm.get("levers", "digest_budget_chars")):
+    if summarized > budget_chars(firm.data["levers"]):
         usd += summarized / 1e6 * b["usd_per_million_condense_chars"]
     return {"pages": total_pages, "characters": chars, "transcription_pages": pages, "usd": round(usd, 2)}
 

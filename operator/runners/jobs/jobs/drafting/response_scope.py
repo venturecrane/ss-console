@@ -2,7 +2,7 @@
 
 WHY (2026-11-20). A response job built the lane's whole-file digest like any
 other class. Measured on three matters (575 to 1,425 pages, 1.4M to 4.4M
-characters, 285 to 331 files), two passed the digest's 1.6M-character ceiling
+characters, 285 to 331 files), two passed the digest's then 1.6M-character ceiling
 and would have been condensed with paid calls, and every scanned page was
 transcribed whether a set needed it or not. Medical records alone ran 1.42M
 and 1.73M characters on two of them, and 792 of one matter's 871 medical pages

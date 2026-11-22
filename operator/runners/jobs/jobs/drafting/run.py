@@ -56,7 +56,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import firm_wording, limits as limits_mod, paid, proof_mode, request_additions, stop_request
+from .. import firm_wording, limits as limits_mod, paid, proof_mode, request_additions, stop_request, summary_budget
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from operator_connector_sdk.library import readers
@@ -92,11 +92,11 @@ CHUNK_CHARS = 120_000
 CONCURRENCY = 4
 DIGEST_MAX_TOKENS = 64_000
 SHORT = "stage_unfinished: file: the read-back is short after its retries; the files may still be materializing"
-#: The digest compose reads, condensed under this many characters (about 400K
-#: tokens, under demand's 2M-character lever): with the house style, the
-#: skeleton, one exemplar and the context, the compose request stays under
-#: compose.COMPOSE_INPUT_MAX_CHARS, which compose asserts before any call.
-DIGEST_BUDGET_CHARS = 1_600_000
+#: The record summary every compose, audit, repair, notes and review request
+#: carries, in tokens: the window less the largest of those requests' own
+#: prompt and output (``summary_budget``; it replaced a 1,600,000-character
+#: ceiling that came to about 737K tokens at the measured density).
+DIGEST_BUDGET_TOKENS = summary_budget.DRAFTING_BUDGET_TOKENS
 COURT_CLASSES = ("mediation_brief", "discovery_set", "discovery_response")
 CHARGES_CLASSES = ("mediation_brief", "memo")
 #: Scoped and priced over what its sets read (response_scope.py, response_cost.py).
@@ -133,7 +133,7 @@ def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
                 "concurrency": CONCURRENCY,
                 "digest_max_tokens": DIGEST_MAX_TOKENS,
                 "compose_max_tokens": DIGEST_MAX_TOKENS,
-                "digest_budget_chars": DIGEST_BUDGET_CHARS,
+                "digest_budget_chars": summary_budget.budget_chars(DIGEST_BUDGET_TOKENS),
             },
         },
     )
@@ -349,32 +349,35 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
         if p.is_file():
             return p.read_text(encoding="utf-8")
         chunks = summarize.build_chunks(summarize.corpus_files(self.data), CHUNK_CHARS)
+        model = self.firm.model("digest")
         s = summarize.Summarizer(
-            self.data,
-            self.doorway,
-            self.firm.model("digest"),
-            self.firm.prompt(self.cls, "digest"),
-            DIGEST_MAX_TOKENS,
-            CONCURRENCY,
+            self.data, self.doorway, model, self.firm.prompt(self.cls, "digest"), DIGEST_MAX_TOKENS, CONCURRENCY,
             self.log,
-        )
-        out = summarize.condense(
-            s.run(chunks),
-            DIGEST_BUDGET_CHARS,
-            self.doorway,
-            self.firm.model("digest"),
-            CONDENSE_PROMPT,
-            CONCURRENCY,
-            self.log,
-        )
+        )  # fmt: skip
+        target = summary_budget.budget_chars(DIGEST_BUDGET_TOKENS)
+        first = summarize.condense(s.run(chunks), target, self.doorway, model, CONDENSE_PROMPT, CONCURRENCY, self.log)
+        out = self._bounded(first)
         self._atomic("digest.md", out)
         return out
 
+    def _bounded(self, first: str) -> str:
+        """The summary condensed again until it fits its token budget; a job
+        whose summary cannot be made to fit ends failed, resumable."""
+        try:
+            return summarize.bounded(
+                first, DIGEST_BUDGET_TOKENS, self.doorway, self.firm.model("digest"), CONDENSE_PROMPT,
+                CONCURRENCY, self.log,
+            )  # fmt: skip
+        except summary_budget.SummaryTooLarge as exc:
+            raise DraftingFailed(f"stage_unfinished: summarize: {exc}") from None
+
     def _packs(self) -> str:
+        """A response job's summary: each distinct unit pack once, bounded like the digest."""
         p = self.data / "digest.md"
         if not p.is_file():
             plan = self._state()["units"]
-            self._atomic("digest.md", response_scope.write_packs(self.data, plan, self._json("facts.json")))
+            first = response_scope.write_packs(self.data, plan, self._json("facts.json"))
+            self._atomic("digest.md", self._bounded(first))
         return p.read_text(encoding="utf-8")
 
     def _howell(self) -> None:

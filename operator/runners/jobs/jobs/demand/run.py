@@ -49,7 +49,7 @@ from typing import Any, Callable
 
 from operator_connector_sdk.library import readers
 
-from .. import firm_wording, limits as limits_mod, paid, proof_mode
+from .. import firm_wording, limits as limits_mod, paid, proof_mode, summary_budget
 from ..matter import store as page_store_mod
 from ..proof import review as proof_review
 from . import (
@@ -280,7 +280,10 @@ class DemandRun:
         self.limits.check_before_paid(projected_usd=cost, spent_usd=self.budget.refresh(), stage=stage, batch=True)
 
     def _digest(self) -> str:
-        return summarize.digest(self.data, self.doorway, self.firm, self._workers, self.log)
+        try:
+            return summarize.digest(self.data, self.doorway, self.firm, self._workers, self.log)
+        except summary_budget.SummaryTooLarge as exc:
+            raise DemandFailed(str(exc)) from None
 
     def _matter_fields(self) -> list[str]:
         f = self._json("facts.json")

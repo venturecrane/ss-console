@@ -35,7 +35,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from .. import firm_wording
+from .. import firm_wording, summary_budget
 from ..demand import draft as d_mod
 from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
@@ -268,9 +268,25 @@ class EvidenceLane:
         self._ev_ledger = out
 
     def _ev_index(self) -> None:
-        from .run import DIGEST_BUDGET_CHARS
+        # The index (compose) and its digest (audit, notes, review) both fit the
+        # summary's token budget: built under it, then rebuilt tighter while
+        # either is over (index.build trims in code, so a pass is free).
+        led = self.ledger()
+        budget = summary_budget.DRAFTING_BUDGET_TOKENS
 
-        idx = index.build(self.ledger(), DIGEST_BUDGET_CHARS, self.log)
+        def size(i: index.Index) -> int:
+            return max(len(i.text), len(i.digest))
+
+        def tighter(i: index.Index, target: int) -> index.Index:
+            return index.build(led, int(len(i.text) * target / size(i)), self.log)
+
+        try:
+            idx = summary_budget.bound(
+                index.build(led, summary_budget.budget_chars(budget), self.log), budget, tighter, self.log, size,
+                max_passes=6,
+            )  # fmt: skip
+        except summary_budget.SummaryTooLarge as exc:
+            raise DraftingFailed(f"stage_unfinished: index: {exc}") from None
         self._ev_write("index.md", idx.text)
         self._ev_write("index.json", json.dumps({"kept": len(idx.kept), "trimmed": list(idx.trimmed)}, indent=1))
         self._atomic("digest.md", idx.digest)

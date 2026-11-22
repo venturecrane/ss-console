@@ -36,6 +36,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
 
+from .. import summary_budget as sb
 from ..llm import Item
 from .repeats import Repeats
 
@@ -337,15 +338,38 @@ def digest(data: Path, doorway: Any, firm: Any, workers: int, log: Callable[[str
     s = Summarizer(
         data, doorway, firm.model("digest"), firm.text("prompt_digest"), int(levers["digest_max_tokens"]), workers, log
     )
-    out = condense(
-        s.run(chunks),
-        int(levers["digest_budget_chars"]),
-        doorway,
-        firm.model("digest"),
-        firm.text("prompt_condense"),
-        workers,
-        log,
-        batch_dir=data / "digest" / "batch-condense",
-    )
+    model, prompt, batch = firm.model("digest"), firm.text("prompt_condense"), data / "digest" / "batch-condense"
+    first = condense(s.run(chunks), budget_chars(levers), doorway, model, prompt, workers, log, batch_dir=batch)
+    out = bounded(first, sb.DEMAND_BUDGET_TOKENS, doorway, model, prompt, workers, log, batch)
     p.write_text(out, encoding="utf-8")
     return out
+
+
+def budget_chars(levers: dict[str, Any]) -> int:
+    """The condense target: the firm's ``digest_budget_chars`` lever, never past
+    the lane's token budget (``summary_budget``; 2,000,000 characters is about
+    a million tokens at the measured density)."""
+    return min(int(levers["digest_budget_chars"]), sb.DEMAND_BUDGET_CHARS)
+
+
+def bounded(
+    first: str,
+    budget: int,
+    doorway: Any,
+    model: str,
+    prompt: str,
+    workers: int,
+    log: Callable[[str], None],
+    batch_dir: Path | None = None,
+) -> str:
+    """``first`` condensed again, by ``condense`` over its pieces, until it fits
+    ``budget`` tokens (``summary_budget.bound``); untouched when it already
+    does. Raises ``summary_budget.SummaryTooLarge``."""
+    n = [0]
+
+    def again(text: str, target: int) -> str:
+        n[0] += 1
+        sub = batch_dir / f"pass-{n[0]}" if batch_dir is not None else None
+        return condense(sb.pieces(text), target, doorway, model, prompt, workers, log, batch_dir=sub)
+
+    return sb.bound_text(first, budget, again, log)
