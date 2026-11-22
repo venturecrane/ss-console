@@ -190,6 +190,16 @@ def ran(ud: Path) -> bool:
     return now is not None and mark.get("out_sha") == now
 
 
+def named(ud: Path) -> set[str]:
+    """The values the final set named when it removed an entry that said
+    nothing (rule 0, ``final_set.bodiless``), for proof 10; only while the
+    document is still its output (``ran``)."""
+    mark = _json(ud / REPORT, None)
+    if not isinstance(mark, dict) or not ran(ud):
+        return set()
+    return {str(v) for op in mark.get("ops") or [] if op.get("op") == "bodiless" for v in op.get("named") or []}
+
+
 def read_rows(ud: Path) -> list[dict[str, Any]]:
     """``final_rows.jsonl``, parsed (a line that does not parse is skipped)."""
     return [r for r in CL.read_rows(ud / ROWS) if isinstance(r, dict)]
