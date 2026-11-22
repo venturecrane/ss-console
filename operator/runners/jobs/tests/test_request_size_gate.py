@@ -121,7 +121,7 @@ def test_an_over_limit_call_is_never_sent_and_writes_a_zero_row(ledger: ledger_m
 
 
 def test_streamed_calls_are_stopped_the_same_way(ledger: ledger_mod.Ledger) -> None:
-    d = _door(ledger, _NeverCalled(counted=999_000))  # 999,000 + 16,000 output room > 1,000,000
+    d = _door(ledger, _NeverCalled(counted=999_500))  # 999,500 + 1,000 output room > 1,000,000
     with pytest.raises(llm.RequestTooLarge):
         d.call("compose", model=BIG, messages=_pages(200), max_tokens=128_000, stream=True)
 
@@ -173,10 +173,22 @@ def test_an_unknown_model_gets_the_200k_window(ledger: ledger_mod.Ledger) -> Non
     assert all(RS.window_for(m) == 1_000_000 for m in large)
     small = ("claude-haiku-4-5-20251001", "claude-sonnet-4-5", "claude-opus-4-20250514", "claude-opus-6")
     assert all(RS.window_for(m) == 200_000 for m in small), "a generation past 5 is not guessed large"
-    d = _door(ledger, _NeverCalled(counted=190_000))
-    with pytest.raises(llm.RequestTooLarge) as caught:
-        d.call("audit", model="some-future-model", messages=_pages(40), max_tokens=16_000)
-    assert caught.value.limit == 200_000
+    # A model it cannot place is never refused before sending (review 11-22): a
+    # newer generation may well have the larger window; the API decides.
+    assert not RS.known("some-future-model") and not RS.known("claude-opus-6") and RS.known(BIG)
+    c = _Client(counted=190_000)
+    d = _door(ledger, c)
+    d.call("audit", model="claude-opus-6", messages=_pages(400), max_tokens=16_000)
+    assert len(c.messages.calls) == 1 and not c.messages.counts
+
+
+def test_a_near_window_request_with_a_short_answer_is_lowered_not_refused(ledger: ledger_mod.Ledger) -> None:
+    """994,000 input tokens and an 8,000-token answer: the API takes it today
+    (6,000 tokens of room), so the stop must not refuse it; the ceiling is lowered."""
+    c = _Client(counted=994_000)
+    d = _door(ledger, c)
+    d.call("audit", model=BIG, messages=_pages(400), max_tokens=8_000)
+    assert len(c.messages.calls) == 1 and c.messages.calls[0]["max_tokens"] == 6_000
 
 
 @pytest.mark.parametrize(

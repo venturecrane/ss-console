@@ -66,8 +66,10 @@ TOKENS_PER_BYTE = 0.6
 IMAGE_TOKENS = 6_000
 #: The least output room a request must keep. A request whose input leaves less
 #: than this (or than its own ``max_tokens``, if smaller) cannot answer usefully
-#: and is not sent.
-OUTPUT_FLOOR = 16_000
+#: and is not sent. Kept small (review 11-22): a 994,000-token audit call with an
+#: 8,000-token answer fits today and must not be refused; between this and its
+#: own ``max_tokens`` the ceiling is lowered instead.
+OUTPUT_FLOOR = 1_000
 #: Seconds the exact count may take before the request is sent uncounted.
 COUNT_TIMEOUT_S = 60.0
 #: A model this module cannot place gets the smallest window any current model
@@ -116,6 +118,14 @@ class RequestTooLarge(DoorwayError):
             f"{UNSENT}: {who} counts {self.measured:,} input tokens; with {room:,} for its answer it is over "
             f"the {self.model} window of {self.limit:,}; it was not sent and nothing was charged"
         )
+
+
+def known(model: str) -> bool:
+    """True when ``window_for`` places the model from its id. A model it cannot
+    place (a newer generation, a provider-prefixed id it cannot read) is never
+    refused before sending: the API decides, and ``refused`` translates its answer."""
+    m = _MODEL.match(str(model).rsplit("anthropic.", 1)[-1])
+    return m is not None and m.group(1) in _FAMILIES and int(m.group(2)) <= 5
 
 
 def window_for(model: str) -> int:
@@ -209,7 +219,7 @@ def fit(
     the answer would overflow; else ``RequestTooLarge`` (after its zero row)."""
     model, max_tokens = str(params["model"]), int(params["max_tokens"])
     limit = window_for(model)
-    if upper_bound(params) + max_tokens <= limit:
+    if not known(model) or upper_bound(params) + max_tokens <= limit:
         return params
     counter = door.count_tokens or client_counter(door._client(None))
     measured = counter(params)
