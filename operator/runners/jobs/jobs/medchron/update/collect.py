@@ -13,8 +13,6 @@ by name and assemble numbered them by first citation. Here:
    kept restatement of a delivered visit is cut to its "Additional findings";
    a new entry another new entry of its date and provider covers is dropped;
    a sentence a kept entry states twice is said once (``update/within.py``);
-   a billed date carried as its own row is not added when a delivered entry
-   carries its date (``BILLED_DELIVERED``);
 3. an entry carrying an unresolved "(FILE: ...)" citation refuses: the audit
    extracts only "(Exhibit N ...)" claims, so it would ship unaudited;
 4. a new exhibit no kept entry cites is not an exhibit (every visit it holds
@@ -37,12 +35,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import body as B, demographics as D, repeats as R, within as W
-from ..billed_rows import is_billed_row
-
-#: A billed date carried as its own row (``medchron/billed_rows.py``) whose
-#: date the delivered chronology already carries: a date the delivered
-#: chronology records a visit on is not a date known only from a bill.
-BILLED_DELIVERED = "not added: a billed date the delivered chronology carries"
 
 CITED_EX = re.compile(r"\(Exhibit (\d+)(?: - p\. [0-9,\s\-]+)?\)")
 ASSEMBLED = re.compile(r"\(Exhibit (\d+)((?: - p\. [0-9,\s\-]+)?)\)")
@@ -99,11 +91,7 @@ def collect(
     """(kept entries in date order, report). Refuses an unresolved citation."""
     keep: list[str] = []
     rep: Counter[str] = Counter()
-    delivered = {B.iso(b) for b in base_ents}
     for e in comp:
-        if is_billed_row(e) and B.iso(e) in delivered:
-            rep[BILLED_DELIVERED] += 1
-            continue
         verdict, kept = R.keep_decision(e, base_ents, canon)
         if kept is None:
             rep[verdict] += 1

@@ -9,10 +9,7 @@ which is the silent-omission class a chronology must not have.
 
 Outputs under runs/<unit>/: entries.md (standalone entries, pre-merge),
 clusters.md (same date+provider fragments for the merge), exhibit_map.json
-(file name -> exhibit number), billing_dates.md, conflicts.md, files_seen.md,
-billed_rows.md (each billed visit ``dos_check`` finds no medical record for,
-written as its own dated row by ``medchron/billed_rows.py`` and assembled
-with the rest).
+(file name -> exhibit number), billing_dates.md, conflicts.md, files_seen.md.
 """
 
 from __future__ import annotations
@@ -25,7 +22,6 @@ from pathlib import Path
 from typing import Any
 
 from . import fileref
-from ..medchron import billed_rows as BR
 from .base import StageRun, read_json
 from .compose import read_usage
 from ..text_rules import DATE_HEAD, ENTRY_START as ENTRY_SPLIT
@@ -97,54 +93,6 @@ class Resolver:
         return None
 
 
-def _seen(txt: str) -> dict[str, set[str]]:
-    """name -> the fileIds of the `=== FILE:` headers one map's chunk carried."""
-    seen: dict[str, set[str]] = defaultdict(set)
-    for name, fid in FILE_HEADER.findall(txt):
-        seen[name.strip()].add(fid)
-    return seen
-
-
-#: The billed dates carried as rows (``medchron/billed_rows.py``), in the
-#: writer's entry format, read by ``group.index_rows`` like a map's ENTRIES.
-BILLED_ROWS = "billed_rows.md"
-
-
-def billed_entries(sr: StageRun, d: Path, entries: list[dict[str, Any]], real_names: list[str]) -> list[dict[str, Any]]:
-    """Each billed visit ``dos_check`` finds no medical record for, as an
-    entry fragment (``medchron/billed_rows.py`` decides which and writes the
-    text). One whose bill is not a unit file is logged and left out: its
-    citation could resolve to no exhibit."""
-    from .billing_chart import Matcher
-
-    update = (d / "update" / "update_plan.json").is_file()
-    # the patient the bills are checked against, as each lane's dos_check has it
-    patient = sr.unit.client_name.lower() if (update or sr.job.joint) else None
-    by_date: dict[str, list[str]] = defaultdict(list)
-    for e in entries:
-        by_date[e["date"]].append(e["provider"])
-    match = Matcher(sr.cfg, sr.slug_dir).match
-    items = BR.no_record_items(sr.slug_dir, d, str(sr.job.incident_date or ""), patient, dict(by_date), match)
-    names = set(real_names) | {_norm_name(n) for n in real_names}
-    rows, dropped = BR.carry(
-        items,
-        [e["provider"] for e in entries],
-        match,
-        BR.heading_of(sr.cfg.get("format", "subsections")),
-        lambda f: f in names or _norm_name(f) in names,
-    )
-    frags = [
-        {"date": r["iso"], "provider": r["provider"], "key": norm_provider(r["provider"]), "text": r["text"],
-         "src": BILLED_ROWS, "seen": {}}
-        for r in rows
-    ]  # fmt: skip
-    for i in dropped:
-        sr.log(
-            f"  billed date {i['iso']} not carried: its bill is not a file of this unit ({i['file'][:60]} p.{i['page']})"
-        )
-    return frags
-
-
 def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     entries: list[dict[str, Any]] = []
     buckets: dict[str, list[str]] = {"billing_dates.md": [], "conflicts.md": [], "files_seen.md": []}
@@ -155,7 +103,9 @@ def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str
     )
     for fn in maps:
         txt = (d / fn).read_text(encoding="utf-8")
-        seen = _seen(txt)
+        seen: dict[str, set[str]] = defaultdict(set)
+        for name, fid in FILE_HEADER.findall(txt):
+            seen[name.strip()].add(fid)
         body = section(txt, "ENTRIES")
         if body and "none in this chunk" not in body.lower():
             for chunk in ENTRY_SPLIT.split(body):
@@ -257,9 +207,6 @@ def run(sr: StageRun) -> int:
     entries, buckets = parse_maps(d, maps)
     unit_files = read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
     real_names = [f["name"] + (f.get("ext") or "") for f in unit_files]
-    billed = billed_entries(sr, d, entries, real_names)
-    entries += billed
-    (d / BILLED_ROWS).write_text("".join(e["text"] + "\n\n" for e in billed), encoding="utf-8")
     resolve = Resolver(real_names, {f["id"]: n for f, n in zip(unit_files, real_names)})
     exhibit = exhibit_numbers(entries, resolve)
     (d / "exhibit_map.json").write_text(json.dumps(exhibit, indent=1), encoding="utf-8")
@@ -281,7 +228,6 @@ def run(sr: StageRun) -> int:
         (d / fname).write_text("\n\n".join(bucket), encoding="utf-8")
     sr.log(f"{sr.unit.unit}: {len(maps)} map files, {len(entries)} entry fragments")
     sr.log(f"  {len(singles)} standalone, {len(clusters)} clusters to merge")
-    sr.log(f"  {len(billed)} billed visit(s) with no medical record, written as dated rows ({BILLED_ROWS})")
     sr.log(f"  {len(exhibit)} source files -> exhibit numbers")
     if resolve.unresolved:
         sr.log(f"  UNRESOLVED cited file name(s): {len(resolve.unresolved)}")

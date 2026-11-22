@@ -263,8 +263,7 @@ NO_RECORD_HEADING = "Dates billed with no medical record on file"
 def _billed_no_record(doc: Any, sr: StageRun) -> None:
     """Each date of service a bill or ledger carries that no medical record
     on file does (``dos_check``'s ``billed_no_record``). A billing-only source
-    makes no visit entry; the chronology carries such a date only as a row
-    stating the service billed (``medchron/billed_rows.py``); the dates are listed here so
+    makes no chronology entry (the house rule); its dates are listed here so
     they reach a filed document (2026-11-17: an update named two ledgers whose
     dates were in no record, and no filed page carried them)."""
     lost = [x for x in read_json(sr.slug_dir / "billing" / "not_read.json", []) or [] if isinstance(x, dict)]
@@ -280,7 +279,7 @@ def _billed_no_record(doc: Any, sr: StageRun) -> None:
     para(
         doc,
         f"{len(rows)} date(s) of service appear in the billing records on file and in no medical record on file. "
-        "Where the medical chronology lists one of these dates, it states only the service billed.",
+        "They are not in the medical chronology, which is built from medical records only.",
     )
     body = _dedup([[dshow(str(r["date"])), str(r.get("billing_provider") or "-")[:60]] for r in rows], tuple)
     table(doc, ["Date of Service", "Billed By"], sorted(body, key=lambda r: r[0][6:] + r[0][:5])[:200], [1.4, 5.8])

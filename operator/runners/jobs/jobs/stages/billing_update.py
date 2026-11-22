@@ -3,8 +3,7 @@
 WHY. An update named two patient ledgers whose dates of service appear in no
 medical record on file. The house rule (``prompts/map-system.md``,
 ``dos_check`` ``billed_no_record``) is that a billing-only source makes no
-visit entry (the chronology carries such a date only as a billed row,
-``medchron/billed_rows.py``) and its dates belong on the billing worksheet. The update
+chronology entry and its dates belong on the billing worksheet. The update
 dropped the ledgers by name and never ran a billing stage, so those dates
 reached no filed document, while the firm had been told they "will show as
 billing only".

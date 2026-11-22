@@ -18,11 +18,9 @@ this order:
   explained         a person recorded why (`billed_dates_explained.json`,
                     written by `jobs explain-date`).
   billed_no_record  no non-billing page in the file carries the date. The
-                    composer keeps billing-only dates OUT of its entries
-                    (prompts/map-system.md) and code carries each as a dated
-                    row stating the service billed (medchron/billed_rows.py),
-                    which this check does not count as a record of the visit:
-                    a records gap in the firm's file, not a chronology error.
+                    composer is told to keep billing-only dates OUT of entries
+                    (prompts/map-system.md), so this is a records gap in the
+                    firm's file, not a chronology error.
   provider_unmatched  entries carry the date, none names the billing provider,
                     and the medical records DO name it: two providers seen one
                     day and the chronology may hold only one. (A billing name
@@ -208,36 +206,6 @@ def _named_in_records(bill_prov: str, pages: dict[str, list[tuple[int, str]]]) -
     return bool(want) and any(want <= _words(t) for plist in pages.values() for _, t in plist)
 
 
-def classify(
-    iso: str,
-    prov: str,
-    by_date: dict[str, list[str]],
-    incident_iso: str,
-    explained: set[str],
-    pages: dict[str, list[tuple[int, str]]],
-    match: dict[str, list[str]],
-) -> tuple[str, tuple[str, int] | None]:
-    """One billed visit's class (``CLASSES``, in their order) and, for a
-    missed visit, the record page that carries its date. ``billed_rows``
-    carries exactly the ``billed_no_record`` ones into the chronology."""
-    if iso in by_date and (
-        any(_names_provider(p, prov, match) for p in by_date[iso]) or not _named_in_records(prov, pages)
-    ):
-        return "in_chronology", None
-    if iso < incident_iso:
-        return "pre_incident", None
-    if iso in explained:
-        return "explained", None
-    if iso in by_date:
-        return "provider_unmatched", None
-    hit = _on_record_page(iso, pages)
-    return ("missed_visit", hit) if hit else ("billed_no_record", None)
-
-
-def explained_dates(run_dir: Path) -> set[str]:
-    return {str(r.get("date")) for r in read_json(run_dir / EXPLAINED_FILE, []) or [] if isinstance(r, dict)}
-
-
 def check(
     slug_dir: Path,
     run_dir: Path,
@@ -249,40 +217,46 @@ def check(
     """The report: counts per class, the data-quality counts, one row per
     missed visit (file and page of the record carrying it, nearest entry) and
     one per provider_unmatched visit."""
-    from .billed_rows import is_billed_row  # billed_rows reads this module's classes
-
     billed, quality = billed_dates(slug_dir, patient)
     by_date: dict[str, list[str]] = {}
     for e in parse_entries(entries_text):
-        # a billed date carried as its own row (billed_rows.py) records no
-        # visit: its date stays billed with no record, on the worksheet too
-        if not is_billed_row(e["text"]):
-            by_date.setdefault(e["iso"], []).append(e["provider"])
+        by_date.setdefault(e["iso"], []).append(e["provider"])
     entry_isos = sorted(by_date)
     match = provider_match or {}
-    explained = explained_dates(run_dir)
+    explained = {str(r.get("date")) for r in read_json(run_dir / EXPLAINED_FILE, []) or [] if isinstance(r, dict)}
     pages = record_pages(slug_dir, _billing_pages(slug_dir))
-    counts: dict[str, int] = dict.fromkeys(CLASSES, 0)
+    counts = dict.fromkeys(CLASSES, 0)
     missed: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     #: each billed date no medical record on file carries: it goes on the
-    #: billing worksheet (the chronology carries it only as a billed row)
+    #: billing worksheet, never into the chronology (map-system.md, house rule)
     no_record: list[dict[str, Any]] = []
     for iso, prov in sorted(billed):
-        cls, hit = classify(iso, prov, by_date, incident_iso, explained, pages, match)
-        if cls == "provider_unmatched":
+        if iso in by_date and (
+            any(_names_provider(p, prov, match) for p in by_date[iso]) or not _named_in_records(prov, pages)
+        ):
+            cls = "in_chronology"
+        elif iso < incident_iso:
+            cls = "pre_incident"
+        elif iso in explained:
+            cls = "explained"
+        elif iso in by_date:
+            cls = "provider_unmatched"
             unmatched.append({"date": iso, "billing_provider": prov, "entry_providers": by_date[iso]})
-        elif cls == "billed_no_record":
-            no_record.append({"date": iso, "billing_provider": prov})
-        elif cls == "missed_visit" and hit:
-            missed.append(
-                {
-                    "date": iso,
-                    "record_file": hit[0],
-                    "record_page": hit[1],
-                    "nearest_entry_days": _nearest_days(iso, entry_isos),
-                }
-            )
+        else:
+            hit = _on_record_page(iso, pages)
+            cls = "missed_visit" if hit else "billed_no_record"
+            if not hit:
+                no_record.append({"date": iso, "billing_provider": prov})
+            if hit:
+                missed.append(
+                    {
+                        "date": iso,
+                        "record_file": hit[0],
+                        "record_page": hit[1],
+                        "nearest_entry_days": _nearest_days(iso, entry_isos),
+                    }
+                )
         counts[cls] += 1
     out = {
         "billed_dates": sum(counts.values()),
