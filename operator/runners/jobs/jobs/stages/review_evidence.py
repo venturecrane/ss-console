@@ -158,23 +158,43 @@ def _cites(block: str, exhibit: int, page: int) -> bool:
     )
 
 
-def entry_for(md: str, text: str) -> tuple[int, int, str] | None:
-    """The one entry a finding's text names by its date, then its provider
-    when the date has several entries, then the exhibit page the finding
-    cites when the same provider has several entries that day (an ED visit
-    and its admission); None when it names no single one."""
+#: A phrase a finding quotes (straight or curly quotes), long enough to place.
+_QUOTED = re.compile(r"\"([^\"]{8,})\"|“([^”]{8,})”")
+
+
+def candidates(md: str, text: str) -> list[tuple[int, int, str]]:
+    """The entries a finding's text may be about: those on its date, narrowed
+    by its provider, then the exhibit page it cites (an ED visit and its
+    admission), then a phrase it quotes. A narrowing that would leave none
+    narrows nothing (a finding naming no provider keeps the day's entries).
+    The first date naming exactly one entry wins; else the first date's
+    entries; [] when no date in the text names an entry (2026-11-22: 72
+    entries on one date and a finding naming no provider held a job)."""
     low = text.lower()
     blocks = entry_blocks(md)
     named = _named_pages(text)
+    quotes = [q for q in (_norm(a or b) for a, b in _QUOTED.findall(text)) if q]
+    first: list[tuple[int, int, str]] = []
     for d in dict.fromkeys(_DATE.findall(text)):
         same = [b for b in blocks if b[2].startswith(d)]
-        if len(same) > 1:
-            same = [b for b in same if _provider(b[2]) and _provider(b[2]) in low]
-        if len(same) > 1 and named:
-            same = [b for b in same if any(_cites(b[2], ex, pg) for ex, pg in named)]
+        for keep in (
+            lambda b: bool(_provider(b[2])) and _provider(b[2]) in low,
+            lambda b: any(_cites(b[2], ex, pg) for ex, pg in named),
+            lambda b: any(q in _norm(b[2]) for q in quotes),
+        ):
+            if len(same) > 1:
+                same = [b for b in same if keep(b)] or same
         if len(same) == 1:
-            return same[0]
-    return None
+            return same
+        first = first or same
+    return first
+
+
+def entry_for(md: str, text: str) -> tuple[int, int, str] | None:
+    """The one entry a finding's text names (``candidates``); None when it
+    names no single one."""
+    got = candidates(md, text)
+    return got[0] if len(got) == 1 else None
 
 
 def cited_pages(block: str, text: str) -> list[tuple[int, int]]:

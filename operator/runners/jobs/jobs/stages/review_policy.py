@@ -31,13 +31,15 @@ delivery with no SMD touch. So, in order:
 BEFORE those (2026-10-24, the stop audit rows 11 to 13), on the cited page
 (``review_evidence``): a check 3 MUST-FIX whose quoted words the cited page
 prints verbatim is the record's own wording, a NOTE; a model check 1 MUST-FIX
-on one entry is decided by the cited page's patient identifiers: the
-client's, a NOTE; another person's, or no one's, the entry is left out by
-rule and disclosed (``review-left-out.json`` and the Review Notes), never
-naming that person. Code's entry dated after today joins step 4, where the
-finisher re-reads the date on its page; it settles only when no entry is
-dated after today any more. ``review-policy.json`` counts every step (row 14:
-the residual check 2/4 after the repair is measured on replays).
+is decided by the cited page's patient identifiers (``review_check1``, on an
+update too): the client's page, the client's own record reporting a family
+member's health, or a page naming no one, a NOTE; another person's page, the
+entry is left out by rule and disclosed (``review-left-out.json`` and the
+Review Notes), never naming that person. Code's entry dated after today
+joins step 4, where the finisher re-reads the date on its page; it settles
+only when no entry is dated after today any more. ``review-policy.json``
+counts every step (row 14: the residual check 2/4 after the repair is
+measured on replays).
 
 AND TWO MORE (2026-10-24, Pamplona: a job held at this review on 18 MUST-FIX
 after the paid audit confirmed 2,468 of 2,468 claims; 7 were the system's
@@ -230,7 +232,7 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
       read is never dropped on the review's suspicion alone); only a page
       naming another person has the entry left out by rule and disclosed
       (never naming that person)."""
-    from . import review_evidence as EV
+    from . import review_check1 as C1, review_evidence as EV
 
     md = before = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
@@ -245,19 +247,15 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
                 )
                 stats["system_words_on_record"] += 1
         elif n == 1 and f.by == "model":
-            block = EV.entry_for(md, _text(f))
-            if block is None:
-                continue
-            cited = EV.cited_pages(block[2], _text(f))
-            kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
+            kind, block, cited, many = C1.decide(sr, md, f, pages)
+            if kind == "none" or (kind == "other" and block is None):
+                continue  # no entry, or several and one of them on another person's page: it holds
             if kind != "other":
-                # The client's page, or a page naming no one: the entry is a
-                # record the map read, and suspicion alone never drops it.
-                whom = "which is the client's" if kind == "client" else "which names no other person; the entry is kept"
-                out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"checked against the cited page, {whom}: {f.finding}"
-                )
-                stats["identity_client" if kind == "client" else "identity_unnamed"] += 1
+                # The client's page (or the client's own record reporting a
+                # family member's health), or a page naming no one: the entry
+                # is a record the map read, and suspicion alone never drops it.
+                out.findings[k] = C1.note(f, kind, many)
+                stats[C1.stat_key(kind)] += 1
                 continue
             reason = EV.LEFT_OUT_REASON
             EV.leave_out(sr, doc, block, cited, reason)
@@ -299,18 +297,26 @@ def settle(
     images: Any = None,
     audit: Audit | None = None,
     today: date | None = None,
+    update_rd: Path | None = None,
 ) -> Outcome:
     """Every step in order. ``doc`` is the full build's ``final-chronology.md``
     (None on an update, which has its own repair before this review and only
-    gets steps 1 and 2). ``repair``, ``verify``, ``images``, ``audit`` and
-    ``today`` fed the removed repair round; callers still pass them and they
-    change nothing."""
+    gets steps 1 and 2, then check 1 decided read only on the document it
+    delivers, under the run dir ``update_rd``: ``review_check1.on_update``;
+    every step that edits the document stays off, since the update's own
+    proofs already read it). ``repair``, ``verify``, ``images``, ``audit``
+    and ``today`` fed the removed repair round; callers still pass them and
+    they change nothing."""
     del repair, verify, images, audit, today
     from . import review_settle
 
     kept, dropped = wording_and_notes(found)
     out = Outcome(kept, dropped)
     if doc is None or not doc.is_file():
+        if update_rd is not None:
+            from . import review_check1
+
+            review_check1.on_update(sr, update_rd, out)
         review_settle.flag_residual(out, {})
         return out
     stats: dict[str, int] = dict.fromkeys(
@@ -318,6 +324,8 @@ def settle(
             "system_words_on_record",
             "identity_client",
             "identity_unnamed",
+            "identity_family",
+            "identity_several",
             "identity_left_out",
             "summary_deleted",
             "system_scrubbed",
@@ -471,7 +479,7 @@ def package(
 
     doc = None if update else rd / "final-chronology.md"
     spine_before = timeline_providers(doc)
-    pol = settle(sr, doc, found, repair=repair, **inject)
+    pol = settle(sr, doc, found, repair=repair, update_rd=rd if update else None, **inject)
     if pol.dropped:
         sr.log(
             f"review: {len(pol.dropped)} finding(s) on the firm's required wording dropped: "

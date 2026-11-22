@@ -6,7 +6,8 @@ You are given: the client (name, date of birth when known, date of the incident)
 
 Check, at minimum, each of these:
 
-1. ANOTHER PERSON'S RECORDS. An entry, a treatment summary line, a diagnosis or a provider row that is about someone other than this client: a co-plaintiff or other client named above, a family member, another patient on a shared form. MUST-FIX.
+1. ANOTHER PERSON'S RECORDS. An entry, a treatment summary line, a diagnosis or a provider row that is about someone other than this client: a co-plaintiff or other client named above, a family member's own record, another patient on a shared form. MUST-FIX.
+   A family member's health fact written in the client's own record (family history, a parent's results or a child's diagnosis the client reports) is the client's record, never this finding: grade it NOTE at most.
 2. ENTRIES THAT CONTRADICT EACH OTHER. Two entries, or an entry and a summary table, that disagree on a date, a provider, a body part, a laterality, a measured value or a diagnosis for the same visit or finding. MUST-FIX.
    Where an entry gives both readings, each cited, followed by the sentence "{{WORDING:RECORDS_DIFFER}}", the chronology reports the records' own disagreement as the firm's house style requires: grade that NOTE, never MUST-FIX.
 3. THE SYSTEM'S OWN LANGUAGE. Words about how the chronology was made rather than about the client's care: chunks, the pipeline, the model, a job, an auditor, a placeholder title ("Provider not identified"), a heading or marker a person would not write. MUST-FIX.
