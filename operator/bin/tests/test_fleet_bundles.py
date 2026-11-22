@@ -195,6 +195,40 @@ def test_a_seat_that_never_reports_the_version_is_rolled_back_to_its_previous_po
     assert "pointer restored to " + V1 in out.detail and out.halts
 
 
+def test_a_bundle_rollback_keeps_the_marker_until_its_read_back_decides() -> None:
+    """2026-11-22: the marker was cleared in a `finally` before the rollback, so a
+    lane claimed a job the rollback restart then killed. FALSIFIER: put
+    gate.clear back in that `finally` and a clear lands between the two restarts."""
+    w = World(["lane-a"])
+    w.publish(V1)
+    w.publish(V2)
+    assert w.run("lane-a", V1).state == "done"
+    w.refuses.add("lane-a")
+    events: list[str] = []
+    restart, run_python = w.fly.restart, w.fly.run_python
+
+    def recording_restart(app: str, machine_id: str | None = None) -> Any:
+        events.append("restart")
+        return restart(app, machine_id)
+
+    def recording_run_python(app: str, source: str, timeout: float = 90) -> Any:
+        if "SMD_QUIESCE" in source and "ARGS = json.loads" in source:
+            events.append("set" if '\\"action\\": \\"set\\"' in source else "clear")
+        else:
+            events.append("probe")
+        return run_python(app, source, timeout)
+
+    w.fly.restart = recording_restart  # type: ignore[method-assign]
+    w.fly.run_python = recording_run_python  # type: ignore[method-assign]
+    out = w.run("lane-a", V2)
+    assert out.state == "rolled_back", out.detail
+    assert events.count("restart") == 2, events
+    first, second = events.index("restart"), events.index("restart", events.index("restart") + 1)
+    assert "clear" not in events[first:second], events
+    assert events[first - 2 : first] == ["set", "probe"] and events[second - 2 : second] == ["set", "probe"], events
+    assert events[-1] == "clear" and events.count("clear") == 1, events
+
+
 def test_a_seat_with_no_previous_pointer_has_it_removed_on_rollback() -> None:
     w = World(["lane-a"])
     w.publish(V1)

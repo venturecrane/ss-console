@@ -818,3 +818,92 @@ def test_every_seat_a_run_decided_is_named_for_the_spec_republish(tmp_path, monk
     sink.unlink()
     w.release_all()
     assert not sink.exists(), "a seat already done on the release was not redeployed and is not named"
+
+
+# -- a release or its rollback never restarts a seat unmarked (2026-11-19, 11-22) ----------
+#
+# On record twice: the marker was cleared in a `finally` before the rollback, and
+# the rollback deploy (and the deploy retry) restarted the seat with no gate, so a
+# job that started in the gap was killed by the rollback.
+
+_IDLE = {"lanes": [], "children": [], "crons": [], "errors": []}
+_RUNNING = {"lanes": [], "children": [{"file": "child.pid", "pid": "77", "alive": True}], "crons": [], "errors": []}
+
+
+def _ordered(w: World) -> list[str]:
+    """Record every marker write, marker clear, busy probe and deploy on w.fly, in order."""
+    events: list[str] = []
+    run_python, deploy = w.fly.run_python, w.fly.deploy
+
+    def recording_run_python(app: str, source: str, timeout: float = 90) -> Result:
+        if "SMD_QUIESCE" in source and "ARGS = json.loads" in source:
+            events.append("set" if '\\"action\\": \\"set\\"' in source else "clear")
+        elif "SMD_BUSY_PROBE" in source:
+            events.append("probe")
+        return run_python(app, source, timeout)
+
+    def recording_deploy(app: str, image: str, config_path: str) -> Result:
+        events.append("deploy-old" if image.endswith("deployment-OLD") else "deploy")
+        return deploy(app, image, config_path)
+
+    w.fly.run_python = recording_run_python  # type: ignore[method-assign]
+    w.fly.deploy = recording_deploy  # type: ignore[method-assign]
+    return events
+
+
+def _gated_before(events: list[str], deploy: str) -> bool:
+    """The deploy is preceded by a marker write and then a probe, with no clear in between."""
+    at = events.index(deploy)
+    return events[at - 2 : at] == ["set", "probe"]
+
+
+def test_a_rollback_keeps_the_marker_and_passes_the_gate_before_its_deploy() -> None:
+    # FALSIFIER: put gate.clear back in _deploy_and_verify's finally and a "clear"
+    # lands between the forward deploy and the rollback deploy; drop the
+    # wait_idle before _deploy(from_image) and the rollback deploy follows the
+    # re-smoke's work unprobed.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    events = _ordered(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back"
+    assert events.count("deploy") == 1 and events.count("deploy-old") == 1
+    between = events[events.index("deploy") : events.index("deploy-old")]
+    assert "clear" not in between, events
+    assert _gated_before(events, "deploy") and _gated_before(events, "deploy-old"), events
+    # Cleared once, at the release's end: after the rollback and its re-smoke.
+    assert events[-1] == "clear" and events.count("clear") == 1, events
+
+
+def test_a_seat_busy_at_the_rollback_is_not_rolled_back() -> None:
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "never reached"))
+    w.fly.probe_facts["ap-staging"] = [_IDLE, _RUNNING]
+    events = _ordered(w)
+    result = w.release_all(only="ap-staging", max_idle_wait=120)
+    assert w.store.states()["ap-staging"] == "failed" and result.halted
+    assert events.count("deploy") == 1 and "deploy-old" not in events
+    assert _details(w)["ap-staging"].startswith("rollback deferred, seat busy")
+    assert events[-1] == "clear"
+
+
+def test_a_deploy_retry_passes_the_gate_again() -> None:
+    w = World()
+    w.fly.deploy_results = [Result(1, "", "Error: context deadline exceeded")]
+    events = _ordered(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "done"
+    first = events.index("deploy")
+    second = events.index("deploy", first + 1)
+    # FALSIFIER: drop the wait_idle before the retry and nothing is probed between the deploys.
+    assert events[first + 1 : second] == ["set", "probe"], events
+
+
+def test_a_seat_busy_at_the_deploy_retry_is_not_deployed_again() -> None:
+    w = World()
+    w.fly.deploy_results = [Result(1, "", "Error: context deadline exceeded")]
+    w.fly.probe_facts["ap-staging"] = [_IDLE, _RUNNING]
+    events = _ordered(w)
+    w.release_all(only="ap-staging", max_idle_wait=120)
+    assert w.store.states()["ap-staging"] == "tooling_error"
+    assert events.count("deploy") == 1 and "deploy-old" not in events
+    assert "retry deferred, seat busy" in _details(w)["ap-staging"]
+    assert events[-1] == "clear"

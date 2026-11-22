@@ -36,9 +36,15 @@ Machines). A FAILED listing is a tooling error, never idle.
 QUEUED work is not busy: the queues live on the volume (/run/smd-jobs is a
 bind mount of it) and survive the restart.
 
-Busy -> write the quiesce marker (no new claims; expires on its own) and poll
-until idle, up to a cap. The cap ends in WAITING_IDLE: the seat is skipped with
-the reason, never deployed mid-job. ``--force-mid-job`` skips the gate, loudly.
+The quiesce marker (no new claims; expires on its own) is written BEFORE the
+first probe, every time, and the gate answers idle only from a probe taken after
+the marker stood. A first probe that read idle used to return with no marker
+(2026-11-19 and 11-22): queued and between-retry jobs read idle by design, so a
+lane could claim one between the check and the restart, and the restart killed
+it. Busy -> keep the marker ahead of its expiry and poll until idle, up to a
+cap. The cap ends in WAITING_IDLE: the seat is skipped with the reason, never
+deployed mid-job. The caller clears the marker once its release has decided
+(after any rollback); ``--force-mid-job`` skips the gate, loudly.
 """
 
 from __future__ import annotations
@@ -283,7 +289,14 @@ class BusyGate:
         raise AssertionError("unreachable")
 
     def wait_idle(self, seat: str, max_wait: float, log: Callable[[str], None]) -> Verdict:
-        """Idle verdict, or the last busy verdict once ``max_wait`` has passed."""
+        """Idle verdict, or the last busy verdict once ``max_wait`` has passed.
+
+        The marker is written first, so an idle verdict always comes from a
+        probe taken while no lane could claim: nothing starts between this
+        answer and the caller's restart, nor at the new boot (the supervisor
+        keeps a live fleet marker across the stop). A seat with no Machine has
+        nothing to mark and nothing running.
+        """
 
         def probe() -> Verdict:
             return self._riding_transport(seat, "busy probe", lambda: self.probe(seat), log)
@@ -292,17 +305,19 @@ class BusyGate:
             reason = f"fleet release by {self.holder}"
             self._riding_transport(seat, "quiesce marker", lambda: self.quiesce(seat, reason), log)
 
+        if not self.fly.machines(ids.app_name(seat)):
+            return Verdict(False, [NO_MACHINE_REASON], {"machines": 0})
+        quiesce()
         verdict = probe()
         if not verdict.busy:
             return verdict
-        log(f"{seat}: busy ({'; '.join(verdict.reasons)}); quiescing and waiting up to {max_wait:.0f}s")
-        quiesce()
+        log(f"{seat}: busy ({'; '.join(verdict.reasons)}); quiesced, waiting up to {max_wait:.0f}s")
         deadline = self.clock() + max_wait
         while self.clock() < deadline:
             self.sleep(POLL_S)
+            quiesce()  # ahead of its expiry, and standing before the probe
             verdict = probe()
             if not verdict.busy:
                 log(f"{seat}: idle")
                 return verdict
-            quiesce()  # keep the marker ahead of its expiry
         return verdict

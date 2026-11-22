@@ -6,6 +6,11 @@
   done | (fail) restore the pointer, roll back to from-image + from-toml,
   re-smoke, halt | (tooling_error / timeout) halt, touch nothing
 
+The busy gate's quiesce marker stands from before the first probe to the
+release's end, after any rollback and its re-smoke; every restart (the deploy,
+its retry, the rollback deploy) passes the gate first, and a seat busy at the
+rollback is not rolled back ("rollback deferred, seat busy": halt, page).
+
 A re-smoke that gets no verdict (the boot smoke tries ssh, then `fly machine
 exec`) leaves the row rolled_back with its detail beginning UNVERIFIED_MARK.
 
@@ -202,15 +207,18 @@ class ImageRollout:
             return f"the seat runs volume epoch {now}; this release is epoch {to_epoch}, an older volume layout"
         return ""
 
-    def _deploy(self, seat: str, image: str, toml_text: str) -> str:
-        return self._deploy_saying(seat, image, toml_text)[0]
+    def _deploy(self, seat: str, image: str, toml_text: str, gate_wait: float | None) -> str:
+        return self._deploy_saying(seat, image, toml_text, gate_wait)[0]
 
-    def _deploy_saying(self, seat: str, image: str, toml_text: str) -> tuple[str, str]:
+    def _deploy_saying(self, seat: str, image: str, toml_text: str, gate_wait: float | None) -> tuple[str, str]:
         """``fly deploy``: its class, and what Fly said when it decided nothing.
 
-        A tooling_error is tried once more after DEPLOY_RETRY_PAUSE_S. What Fly
-        printed is kept, because before 2026-10-30 it was thrown away and three
-        halts in one day could not say why.
+        A tooling_error is tried once more after DEPLOY_RETRY_PAUSE_S, behind
+        the busy gate again (``gate_wait`` seconds; None only under
+        --force-mid-job): the first attempt may have restarted the seat, and
+        the retry restarts it again. A seat busy by then is not deployed. What
+        Fly printed is kept, because before 2026-10-30 it was thrown away and
+        three halts in one day could not say why.
         """
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "fly.toml")
@@ -224,6 +232,10 @@ class ImageRollout:
             first = deploy_excerpt(res)
             self.log(f"{seat}: fly deploy decided nothing ({first}); trying once more in {DEPLOY_RETRY_PAUSE_S:.0f}s")
             self.sleep(DEPLOY_RETRY_PAUSE_S)
+            if gate_wait is not None:
+                verdict = self.gate.wait_idle(seat, gate_wait, self.log)
+                if verdict.busy:
+                    return "tooling_error", f"{first}; retry deferred, seat busy: " + "; ".join(verdict.reasons)
             res = self.fly.deploy(ids.app_name(seat), image, path)
             cls = classify_deploy(res)
             if cls == "fail":
@@ -367,7 +379,21 @@ class ImageRollout:
             return SeatOutcome(
                 seat, "pending", f"dry run: preflight passed and the seat is idle; would deploy now{would}"
             )
-        return self._deploy_and_verify(seat, rid, plan, toml_text, al)
+        try:
+            return self._deploy_and_verify(seat, rid, plan, toml_text, al)
+        finally:
+            # The release's end: after the verdict, and after any rollback and
+            # its re-smoke. The marker lives on the volume and the supervisor
+            # keeps a live fleet marker across the restart, so until this line
+            # no lane claims or resumes anything on the new boot or the
+            # rollback's (2026-11-19, 11-22: cleared before the rollback, it
+            # let a job start that the rollback then killed).
+            self.gate.clear(seat)
+
+    @staticmethod
+    def _gate_wait(plan: ImagePlan) -> float | None:
+        """How long a restart waits on the busy gate; None under --force-mid-job (no gate)."""
+        return None if plan.force_mid_job else plan.max_idle_wait
 
     def _gate(self, seat: str, rid: str, plan: ImagePlan) -> SeatOutcome | None:
         if plan.force_mid_job:
@@ -433,33 +459,29 @@ class ImageRollout:
         if refused is not None:
             return refused
         since = ids.iso(ids.utc_now())
-        try:
-            deployed, said = self._deploy_saying(seat, plan.release["image_ref"], toml_text)
-            if deployed == "tooling_error":
-                # Most likely the seat still runs the from-image, so it gets its
-                # old pointer back; if the new image did land, its self-test
-                # refuses the older bundle (jobs-bundle-built-for-image).
-                undone = self._unpoint(seat, al)
-                return self._finish(
-                    rid,
-                    plan,
-                    SeatOutcome(
-                        seat,
-                        "tooling_error",
-                        "fly deploy failed twice without saying the release was unhealthy; the seat was not "
-                        f"rolled back ({undone}). Fly said: {said}",
-                    ),
-                )
-            self.store.update_rollout(rid, "smoking")
-            check = (
-                Check("fail", f"fly deploy reported the new release would not come up ({said})")
-                if deployed == "fail"
-                else self._verify(seat, plan, since)
+        deployed, said = self._deploy_saying(seat, plan.release["image_ref"], toml_text, self._gate_wait(plan))
+        if deployed == "tooling_error":
+            # Most likely the seat still runs the from-image, so it gets its
+            # old pointer back; if the new image did land, its self-test
+            # refuses the older bundle (jobs-bundle-built-for-image).
+            undone = self._unpoint(seat, al)
+            return self._finish(
+                rid,
+                plan,
+                SeatOutcome(
+                    seat,
+                    "tooling_error",
+                    "fly deploy failed twice without saying the release was unhealthy; the seat was not "
+                    f"rolled back ({undone}). Fly said: {said}",
+                ),
             )
-        finally:
-            # The marker lives on the volume (/run/smd-jobs is a bind mount),
-            # so the new boot inherits it until it expires: clear it now.
-            self.gate.clear(seat)
+        self.store.update_rollout(rid, "smoking")
+        # The release marker still stands (cleared at the release's end, in run).
+        check = (
+            Check("fail", f"fly deploy reported the new release would not come up ({said})")
+            if deployed == "fail"
+            else self._verify(seat, plan, since)
+        )
         if check.cls == "pass":
             return self._finish(rid, plan, SeatOutcome(seat, "done", check.detail), smoke_class="pass")
         if check.cls != "fail":
@@ -488,11 +510,24 @@ class ImageRollout:
                 ),
                 smoke_class="fail",
             )
+        wait = self._gate_wait(plan)
+        if wait is not None:
+            # A rollback restarts the seat too: behind the gate, as the deploy was.
+            verdict = self.gate.wait_idle(seat, wait, self.log)
+            if verdict.busy:
+                why = "; ".join(verdict.reasons)
+                return self._finish(
+                    rid, plan,
+                    SeatOutcome(seat, "failed", f"rollback deferred, seat busy ({why}). smoke FAIL: {check.detail}. "
+                                f"The seat stays on {plan.release['image_ref']}, NOT rolled back to {from_image}; "
+                                f"volume snapshot {snap}. Page the Captain."),
+                    smoke_class="fail",
+                )  # fmt: skip
         self.log(f"{seat}: smoke FAIL ({check.detail}); rolling back to {from_image}")
         # Before the redeploy: the from-image's boot must mount the bundle it ran.
         undone = self._unpoint(seat, al)
         since = ids.utc_now()
-        back = self._deploy(seat, from_image, from_toml)
+        back = self._deploy(seat, from_image, from_toml, wait)
         again = (
             self._resmoke(seat, plan, from_image, since) if back == "ok" else Check("fail", f"rollback deploy {back}")
         )

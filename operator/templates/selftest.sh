@@ -216,7 +216,13 @@ run_prog() { local out rc=0; out="$(cd / && printf '%s' "$3" | with_budget sh 2>
 # ---------- the verbs seat-checks.sh calls ----------
 check() { run_cmd "$1" strict "$2"; }
 check_script() { run_prog "$1" strict "$2"; }
-check_idle() { run_cmd "$1" soft "$2"; }
+# A lane-is-idle check that passes may say why (lane_idle_cmd: a job resumed
+# after a restart, no release marker standing): that note is its detail.
+check_idle() {
+  local out rc=0
+  out="$(cd / && with_budget sh -c "$2" 2>&1)" || rc=$?
+  if [ "${rc}" -eq 0 ]; then record "$1" 1 0 "$(last_words "${out}")"; else judge "$1" soft "${rc}" "${out}"; fi
+}
 # run_vendor <id> <class strict|soft> <cmd>: a vendor that did not answer is
 # judged by judge_inconclusive; any other exit by <class>.
 run_vendor() {

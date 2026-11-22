@@ -387,8 +387,14 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   turn starts or ends, and a stale one held ap-staging for 45 minutes on 2026-11-11. The program
   ships zlib-compressed, because exec refuses a command over its size cap
   (`operator/bin/lib/fleet/busy.py`; the cron window is that narrow so a seat
-  with 15-minute slot crons still has an idle gap). Busy writes the quiesce marker (`/run/smd-jobs/quiesce`, root-owned,
-  expires on its own) so no new job is claimed, and waits for idle, up to
+  with 15-minute slot crons still has an idle gap). The gate writes the quiesce marker (`/run/smd-jobs/quiesce`, root-owned,
+  expires on its own) BEFORE its first probe, so no new job is claimed or
+  resumed, and answers idle only from a probe taken after it (2026-11-19 and
+  11-22: a first probe that read idle wrote no marker, and a job claimed in
+  the gap was killed). The marker stands until the seat's release has
+  decided, after any rollback and its re-smoke: the Machine stop leaves a
+  live fleet marker in place instead of overwriting it, and the boot keeps
+  it. Busy, the gate waits for idle, up to
   `--max-idle-wait` (30 minutes). Still busy: the seat is skipped as
   `waiting_idle`, never deployed mid-job. Queued work is not busy; the queue is
   on the volume and survives the restart. `--force-mid-job` skips the gate, and
@@ -460,6 +466,9 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
 - **Classify.** Only a real seat failure (a smoke check that ran and said no, a
   Machine that never started, a heartbeat naming another image) rolls the seat
   back to its recorded image and toml, re-smokes it, and HALTS the rollout.
+  The rollback deploy passes the busy gate first, as the deploy did (and so
+  does a deploy retry); a seat busy by then is not rolled back: it halts as
+  `failed`, its detail beginning `rollback deferred, seat busy`, and pages.
   The boot smoke (the re-smoke from a laptop) runs its checks over `fly ssh`,
   and when Fly refuses the ssh tunnel it runs them through `fly machine exec`
   instead (`operator/bin/lib/fly-transport.sh`, the fallback `seat-probe.sh`

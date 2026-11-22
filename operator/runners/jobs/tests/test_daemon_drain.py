@@ -165,3 +165,43 @@ def test_a_live_quiesce_stops_every_lane_claiming(tmp_path: Path, monkeypatch) -
         assert env.is_file(), f"{lane.LANE} moved a queued envelope while quiesced"
         built.append(lane.LANE)
     assert len(set(built)) == len(lanes.LANES)
+
+
+def test_a_boot_under_a_surviving_release_marker_claims_and_resumes_nothing(tmp_path: Path, monkeypatch) -> None:
+    """2026-11-19 and 11-22: a fleet release restarts the seat with its marker
+    standing (the supervisor keeps a live fleet marker across the stop), so the
+    new boot's first tick of every claiming lane must start no child: not the
+    queued envelope, and not the claimed job a restart interrupted. They wait
+    for the release to clear its marker. FALSIFIER: drop the quiesce test from
+    ``_in_progress`` and the claimed job is run on this tick."""
+    for q in QUEUE_ENVS:
+        (tmp_path / q.lower()).mkdir()
+        monkeypatch.setenv(q, str(tmp_path / q.lower()))
+    base = daemon.Daemon(run_dir=tmp_path, broker=object(), runner_cmd=[], customer_slug="example")
+    marker = {"until": time.time() + 1800, "by": "fleet:ops@laptop", "reason": "fleet release", "set_at": time.time()}
+    (tmp_path / quiesce.NAME).write_text(json.dumps(marker))
+    ticked = []
+    for name in lanes.LANES:
+        lane = lanes._module(name).build_lane(base)
+        assert lane is not None, name
+        if not lane.CLAIMS:
+            continue
+        started: list[str] = []
+        # Only the steps that would talk to the broker are stood in for; the
+        # claim and resume decisions are the lane's own.
+        monkeypatch.setattr(lane, "run_job", lambda job_id, _s=started: _s.append(job_id) or "done")
+        monkeypatch.setattr(lane, "dispatch_wakes", lambda: None)
+        monkeypatch.setattr(lane, "wipe_expired", lambda: [])
+        monkeypatch.setattr(lane, "poll_requests", lambda: None)
+        lane.queue.mkdir(parents=True, exist_ok=True)
+        env = lane.queue / "01JQUEUED00000000000000000.json"
+        env.write_text("{}")
+        claimed = lane.job_dir("01JCLAIMED0000000000000000")
+        claimed.mkdir(parents=True, exist_ok=True)
+        (claimed / "daemon.json").write_text(json.dumps({"state": "running", "claimed": True, "attempts": 1}))
+        assert lane.tick() is None, lane.LANE
+        assert started == [], f"{lane.LANE} started {started} under a live release marker"
+        assert env.is_file(), f"{lane.LANE} claimed a queued envelope under a live release marker"
+        assert json.loads((claimed / "daemon.json").read_text())["state"] == "running", lane.LANE
+        ticked.append(lane.LANE)
+    assert "medchron" in ticked and len(ticked) >= 2

@@ -16,7 +16,10 @@
 #   check <id> <cmd>              a shell command with NO single quotes
 #   check_script <id> <program>   an sh program that may contain any quoting
 #   check_idle <id> <cmd>         a lane-is-idle check: the image fails it at
-#                                 boot and WARNS hourly (a job may be running)
+#                                 boot and WARNS hourly (a job may be running);
+#                                 its cmd (lane_idle_cmd) fails only under a
+#                                 live release marker, and its output on a
+#                                 pass is the note
 #   check_vendor <id> <cmd>       asks a vendor: the image fails it at boot and
 #                                 WARNS hourly (vendor weather must not page).
 #                                 Exit 3 means the vendor did not answer: a
@@ -57,6 +60,19 @@ seat_prog() {
 # file fails, and the self-test records selftest-checks-unloadable.
 # shellcheck source=/dev/null
 . "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh" || return 1
+
+# lane_idle_cmd <child pidfile>: the ONE command every lane's idle check runs
+# (both transports). A job child at boot is a broken release only when a live
+# fleet release marker stands (the release holds that marker from before its
+# restart to its end, and the lanes claim and resume nothing under it). With no
+# release marker the child is a job the lane resumed after a restart, which is
+# what a lane is for: a pass carrying that note. On 2026-11-19 and 11-22 a
+# correctly resumed job failed this check at boot, read as a broken image, and
+# the rollback killed the job. The marker's expiry is read as whole seconds.
+lane_idle_cmd() {
+  local f="${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/$1" m="${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/quiesce"
+  printf '%s' "test -f ${f} || exit 0; u=\$(sed -n \"s/.*until.: *\\([0-9][0-9]*\\).*/\\1/p\" ${m} 2>/dev/null | head -n 1); if grep -q \"by.: .fleet:\" ${m} 2>/dev/null && [ \"\${u:-0}\" -gt \"\$(date +%s)\" ]; then echo \"${f} present while a live fleet release marker stands: a job was claimed during the release\"; exit 1; fi; echo \"${f} present, no live release marker: a job resumed after a restart, not a broken release\""
+}
 
 # shellcheck disable=SC2016 # the check strings are evaluated on the Machine, not here
 seat_checks() {
@@ -613,7 +629,7 @@ check_lever "for e in ${SEAT_ROOT}/proc/[0-9]*/environ; do if tr \"\\000\" \"\\n
 # The runner daemon is a root process that spends the firm's model budget on
 # its own schedule, so the checks here are the ones that would otherwise be
 # invisible: that its loop turns (tick freshness, the 11c idiom — not a pid),
-# that it is NOT running a job on a fresh boot (the child pidfile the daemon
+# that it claimed no job under a live release marker (lane_idle_cmd; the child pidfile the daemon
 # writes for exactly this question; a `pgrep -f` would match its own sh -c
 # wrapper), that the memory controller the cap depends on is really there
 # (the heartbeat says which; `none` means jobs would run uncapped beside the
@@ -628,7 +644,7 @@ check_lever "for e in ${SEAT_ROOT}/proc/[0-9]*/environ; do if tr \"\\000\" \"\\n
 check "jobs-uid-exists" "id -u jobs >/dev/null"
 if any_lane_runs; then
 check "jobs-daemon-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "jobs-daemon-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/child.pid"
+check_idle "jobs-daemon-idle" "$(lane_idle_cmd child.pid)"
 # cgroup2 on a unified guest, cgroup1 on Fly's hybrid layout (live-probed
 # 2026-08-31: v2 is mounted bare at /sys/fs/cgroup/unified with no
 # controllers; memory is on the v1 mount). `none` is the failure.
@@ -691,7 +707,7 @@ fi
 # this tick aging, which is the only way that death would be seen.
 if lane_runs demand; then
 check "demand-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/demand-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "demand-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/demand-child.pid"
+check_idle "demand-lane-idle" "$(lane_idle_cmd demand-child.pid)"
 check "demand-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_DEMAND_QUEUE})\" = root:workspace-broker:770 ]"
 check "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/demand-jobs)\" = root:jobs:710 ]"
 fi
@@ -700,7 +716,7 @@ fi
 # no drafting inputs ticks and defers, so a silent tick is still a dead thread.
 if lane_runs drafting; then
 check "drafting-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/drafting-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "drafting-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/drafting-child.pid"
+check_idle "drafting-lane-idle" "$(lane_idle_cmd drafting-child.pid)"
 check "drafting-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_DRAFTING_QUEUE})\" = root:workspace-broker:770 ]"
 check "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/drafting-jobs)\" = root:jobs:710 ]"
 fi
@@ -710,7 +726,7 @@ fi
 # group workspace-broker read-only, never writable by it).
 if lane_runs litigation; then
 check "litigation-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "litigation-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation-child.pid"
+check_idle "litigation-lane-idle" "$(lane_idle_cmd litigation-child.pid)"
 check "litigation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_LITIGATION_QUEUE})\" = root:workspace-broker:770 ]"
 check "litigation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation-jobs)\" = root:jobs:710 ]"
 check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation/state)\" = jobs:jobs:700 ]"
@@ -725,7 +741,7 @@ fi
 # cache, which the litigation checks above already hold.
 if lane_runs casefile; then
 check "casefile-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "casefile-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile-child.pid"
+check_idle "casefile-lane-idle" "$(lane_idle_cmd casefile-child.pid)"
 check "casefile-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_CASEFILE_QUEUE})\" = root:workspace-broker:770 ]"
 check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile-jobs)\" = root:jobs:710 ]"
 check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile/state)\" = jobs:jobs:700 ]"

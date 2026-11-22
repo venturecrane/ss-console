@@ -376,14 +376,40 @@ def test_unreadable_customer_yaml_reads_as_authored_never_as_absent(seat: dict[s
     assert not [c for c in doc["checks"] if c["id"].endswith("-absent") and "not authored" in c["detail"]]
 
 
-def test_busy_lane_fails_at_boot_and_warns_hourly(seat: dict[str, Path]) -> None:
+def _release_marker(seat: dict[str, Path], by: str = "fleet:ops@laptop", ttl: float = 1800.0) -> None:
+    body = {"until": time.time() + ttl, "by": by, "reason": "fleet release", "set_at": time.time()}
+    _write(seat["root"] / "run/smd-jobs/quiesce", json.dumps(body))
+
+
+def test_a_job_claimed_under_a_release_marker_fails_at_boot_and_warns_hourly(seat: dict[str, Path]) -> None:
+    # The falsifier the check exists for: the release holds its marker from
+    # before its restart to its end, so a child at boot under it is a lane that
+    # claimed when it must not have.
     _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
     assert _check(_once(seat, "boot"), "jobs-daemon-idle")["ok"] is True
     _write(seat["root"] / "run/smd-jobs/child.pid", "4242\n")
+    _release_marker(seat)
     boot = _check(_once(seat, "boot"), "jobs-daemon-idle")
     assert boot["ok"] is False and boot["warn"] is False
+    assert "live fleet release marker" in boot["detail"]
     hourly = _check(_once(seat, "hourly"), "jobs-daemon-idle")
     assert hourly["ok"] is False and hourly["warn"] is True
+
+
+def test_a_job_resumed_at_boot_with_no_release_marker_passes_with_a_note(seat: dict[str, Path]) -> None:
+    # 2026-11-19 and 11-22: a correctly resumed job failed this check at boot,
+    # read as a broken image, and the rollback killed it. FALSIFIER: go back to
+    # "! test -f child.pid" and both boots below fail.
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
+    _write(seat["root"] / "run/smd-jobs/child.pid", "4242\n")
+    for marker in (None, "expired", "machine-stop"):
+        if marker == "expired":
+            _release_marker(seat, ttl=-60.0)
+        elif marker == "machine-stop":
+            _release_marker(seat, by="machine-stop")
+        boot = _check(_once(seat, "boot"), "jobs-daemon-idle")
+        assert boot["ok"] is True and boot["warn"] is False, (marker, boot)
+        assert "a job resumed after a restart" in boot["detail"], (marker, boot)
 
 
 JOBS_VOLUME_CHECKS = (

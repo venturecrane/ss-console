@@ -803,3 +803,55 @@ def test_the_probe_finds_a_starting_gateway_process_and_not_its_forked_child(tmp
     assert [p["pid"] for p in facts["gateway_processes"]] == [700]
     assert 290 <= facts["gateway_processes"][0]["age_s"] <= 310
     assert busy.decide(facts).busy
+
+
+# --- the marker stands before the verdict (2026-11-19 and 11-22) -----------------------
+#
+# Both release interruptions on record began with a first probe that read idle:
+# wait_idle returned before writing any marker, so a queued or between-retry job
+# (idle by design) was claimed between the check and the restart.
+
+
+class _OrderedFly(FakeFly):
+    """A FakeFly that records, in order, each marker write and each busy probe."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.events: list[str] = []
+
+    def run_python(self, app: str, source: str, timeout: float = 90) -> Result:
+        if "SMD_QUIESCE" in source and "ARGS = json.loads" in source:
+            self.events.append("quiesce-set" if '\\"action\\": \\"set\\"' in source else "quiesce-clear")
+        elif "SMD_SELFTEST_PLANT" not in source:
+            self.events.append("probe")
+        return super().run_python(app, source, timeout)
+
+
+def test_a_first_probe_that_reads_idle_still_follows_the_marker() -> None:
+    # FALSIFIER: return on the first idle probe before quiesce() (the pre-fix
+    # shape) and events reads ["probe"]: no marker stood when the restart came.
+    fly = _OrderedFly()
+    verdict = _gate(fly).wait_idle("captain-mark", 3600, lambda _: None)
+    assert not verdict.busy
+    assert fly.events == ["quiesce-set", "probe"]
+
+
+def test_a_seat_that_turns_busy_after_the_marker_is_busy() -> None:
+    # The marker stops new claims, not a job claimed a moment before it: the
+    # probe after the marker is what decides, and it reads the child.
+    fly = _OrderedFly()
+    fly.probe_facts["captain-mark"] = [_facts(children=[{"file": "child.pid", "pid": "77", "alive": True}])]
+    verdict = _gate(fly).wait_idle("captain-mark", 60, lambda _: None)
+    assert verdict.busy and "child.pid: job child pid 77 alive" in verdict.reasons
+    assert fly.events[:2] == ["quiesce-set", "probe"]
+    # Every poll renews the marker before it probes: no probe ever runs unmarked.
+    assert all(fly.events[i - 1] == "quiesce-set" for i, e in enumerate(fly.events) if e == "probe")
+    assert fly.events.count("probe") > 1
+
+
+def test_a_seat_with_no_machine_is_idle_with_no_marker_written() -> None:
+    fly = _OrderedFly()
+    fly.no_machine.add("hermes-captain-mark")
+    verdict = _gate(fly).wait_idle("captain-mark", 60, lambda _: None)
+    assert not verdict.busy and verdict.reasons == [busy.NO_MACHINE_REASON]
+    assert fly.events == []
