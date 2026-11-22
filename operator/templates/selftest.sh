@@ -221,7 +221,13 @@ check_script() { run_prog "$1" strict "$2"; }
 check_idle() {
   local out rc=0
   out="$(cd / && with_budget sh -c "$2" 2>&1)" || rc=$?
-  if [ "${rc}" -eq 0 ]; then record "$1" 1 0 "$(last_words "${out}")"; else judge "$1" soft "${rc}" "${out}"; fi
+  if [ "${rc}" -eq 0 ]; then
+    record "$1" 1 0 "$(last_words "${out}")"
+  elif [ "${rc}" -eq "${LANE_IDLE_STALE_RC:-3}" ]; then
+    record "$1" 0 1 "$(last_words "${out}")" # a stale pidfile: a warning, at boot and hourly
+  else
+    judge "$1" soft "${rc}" "${out}"
+  fi
 }
 # run_vendor <id> <class strict|soft> <cmd>: a vendor that did not answer is
 # judged by judge_inconclusive; any other exit by <class>.

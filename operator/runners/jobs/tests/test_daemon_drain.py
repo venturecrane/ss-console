@@ -205,3 +205,49 @@ def test_a_boot_under_a_surviving_release_marker_claims_and_resumes_nothing(tmp_
         assert json.loads((claimed / "daemon.json").read_text())["state"] == "running", lane.LANE
         ticked.append(lane.LANE)
     assert "medchron" in ticked and len(ticked) >= 2
+
+
+def test_a_claim_that_slipped_in_before_the_marker_is_never_started(tmp_path: Path, monkeypatch) -> None:
+    """The release's marker can land between claim_next's quiesce look and the
+    start: the claim must go back to the queue and no child must start.
+    FALSIFIER (fails on ff4e5898c): the tick ran the job it had just claimed."""
+    for q in QUEUE_ENVS:
+        (tmp_path / q.lower()).mkdir()
+        monkeypatch.setenv(q, str(tmp_path / q.lower()))
+    base = daemon.Daemon(run_dir=tmp_path, broker=object(), runner_cmd=[], customer_slug="example")
+    marker = {"until": time.time() + 1800, "by": "fleet:ops@laptop", "reason": "fleet release", "set_at": time.time()}
+    ticked = []
+    for name in lanes.LANES:
+        lane = lanes._module(name).build_lane(base)
+        assert lane is not None, name
+        if not lane.CLAIMS:
+            continue
+        (tmp_path / quiesce.NAME).unlink(missing_ok=True)
+        lane._quiesce_logged.clear()
+        started: list[str] = []
+        job_id = "01JRACED00000000000000000" + str(len(ticked)).zfill(1)
+        lane.queue.mkdir(parents=True, exist_ok=True)
+        env = lane.queue / f"{job_id}.json"
+        env.write_text('{"x": 1}')
+
+        def claim_then_marker(_lane=lane, _env=env, _id=job_id) -> str:
+            # What claim_next does once its quiesce look passed, then the gate's write.
+            jd = _lane.job_dir(_id)
+            jd.mkdir(parents=True, exist_ok=True)
+            _env.replace(jd / "envelope.json")
+            _lane._write_state(_id, claimed=True, state="submitted", claimed_at=_lane.clock(), attempts=0)
+            (tmp_path / quiesce.NAME).write_text(json.dumps(marker))
+            return _id
+
+        monkeypatch.setattr(lane, "claim_next", claim_then_marker)
+        monkeypatch.setattr(lane, "run_job", lambda jid, _s=started: _s.append(jid) or "done")
+        monkeypatch.setattr(lane, "_run_backing_off", lambda jid, _s=started: _s.append(jid) or "done")
+        monkeypatch.setattr(lane, "dispatch_wakes", lambda: None)
+        monkeypatch.setattr(lane, "wipe_expired", lambda: [])
+        monkeypatch.setattr(lane, "poll_requests", lambda: None)
+        assert lane.tick() is None, lane.LANE
+        assert started == [], f"{lane.LANE} started {started} after the marker landed"
+        assert env.is_file() and env.read_text() == '{"x": 1}', f"{lane.LANE} did not return the claim to its queue"
+        assert not lane.job_dir(job_id).exists(), lane.LANE
+        ticked.append(lane.LANE)
+    assert "medchron" in ticked and len(ticked) >= 2

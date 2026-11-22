@@ -855,3 +855,30 @@ def test_a_seat_with_no_machine_is_idle_with_no_marker_written() -> None:
     verdict = _gate(fly).wait_idle("captain-mark", 60, lambda _: None)
     assert not verdict.busy and verdict.reasons == [busy.NO_MACHINE_REASON]
     assert fly.events == []
+
+
+def test_the_rollback_judgement_defers_only_for_work_a_restart_would_cut_off() -> None:
+    symptoms = _facts(
+        lanes=[{"file": "heartbeat.json", "age_s": 4000, "running": None, "wakes_pending": 0, "daemon_alive": True}],
+        crons=[{"name": "slot", "next_in_s": 30}],
+        gateway_processes=[{"pid": 914, "age_s": 10}],
+        errors=["state.db unreadable"],
+    )
+    assert busy.decide(symptoms).busy and not busy.decide_rollback(symptoms).busy
+    for work in (
+        _facts(children=[{"file": "child.pid", "pid": "7", "alive": True}]),
+        _facts(gateways=[{"file": "g", "alive": True, "live": {"active_agents": 1, "active_work": ["chat"]}}]),
+        _facts(turns=[{"file": "t", "reply_open": True, "sent_ago_s": 30}]),
+    ):
+        assert busy.decide_rollback(work).busy, work
+
+
+def test_a_rollback_gate_that_cannot_read_the_seat_lets_the_rollback_go() -> None:
+    fly = _OrderedFly()
+    fly.ssh_raises.add("captain-mark")
+    log: list[str] = []
+    verdict = _gate(fly).wait_rollback("captain-mark", 60, log.append)
+    assert not verdict.busy and "seat unreadable at the rollback" in verdict.reasons[0]
+    # The forward gate still halts on the same seat: only the rollback proceeds.
+    with pytest.raises(ToolingError):
+        _gate(fly).wait_idle("captain-mark", 60, lambda _: None)

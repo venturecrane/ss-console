@@ -168,20 +168,16 @@ def _starting_reasons(facts: dict[str, Any]) -> list[str]:
     return out
 
 
-def decide(
-    facts: dict[str, Any],
-    stale_after: float = STALE_AFTER_S,
-    ahead: float = CRON_AHEAD_S,
-    behind: float = CRON_BEHIND_S,
-) -> Verdict:
+def _child_reasons(facts: dict[str, Any]) -> list[str]:
+    return [
+        f"{child.get('file')}: job child pid {child.get('pid')} alive"
+        for child in facts.get("children") or []
+        if child.get("alive")
+    ]
+
+
+def _gateway_reasons(facts: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
-    for child in facts.get("children") or []:
-        if child.get("alive"):
-            reasons.append(f"{child.get('file')}: job child pid {child.get('pid')} alive")
-    for lane in facts.get("lanes") or []:
-        reasons.extend(_lane_reasons(lane, stale_after))
-    for cron in facts.get("crons") or []:
-        reasons.extend(_cron_reasons(cron, ahead, behind))
     for gw in facts.get("gateways") or []:
         live = gw.get("live")
         if gw.get("alive") and isinstance(live, dict):
@@ -205,13 +201,46 @@ def decide(
         leaked = isinstance(quiet, (int, float)) and float(quiet) > GATEWAY_QUIET_S
         if gw.get("alive") and active > 0 and not leaked:
             reasons.append(f"{gw.get('file')}: the gateway is running {active} turn(s)")
-    reasons.extend(_starting_reasons(facts))
+    return reasons
+
+
+def _turn_reasons(facts: dict[str, Any]) -> list[str]:
+    reasons = []
     for turn in facts.get("turns") or []:
         ago = turn.get("sent_ago_s")
         if turn.get("reply_open") and ago is not None and 0 <= float(ago) <= TURN_BUSY_S:
             reasons.append(f"{turn.get('file')}: DELIVER turn started {float(ago):.0f}s ago, its reply not yet seen")
+    return reasons
+
+
+def decide(
+    facts: dict[str, Any],
+    stale_after: float = STALE_AFTER_S,
+    ahead: float = CRON_AHEAD_S,
+    behind: float = CRON_BEHIND_S,
+) -> Verdict:
+    reasons = _child_reasons(facts)
+    for lane in facts.get("lanes") or []:
+        reasons.extend(_lane_reasons(lane, stale_after))
+    for cron in facts.get("crons") or []:
+        reasons.extend(_cron_reasons(cron, ahead, behind))
+    reasons += _gateway_reasons(facts) + _starting_reasons(facts) + _turn_reasons(facts)
     for err in facts.get("errors") or []:
         reasons.append(f"cannot evaluate: {err}")
+    return Verdict(bool(reasons), reasons, facts)
+
+
+def decide_rollback(facts: dict[str, Any]) -> Verdict:
+    """Busy for a ROLLBACK: only work a restart would really cut off.
+
+    A live job child, a gateway turn in flight, a DELIVER turn still sending.
+    Everything else ``decide`` counts (a gateway still starting, a stale lane
+    heartbeat, a store it could not read, a cron window) is what a broken
+    release looks like from outside: a crash-looping gateway is "starting" with
+    a new pid every time. Waiting on those would leave the seat on the broken
+    image for the whole idle wait and then not roll it back at all.
+    """
+    reasons = _child_reasons(facts) + _gateway_reasons(facts) + _turn_reasons(facts)
     return Verdict(bool(reasons), reasons, facts)
 
 
@@ -244,7 +273,7 @@ class BusyGate:
         self.clock = clock
         self.probe_source = (HERE / "remote_busy_probe.py").read_text(encoding="utf-8")
 
-    def probe(self, seat: str) -> Verdict:
+    def probe(self, seat: str, judge: Callable[[dict[str, Any]], Verdict] = decide) -> Verdict:
         if not self.fly.machines(ids.app_name(seat)):
             return Verdict(False, [NO_MACHINE_REASON], {"machines": 0})
         res = self.fly.run_python(ids.app_name(seat), self.probe_source)
@@ -252,7 +281,7 @@ class BusyGate:
             if looks_like_transport_failure(res):
                 raise TransportFailure(f"busy probe on {seat} failed (transport): {res.text.strip()[-300:]}")
             raise ToolingError(f"busy probe on {seat} failed (rc={res.rc}): {res.text.strip()[-300:]}")
-        return decide(parse_probe(res.stdout))
+        return judge(parse_probe(res.stdout))
 
     def quiesce(self, seat: str, reason: str) -> None:
         src = quiesce_source("set", self.holder, self.clock() + QUIESCE_TTL_S, reason)
@@ -297,9 +326,34 @@ class BusyGate:
         keeps a live fleet marker across the stop). A seat with no Machine has
         nothing to mark and nothing running.
         """
+        return self._wait(seat, max_wait, log, decide)
 
+    def wait_rollback(self, seat: str, max_wait: float, log: Callable[[str], None]) -> Verdict:
+        """The gate before a ROLLBACK restart: busy only per ``decide_rollback``.
+
+        A seat that cannot be marked or probed (a Machine that never came up,
+        an image whose exec is broken) is rolled back, not left down on the
+        failing image: the release's marker has stood since before its deploy,
+        so no lane can have claimed anything since.
+        """
+        try:
+            return self._wait(seat, max_wait, log, decide_rollback)
+        except ToolingError as exc:
+            log(f"{seat}: the rollback gate could not read the seat ({exc}); rolling back")
+            return Verdict(False, [f"seat unreadable at the rollback ({exc}); the release marker stood throughout"])
+
+    def renew(self, seat: str, log: Callable[[str], None]) -> None:
+        """Push the marker's expiry out again; best effort (a seat mid-boot may not answer)."""
+        try:
+            self.quiesce(seat, f"fleet release by {self.holder}")
+        except ToolingError as exc:
+            log(f"{seat}: could not renew the quiesce marker ({exc}); it stands until its expiry")
+
+    def _wait(
+        self, seat: str, max_wait: float, log: Callable[[str], None], judge: Callable[[dict[str, Any]], Verdict]
+    ) -> Verdict:
         def probe() -> Verdict:
-            return self._riding_transport(seat, "busy probe", lambda: self.probe(seat), log)
+            return self._riding_transport(seat, "busy probe", lambda: self.probe(seat, judge), log)
 
         def quiesce() -> None:
             reason = f"fleet release by {self.holder}"

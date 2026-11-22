@@ -329,6 +329,7 @@ def _image_rollout(ctx: Ctx, holder: str, align_on: bool | None = None) -> Image
         ctx.store, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), PreflightChecker.for_ctx(ctx),
         SmokeRunner(ctx.runner, str(ctx.repo)), ctx.render, ctx.log, ctx.sleep, ctx.clock,
         FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock), ctx.ledger, bundle_align_for(ctx, align_on),
+        holder,
     )  # fmt: skip
 
 

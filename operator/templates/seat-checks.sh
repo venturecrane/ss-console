@@ -69,9 +69,17 @@ seat_prog() {
 # what a lane is for: a pass carrying that note. On 2026-11-19 and 11-22 a
 # correctly resumed job failed this check at boot, read as a broken image, and
 # the rollback killed the job. The marker's expiry is read as whole seconds.
+#
+# A pidfile is believed only when its pid is alive and the file was written
+# this boot (not older than /proc/stat btime): a daemon SIGKILLed mid-job
+# leaves one behind, and that is neither a claim during a release (it would
+# roll a good release back) nor a silent pass (a dead job child would go
+# unseen). It exits LANE_IDLE_STALE_RC, which both transports record as a
+# WARNING, at boot and hourly.
+LANE_IDLE_STALE_RC=3
 lane_idle_cmd() {
   local f="${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/$1" m="${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/quiesce"
-  printf '%s' "test -f ${f} || exit 0; u=\$(sed -n \"s/.*until.: *\\([0-9][0-9]*\\).*/\\1/p\" ${m} 2>/dev/null | head -n 1); if grep -q \"by.: .fleet:\" ${m} 2>/dev/null && [ \"\${u:-0}\" -gt \"\$(date +%s)\" ]; then echo \"${f} present while a live fleet release marker stands: a job was claimed during the release\"; exit 1; fi; echo \"${f} present, no live release marker: a job resumed after a restart, not a broken release\""
+  printf '%s' "test -f ${f} || exit 0; p=\$(tr -dc 0-9 < ${f}); b=\$(sed -n \"s/^btime //p\" ${SEAT_ROOT}/proc/stat 2>/dev/null); if [ -z \"\$p\" ] || ! kill -0 \"\$p\" 2>/dev/null || { [ -n \"\$b\" ] && [ \"\$(stat -c %Y ${f})\" -lt \"\$b\" ]; }; then echo \"${f} names pid \${p:-none}, not a live job child of this boot: a stale pidfile (a daemon killed mid-job?)\"; exit ${LANE_IDLE_STALE_RC}; fi; u=\$(sed -n \"s/.*until.: *\\([0-9][0-9]*\\).*/\\1/p\" ${m} 2>/dev/null | head -n 1); if grep -q \"by.: .fleet:\" ${m} 2>/dev/null && [ \"\${u:-0}\" -gt \"\$(date +%s)\" ]; then echo \"${f} present while a live fleet release marker stands: a job was claimed during the release\"; exit 1; fi; echo \"${f} present, no live release marker: a job resumed after a restart, not a broken release\""
 }
 
 # shellcheck disable=SC2016 # the check strings are evaluated on the Machine, not here

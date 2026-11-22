@@ -88,7 +88,7 @@ from typing import Any, Callable
 
 from . import ids, ordering, smoke
 from .busy import BusyGate
-from .d1 import FleetStore, seat_lease_name
+from .d1 import FleetStore, renew_seat_lease
 from .fly import Fly, deploy_excerpt
 from .r2 import R2, bundle_manifest_key, bundle_pointer_key, bundle_tarball_key
 from .rings import Ring
@@ -272,20 +272,8 @@ class BundleRollout:
             self.log(f"could not record rollout state {state} ({exc}); carrying on")
 
     def _renew(self, seat: str) -> None:
-        """Renew the seat's lease (2 h TTL, d1.LEASE_TTL): the urgent path's worst case runs past it.
-
-        Best effort, as the status rows are: a lost or unrenewable lease is
-        logged, and the step finishes what it began on the seat.
-        """
-        if self.holder is None:
-            return
-        try:
-            kept = self.store.renew_lease(self.holder, seat_lease_name(seat))
-        except ToolingError as exc:
-            self.log(f"{seat}: could not renew the seat lease ({exc}); carrying on")
-            return
-        if not kept:
-            self.log(f"{seat}: the seat lease is no longer ours; finishing what this step began on the seat")
+        """Renew the seat's lease (2 h TTL, d1.LEASE_TTL): the urgent path's worst case runs past it."""
+        renew_seat_lease(self.store, self.holder, seat, self.log)
 
     def load_manifest(self, name: str, version: str) -> tuple[dict[str, Any], str, str]:
         return load_manifest(self.r2, name, version)
@@ -363,6 +351,7 @@ class BundleRollout:
             said = self._restore(pointer, previous)
             return SeatOutcome(seat, "rolled_back", f"SEAT DOWN: {restart.words}; {said}; not restarted again")
         self._mark(rid, "smoking")
+        self.gate.renew(seat, self.log)  # the read-back can outlast the marker's expiry
         check = self._verify(seat, name, version, row, since, selftest)
         self._renew(seat)
         note = f"; {restart.words}" if restart.words else ""
@@ -551,7 +540,7 @@ class BundleRollout:
         if state == "started":
             # The caller's marker still stands and is renewed here; the caller
             # clears it once this read-back has decided.
-            verdict = self.gate.wait_idle(seat, self.max_idle_wait, self.log)
+            verdict = self.gate.wait_rollback(seat, self.max_idle_wait, self.log)
             if verdict.busy:
                 why = "; ".join(verdict.reasons)
                 return RolledBack(f"{said}; restart deferred, the seat is busy ({why}): its next boot takes it",

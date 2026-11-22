@@ -229,6 +229,24 @@ def test_a_bundle_rollback_keeps_the_marker_until_its_read_back_decides() -> Non
     assert events[-1] == "clear" and events.count("clear") == 1, events
 
 
+def test_a_bundle_rollback_is_not_deferred_by_the_rejected_bundles_own_symptoms() -> None:
+    """FALSIFIER (fails on ff4e5898c): the rollback gate judged with the full
+    busy rule, so a gateway crash-looping on the rejected bundle ("still
+    starting", a new pid each time) deferred the rollback restart."""
+    w = World(["lane-a"])
+    w.publish(V1)
+    w.publish(V2)
+    assert w.run("lane-a", V1).state == "done"
+    w.refuses.add("lane-a")
+    starting = {"lanes": [], "children": [], "crons": [], "errors": [], "gateways": [],
+                "gateway_processes": [{"pid": 913, "age_s": 20}]}  # fmt: skip
+    w.fly.probe_facts["lane-a"] = [{"lanes": [], "children": [], "crons": [], "errors": []}, starting]
+    out = w.run("lane-a", V2)
+    assert out.state == "rolled_back", out.detail
+    assert "restart deferred" not in out.detail
+    assert w.fly.restarts == ["hermes-lane-a"] * 3, "the rollback restart was made"
+
+
 def test_a_seat_with_no_previous_pointer_has_it_removed_on_rollback() -> None:
     w = World(["lane-a"])
     w.publish(V1)

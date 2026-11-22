@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from bin.lib.fleet import ids
+from bin.lib.fleet import busy, ids
 from bin.lib.fleet.busy import BusyGate
 from bin.lib.fleet.preflight import PreflightChecker
 from bin.lib.fleet.r2 import image_key
@@ -907,3 +907,102 @@ def test_a_seat_busy_at_the_deploy_retry_is_not_deployed_again() -> None:
     assert events.count("deploy") == 1 and "deploy-old" not in events
     assert "retry deferred, seat busy" in _details(w)["ap-staging"]
     assert events[-1] == "clear"
+
+
+# -- review of the branch (bug review, 2026-11-22) -------------------------------------
+
+
+def _exec_breaks_after_the_first_deploy(w: World) -> None:
+    """From the first deploy on, every `fly machine exec` to the seat raises (a broken image)."""
+    deploy = w.fly.deploy
+
+    def breaking_deploy(app: str, image: str, config_path: str) -> Result:
+        res = deploy(app, image, config_path)
+        w.fly.ssh_raises.add(app.removeprefix("hermes-"))
+        return res
+
+    w.fly.deploy = breaking_deploy  # type: ignore[method-assign]
+
+
+def test_a_seat_whose_exec_is_broken_after_the_deploy_is_still_rolled_back() -> None:
+    # FALSIFIER (fails on ff4e5898c): the rollback gate's exec raised, the
+    # rollback deploy was skipped, and the seat was left on the broken image as
+    # tooling_error.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    _exec_breaks_after_the_first_deploy(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back", _details(w)["ap-staging"]
+    assert [img for _, img in deployed_images(w)][-1].endswith("deployment-OLD")
+
+
+def test_a_machine_that_is_not_started_is_rolled_back_without_the_gate() -> None:
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    events = _ordered(w)
+    deploy = w.fly.deploy
+
+    def stopping_deploy(app: str, image: str, config_path: str) -> Result:
+        res = deploy(app, image, config_path)
+        w.fly.machine_state = "stopped"
+        return res
+
+    w.fly.deploy = stopping_deploy  # type: ignore[method-assign]
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back"
+    at = events.index("deploy-old")
+    assert "probe" not in events[events.index("deploy") : at], events
+    assert any("rolling back ungated" in line for line in w.logs)
+
+
+def test_a_broken_releases_own_symptoms_never_defer_its_rollback() -> None:
+    # FALSIFIER (fails on ff4e5898c): a crash-looping gateway reads "still
+    # starting", a dead daemon's beat reads stale, a store reads unreadable; the
+    # full busy judgement deferred the rollback and left the seat broken.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    broken = {
+        "lanes": [{"file": "heartbeat.json", "age_s": 4000, "running": None, "wakes_pending": 0, "daemon_alive": True}],
+        "children": [],
+        "crons": [{"name": "slot", "next_in_s": 60}],
+        "gateways": [],
+        "gateway_processes": [{"pid": 912, "age_s": 30}],
+        "errors": ["state.db unreadable"],
+    }
+    w.fly.probe_facts["ap-staging"] = [_IDLE, broken]
+    w.release_all(only="ap-staging", max_idle_wait=120)
+    assert w.store.states()["ap-staging"] == "rolled_back", _details(w)["ap-staging"]
+    assert busy.decide(broken).busy and not busy.decide_rollback(broken).busy
+
+
+def test_the_marker_and_the_lease_are_renewed_before_the_verify_and_the_re_smoke() -> None:
+    # FALSIFIER (fails on ff4e5898c): the marker was written once, at the gate,
+    # with a 30 minute expiry, and the verify and re-smoke windows can pass it.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    w.roll.holder = "tester"
+    renewed: list[str] = []
+    renew = w.store.renew_lease
+
+    def recording_renew(holder: str, name: str = "rollout") -> bool:
+        renewed.append(name)
+        return renew(holder, name)
+
+    w.store.renew_lease = recording_renew  # type: ignore[method-assign]
+    events = _ordered(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back"
+    forward, back = events.index("deploy"), events.index("deploy-old")
+    assert events[forward + 1] == "set", events  # before the verify
+    assert "set" in events[back + 1 : -1], events  # before the re-smoke
+    assert renewed.count("seat:ap-staging") >= 2, renewed
+
+
+def test_a_deploy_retry_whose_gate_cannot_read_the_seat_still_restores_the_pointer() -> None:
+    # FALSIFIER (fails on ff4e5898c): the gate's ToolingError escaped
+    # _deploy_saying, skipping the branch that restores the bundle pointer.
+    w = World()
+    w.fly.deploy_results = [Result(1, "", "Error: context deadline exceeded")]
+    _exec_breaks_after_the_first_deploy(w)
+    w.release_all(only="ap-staging")
+    detail = _details(w)["ap-staging"]
+    assert w.store.states()["ap-staging"] == "tooling_error"
+    assert "retry not made, the busy gate could not read the seat" in detail
+    assert "bundle pointer untouched" in detail  # the branch that calls _unpoint ran
+    assert len(w.fly.deploys) == 1

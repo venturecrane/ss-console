@@ -38,8 +38,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable
 
 from . import ids, smoke, volume_epoch
-from .busy import BusyGate
-from .d1 import FleetStore
+from .busy import BusyGate, Verdict
+from .d1 import FleetStore, renew_seat_lease
 from .fly import Fly, classify_deploy, deploy_excerpt, deploy_failure_evidence
 from .ledger import VerifyLedger
 from .preflight import PreflightChecker
@@ -141,12 +141,23 @@ class ImageRollout:
         fleet_side: smoke.FleetSideChecks | None = None,
         ledger: VerifyLedger | None = None,
         align: BundleAlign | None = None,
+        holder: str | None = None,
     ) -> None:
         self.store, self.fly, self.gate, self.preflight, self.smoker = store, fly, gate, preflight, smoker
         self.render, self.log, self.sleep, self.clock = render, log, sleep, clock
         self.fleet_side = fleet_side
         self.ledger = ledger
         self.align = align
+        # The holder of each seat's lease (waves.SeatLease, the caller's). The
+        # gate waits, the deploy retry, the verify windows and a rollback can
+        # together run past the lease's 2 h, so it is renewed before the verify
+        # and before the rollback. None: nothing to renew (a test, a dry run).
+        self.holder = holder
+
+    def _hold(self, seat: str) -> None:
+        """Keep this step's claims on the seat ahead of their expiry: the marker (30 min) and the lease (2 h)."""
+        self.gate.renew(seat, self.log)
+        renew_seat_lease(self.store, self.holder, seat, self.log)
 
     # -- helpers ---------------------------------------------------------------
     def _current_digest(self, seat: str) -> str | None:
@@ -207,10 +218,53 @@ class ImageRollout:
             return f"the seat runs volume epoch {now}; this release is epoch {to_epoch}, an older volume layout"
         return ""
 
-    def _deploy(self, seat: str, image: str, toml_text: str, gate_wait: float | None) -> str:
-        return self._deploy_saying(seat, image, toml_text, gate_wait)[0]
+    def _rollback_gate(self, seat: str, wait: float | None) -> Verdict | None:
+        """The gate before a rollback restart; None when no gate applies.
 
-    def _deploy_saying(self, seat: str, image: str, toml_text: str, gate_wait: float | None) -> tuple[str, str]:
+        Only a started Machine can be running work, so a Machine that never
+        came up, or cannot be read, is rolled back ungated (its exec would
+        raise and leave the seat down on the failing image). A started one is
+        judged by ``BusyGate.wait_rollback``: only a live job child or a turn
+        in flight defers, never the failing release's own symptoms.
+        """
+        if wait is None:
+            return None
+        try:
+            state = self.fly.machine(ids.app_name(seat)).get("state")
+        except ToolingError as exc:
+            self.log(f"{seat}: the Machine could not be read before the rollback ({exc}); rolling back ungated")
+            return None
+        if state != "started":
+            self.log(f"{seat}: the Machine is {state}; nothing can be running, rolling back ungated")
+            return None
+        return self.gate.wait_rollback(seat, wait, self.log)
+
+    def _retry_gate(self, seat: str, gate_wait: float | None, rollback: bool) -> str:
+        """Why the deploy retry must not be made ("" when it may): the seat is busy, or unreadable.
+
+        A gate that cannot read the seat is returned as words, never raised, so
+        the caller's tooling_error branch still restores the bundle pointer. A
+        rollback's retry is judged as the rollback was (``_rollback_gate``).
+        """
+        if rollback:
+            verdict = self._rollback_gate(seat, gate_wait)
+        elif gate_wait is None:
+            return ""
+        else:
+            try:
+                verdict = self.gate.wait_idle(seat, gate_wait, self.log)
+            except ToolingError as exc:
+                return f"retry not made, the busy gate could not read the seat: {exc}"
+        if verdict is not None and verdict.busy:
+            return "retry deferred, seat busy: " + "; ".join(verdict.reasons)
+        return ""
+
+    def _deploy(self, seat: str, image: str, toml_text: str, gate_wait: float | None, rollback: bool = False) -> str:
+        return self._deploy_saying(seat, image, toml_text, gate_wait, rollback)[0]
+
+    def _deploy_saying(
+        self, seat: str, image: str, toml_text: str, gate_wait: float | None, rollback: bool = False
+    ) -> tuple[str, str]:
         """``fly deploy``: its class, and what Fly said when it decided nothing.
 
         A tooling_error is tried once more after DEPLOY_RETRY_PAUSE_S, behind
@@ -232,10 +286,9 @@ class ImageRollout:
             first = deploy_excerpt(res)
             self.log(f"{seat}: fly deploy decided nothing ({first}); trying once more in {DEPLOY_RETRY_PAUSE_S:.0f}s")
             self.sleep(DEPLOY_RETRY_PAUSE_S)
-            if gate_wait is not None:
-                verdict = self.gate.wait_idle(seat, gate_wait, self.log)
-                if verdict.busy:
-                    return "tooling_error", f"{first}; retry deferred, seat busy: " + "; ".join(verdict.reasons)
+            held = self._retry_gate(seat, gate_wait, rollback)
+            if held:
+                return "tooling_error", f"{first}; {held}"
             res = self.fly.deploy(ids.app_name(seat), image, path)
             cls = classify_deploy(res)
             if cls == "fail":
@@ -476,7 +529,10 @@ class ImageRollout:
                 ),
             )
         self.store.update_rollout(rid, "smoking")
-        # The release marker still stands (cleared at the release's end, in run).
+        # The release marker still stands (cleared at the release's end, in run);
+        # the gate waits and the deploy may have used most of its 30 minutes.
+        if deployed != "fail":
+            self._hold(seat)
         check = (
             Check("fail", f"fly deploy reported the new release would not come up ({said})")
             if deployed == "fail"
@@ -511,23 +567,24 @@ class ImageRollout:
                 smoke_class="fail",
             )
         wait = self._gate_wait(plan)
-        if wait is not None:
-            # A rollback restarts the seat too: behind the gate, as the deploy was.
-            verdict = self.gate.wait_idle(seat, wait, self.log)
-            if verdict.busy:
-                why = "; ".join(verdict.reasons)
-                return self._finish(
-                    rid, plan,
-                    SeatOutcome(seat, "failed", f"rollback deferred, seat busy ({why}). smoke FAIL: {check.detail}. "
-                                f"The seat stays on {plan.release['image_ref']}, NOT rolled back to {from_image}; "
-                                f"volume snapshot {snap}. Page the Captain."),
-                    smoke_class="fail",
-                )  # fmt: skip
+        renew_seat_lease(self.store, self.holder, seat, self.log)
+        verdict = self._rollback_gate(seat, wait)
+        if verdict is not None and verdict.busy:
+            why = "; ".join(verdict.reasons)
+            return self._finish(
+                rid, plan,
+                SeatOutcome(seat, "failed", f"rollback deferred, seat busy ({why}). smoke FAIL: {check.detail}. "
+                            f"The seat stays on {plan.release['image_ref']}, NOT rolled back to {from_image}; "
+                            f"volume snapshot {snap}. Page the Captain."),
+                smoke_class="fail",
+            )  # fmt: skip
         self.log(f"{seat}: smoke FAIL ({check.detail}); rolling back to {from_image}")
         # Before the redeploy: the from-image's boot must mount the bundle it ran.
         undone = self._unpoint(seat, al)
         since = ids.utc_now()
-        back = self._deploy(seat, from_image, from_toml, wait)
+        back = self._deploy(seat, from_image, from_toml, wait, rollback=True)
+        if back == "ok":
+            self.gate.renew(seat, self.log)  # the re-smoke can outlast the marker's expiry
         again = (
             self._resmoke(seat, plan, from_image, since) if back == "ok" else Check("fail", f"rollback deploy {back}")
         )

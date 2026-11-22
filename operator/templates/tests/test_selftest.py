@@ -387,7 +387,7 @@ def test_a_job_claimed_under_a_release_marker_fails_at_boot_and_warns_hourly(sea
     # claimed when it must not have.
     _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
     assert _check(_once(seat, "boot"), "jobs-daemon-idle")["ok"] is True
-    _write(seat["root"] / "run/smd-jobs/child.pid", "4242\n")
+    _write(seat["root"] / "run/smd-jobs/child.pid", f"{os.getpid()}\n")  # a live pid
     _release_marker(seat)
     boot = _check(_once(seat, "boot"), "jobs-daemon-idle")
     assert boot["ok"] is False and boot["warn"] is False
@@ -401,7 +401,7 @@ def test_a_job_resumed_at_boot_with_no_release_marker_passes_with_a_note(seat: d
     # read as a broken image, and the rollback killed it. FALSIFIER: go back to
     # "! test -f child.pid" and both boots below fail.
     _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
-    _write(seat["root"] / "run/smd-jobs/child.pid", "4242\n")
+    _write(seat["root"] / "run/smd-jobs/child.pid", f"{os.getpid()}\n")  # a live pid
     for marker in (None, "expired", "machine-stop"):
         if marker == "expired":
             _release_marker(seat, ttl=-60.0)
@@ -410,6 +410,39 @@ def test_a_job_resumed_at_boot_with_no_release_marker_passes_with_a_note(seat: d
         boot = _check(_once(seat, "boot"), "jobs-daemon-idle")
         assert boot["ok"] is True and boot["warn"] is False, (marker, boot)
         assert "a job resumed after a restart" in boot["detail"], (marker, boot)
+
+
+def _dead_pid() -> int:
+    proc = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True)
+    return int(proc.stdout)  # reaped: nothing runs at this pid now
+
+
+def test_a_stale_pidfile_warns_at_boot_and_hourly_under_a_marker_or_not(seat: dict[str, Path]) -> None:
+    # Bug review 2026-11-22: a SIGKILLed daemon leaves its child.pid. Under a
+    # release marker it read as "claimed during the release" (a good release
+    # rolled back); with none it passed silently (a dead job child unseen).
+    # FALSIFIER (fails on ff4e5898c): the check tested only that the file exists.
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
+    _write(seat["root"] / "run/smd-jobs/child.pid", f"{_dead_pid()}\n")
+    for marked in (False, True):
+        if marked:
+            _release_marker(seat)
+        for kind in ("boot", "hourly"):
+            got = _check(_once(seat, kind), "jobs-daemon-idle")
+            assert got["ok"] is False and got["warn"] is True, (marked, kind, got)
+            assert "stale pidfile" in got["detail"], (marked, kind, got)
+
+
+def test_a_pidfile_older_than_this_boot_is_stale(seat: dict[str, Path]) -> None:
+    # A live pid in a file written before the boot is a reused pid, not our job child.
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
+    pidfile = _write(seat["root"] / "run/smd-jobs/child.pid", f"{os.getpid()}\n")
+    os.utime(pidfile, (1_000_000_000, 1_000_000_000))
+    _write(seat["root"] / "proc/stat", f"cpu 1 2 3\nbtime {int(time.time()) - 60}\n")
+    got = _check(_once(seat, "boot"), "jobs-daemon-idle")
+    assert got["ok"] is False and got["warn"] is True and "stale pidfile" in got["detail"], got
+    os.utime(pidfile, None)  # written now, after the boot: believed
+    assert _check(_once(seat, "boot"), "jobs-daemon-idle")["ok"] is True
 
 
 JOBS_VOLUME_CHECKS = (
