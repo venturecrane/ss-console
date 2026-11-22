@@ -56,13 +56,6 @@ def entry_audit_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing
     return entry_audit_io.projected_usd(slug_dir, unit, cfg, pricing)
 
 
-def update_review_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
-    """The update review loop's projection (``stages/update_review``)."""
-    from ..stages import update_review
-
-    return update_review.projected_usd(slug_dir, unit, cfg, pricing)
-
-
 def expected_finish(drv: Any, st: Any, extracted: Path) -> None:
     """The run's expected finish, written once per attempt after extract
     (``eta.stamp``): a resume or a redo stamps it again from its own start,
@@ -91,8 +84,27 @@ def stage_usd(drv: Any, stage: Any, ctx: Any, extracted: Path) -> float | None:
         n = claims_to_verify(drv.slug_dir, ctx.unit.unit, drv.cfg)
         return None if n is None else n * drv.limits.usd_per_audit_claim
     if stage.name == "update_review":
-        return update_review_usd(drv.slug_dir, ctx.unit.unit, drv.cfg, drv.pricing)
+        return _update_review(drv, ctx)
     return None
+
+
+def _update_review(drv: Any, ctx: Any) -> float | None:
+    """The review's projection, its components logged for a replay. It plans
+    the stage's requests from the audit document and the delivered entries
+    BEFORE the stage runs, outside its error handling: anything that fails
+    here is logged and the stage is UNPROJECTED (checked at its bound), never
+    a driver crash with no stage row."""
+    from ..stages import update_review_cost as UC
+
+    try:
+        b = UC.breakdown(drv.slug_dir, ctx.unit.unit, drv.cfg, drv.pricing)
+    except Exception as exc:  # noqa: BLE001 - a projection that cannot be computed is unprojected, never fatal
+        drv.log(f"[limits] update_review: the projection could not be computed ({type(exc).__name__})")
+        return None
+    if isinstance(b, UC.Projection):
+        drv.log(f"[limits] {b.line()}")
+        return b.usd
+    return b
 
 
 def bound_usd(drv: Any, stage: Any, extracted: Path) -> float | None:
@@ -129,8 +141,9 @@ def checked_usd(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[str
 def check_limits(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[str] | None = None) -> None:
     """Before a paid stage (``Driver._check_limits``). Each unit's first paid
     stage in this process also asks the page question, which costs nothing to
-    answer. A hold on a stage with no projection says so in its reason (no
-    dollar figure: the daemon relays the reason)."""
+    answer. A cost hold (the job's cap or the month's budget) on a stage with
+    no projection says so in its reason, with no dollar figure (the daemon
+    relays the reason); a page-allowance hold, which no projection moves, does not."""
     from .. import limits as limits_mod
     from .update import charged as update_charged
 
@@ -155,6 +168,6 @@ def check_limits(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[st
                 hold.allowance["projected_cents"] = int(round(usd * 100))
             raise
     except limits_mod.LimitHold as hold:
-        if not measured:
+        if not measured and hold.setting in (limits_mod.CAP_SETTING, limits_mod.BUDGET_SETTING):  # dollar holds only
             hold.reason += f" ({stage.name} had no projection: {UNPROJECTED})"
         raise

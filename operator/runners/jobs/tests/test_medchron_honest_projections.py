@@ -94,8 +94,10 @@ def test_the_projection_covers_the_priced_parts_with_their_delivered_entries(
     rate = pricing.rate_for(UC.review_model(cfg))
     est = _round_one_tokens(tmp_path, cfg)
     priced_parts = est / UC.ESTIMATE_SHARE * rate.input_per_million_cents / 1e8  # round one's real input, low end
-    got = UC.projection(tmp_path, UNIT, cfg, pricing, None)
-    assert got is not None and got >= 0.9 * priced_parts, (got, priced_parts)
+    got = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
+    assert got is not None and got.round1.basis == UC.BY_REQUESTS
+    assert got.round1_usd >= 0.9 * priced_parts, (got.round1_usd, priced_parts)
+    assert got.usd == pytest.approx(got.round1_usd * (1 + UC.LATER_SHARE))
     parts = PAGES // RP.WINDOW_PAGES + 1
     old = (
         PAGES * RP.RV.PAGE_TOKENS * 2 * rate.input_per_million_cents + parts * 4_000 * rate.output_per_million_cents
@@ -112,9 +114,66 @@ def test_before_the_documents_exist_the_projection_still_prices_a_full_context_p
     got = UC.projection(tmp_path, UNIT, cfg, pricing, None)
     rate = pricing.rate_for(UC.review_model(cfg))
     parts = PAGES // RP.WINDOW_PAGES + 1
-    pages_only = PAGES * RP.RV.PAGE_TOKENS * 2 * rate.input_per_million_cents / 1e8
-    context = parts * RP.CONTEXT_MAX * UC.ENTRY_TOKENS * 2 * rate.input_per_million_cents / 1e8
-    assert got is not None and got >= (pages_only + context) / UC.ESTIMATE_SHARE * 0.999
+    tokens = PAGES * RP.RV.PAGE_TOKENS + parts * RP.CONTEXT_MAX * UC.ENTRY_TOKENS
+    round_one = tokens / UC.ESTIMATE_SHARE * rate.input_per_million_cents / 1e8
+    assert got is not None and got >= round_one * (1 + UC.LATER_SHARE) * 0.999
+
+
+def _checkpoint(slug: Path, done: int, rec: dict) -> None:
+    from jobs.stages import update_review_io as IO
+
+    ud = slug / "runs" / UNIT / "update"
+    row = {"compose_sha": IO.compose_sha(ud), "done": done, "md": "the checkpoint document", "rec": rec}
+    (ud / IO.CHECKPOINT).write_text(json.dumps(row))
+
+
+def test_a_resumed_review_is_not_projected_for_the_round_it_already_paid(
+    tmp_path: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    """Round one is in the job's spend once paid: projecting it again held a
+    resumed update at the cap for money already spent."""
+    _update(tmp_path)
+    cfg, pricing = config_mod.load(str(firm_config_path)), load_pricing(pricing_path)
+    fresh = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
+    assert fresh is not None and fresh.round1_left
+    _checkpoint(tmp_path, 0, {"pending": {"round": 1, "md_sha": UC._sha("the checkpoint document")}})
+    paid_review = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
+    assert paid_review is not None and not paid_review.round1_left
+    assert paid_review.usd == pytest.approx(fresh.round1_usd * UC.LATER_SHARE)
+    _checkpoint(tmp_path, 1, {})
+    after_one = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
+    assert after_one is not None and after_one.usd == pytest.approx(fresh.round1_usd * UC.RECHECK_SHARE)
+    assert "already paid, not projected" in after_one.line()
+    _checkpoint(tmp_path, 0, {"pending": {"round": 1, "md_sha": "another document"}})
+    assert UC.projection(tmp_path, UNIT, cfg, pricing, None) == pytest.approx(fresh.usd)
+    (tmp_path / "runs" / UNIT / "update" / "base.md").write_text(K.base_md())  # a new collect: a new review
+    assert UC.still_to_run(tmp_path / "runs" / UNIT / "update") == (True, UC.LATER_SHARE)
+
+
+def _one_long_entry(slug: Path) -> None:
+    """One added entry citing the first and last page of Exhibit 3: every
+    window between carries it (its owner), so every part repeats one
+    nearby-entries block, which the stage marks for the cache."""
+    _update(slug)
+    doc = "## Treatment Timeline\n\n## Diagnostic Highlights\n\n## Medical Chronology\n\n"
+    doc += _entry(START + timedelta(days=30), 3, (1, PAGES), 10)
+    (slug / "runs" / UNIT / "final-chronology.md").write_text(
+        f"Alpha Example - Medical Chronology\n\n{doc}\n\n## Exhibit List\n"
+    )
+
+
+def test_a_repeated_nearby_entries_block_is_priced_at_the_cache_rates(
+    tmp_path: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _one_long_entry(tmp_path)
+    cfg, pricing = config_mod.load(str(firm_config_path)), load_pricing(pricing_path)
+    got = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
+    assert got is not None and got.round1.written > 0 and got.round1.read > got.round1.written
+    assert "read from the cache" in got.line() and f"{got.round1.requests} request(s)" in got.line()
+    monkeypatch.setattr(RP, "cache_blocks", lambda _c, _r: ("system",))
+    uncached = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
+    assert uncached is not None and uncached.round1.read == uncached.round1.written == 0
+    assert got.usd < uncached.usd, "the instrument: reads are priced below plain input"
 
 
 # ---- D2: a paid stage with no projection is marked, never a silent $0.00 ----------
@@ -182,6 +241,46 @@ def test_a_projected_stage_carries_no_mark(
     notes: list[str] = []
     d._check_limits(_update_stage("vision"), ctx, ext, notes)
     assert notes == []
+
+
+def test_the_reviews_projection_is_logged_with_its_components(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    d, ctx, ext, lines = _driver(job_dir, firm_config_path, pricing_path, data_root, pages=PAGES)
+    _update(d.slug_dir)
+    notes: list[str] = []
+    d._check_limits(_update_stage("update_review"), ctx, ext, notes)
+    assert notes == []
+    (line,) = [ln for ln in lines if "update_review projection" in ln]
+    assert "round one" in line and "read from the cache" in line and "later rounds 0.50 of round one" in line
+
+
+def test_a_document_the_planner_cannot_read_leaves_the_review_unprojected_not_the_driver_dead(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    d, ctx, ext, lines = _driver(job_dir, firm_config_path, pricing_path, data_root, pages=PAGES)
+    _update(d.slug_dir)
+    (d.slug_dir / "runs" / UNIT / "final-chronology.md").write_text("Alpha Example\n\nno sections here\n")
+    notes: list[str] = []
+    d._check_limits(_update_stage("update_review"), ctx, ext, notes)  # never raises
+    assert any("the projection could not be computed (ValueError)" in ln for ln in lines), lines
+    assert notes and notes[0].startswith(f"update_review: {projection.UNPROJECTED} (checked at a bound of")
+
+
+def test_a_page_allowance_hold_carries_no_projection_suffix(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    TD._seed_extracted(data_root, pages=10)
+    jd = TD._job(
+        tmp_path, data_root, "job-allow", allowance_remaining_pages=5, month_cents_used=0, allowance_month="2026-09"
+    )
+    d = TD._driver(jd, firm_config_path, pricing_path)
+    d.log = lambda _m: None
+    ctx = dag.Ctx(job=d.job, unit=d.job.units[0], date_stamp=d.date_stamp)
+    with pytest.raises(limits_mod.LimitHold) as held:
+        d._check_limits(_update_stage("update_summary"), ctx, data_root / "example-matter" / "extracted.jsonl", [])
+    assert held.value.setting not in (limits_mod.CAP_SETTING, limits_mod.BUDGET_SETTING)
+    assert "had no projection" not in held.value.reason
 
 
 # ---- D3: a failed row's reason names what failed ----------------------------------
