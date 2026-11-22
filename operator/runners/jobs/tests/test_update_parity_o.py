@@ -1,17 +1,17 @@
-"""Parity fix O: two new files that are one record (2026-10-14, 2026-11-22).
+"""Parity fix O: two new files that are one record are one exhibit (2026-10-14).
 
 A real update pulled a 124-page file and, after it, a 404-page file whose
 pages 281 to 404 were the same scans. The picture pass matched them as NEAR
-copies, but it read the new documents in PULL order, so the smaller file
-kept every shared page and the larger file's copies became repeats. The new
-documents are now read largest first (``pageid.reading_order``).
-
-Since 2026-11-22 a near picture sets nothing aside: a reader called 16 of
-137 known-different page pairs copies. The smaller file's pages are READ,
-each recorded as a suspected copy of the larger file's page and not charged,
-and a visit both files state is dropped or trimmed at collect. The twin rule
-that once read one copy from the other's transcription is gone, so no value
-one reading missed is lost. Every record is invented."""
+copies, but it reads the new documents in PULL order, so the smaller file
+kept every shared page and the larger file's copies became repeats. Both
+became exhibits, every citation to the larger file's copy region pointed at
+the smaller one, and where the two transcriptions of one scan disagreed (one
+reading missed a value) the page was composed from both files and a visit
+was itemized twice. The new documents are now read largest first
+(``pageid.reading_order``). Since 2026-11-22 a near picture sets nothing
+aside: the smaller file is read, every page a suspected copy, not charged,
+and the twin rule (``update/twins``) only suspects. Every record is
+invented."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from types import SimpleNamespace
 
 from test_update_parity_h import _pages_run, _record, _scan, _seed, _transcribe
 
+OVERLAP = "repeats an earlier page of the new documents"
 #: Invented records whose scans a picture tells apart: each re-encoded copy
 #: pairs with its own page, uniquely, at the picture module's margin.
 WHOLE = (0, 1, 4, 9, 13, 15)
@@ -52,8 +53,8 @@ def _run(tmp: Path, part_texts: list[str] | None = None, whole_texts: list[str] 
     assert skip == {}  # nothing pixel-equal: every page is transcribed
     ident = json.loads((tmp / "runs" / "alpha" / "update" / "page_identity.json").read_text())
     pairs = {p: v[1:] for p, v in ident["pages"]["part"].items()}
-    assert pairs == {str(q): ["whole", q + 2, "near"] for q in (1, 2, 3, 4)}  # the copy matches the larger
-    assert ident["pages"]["whole"] == {}  # the larger file is read first: its pages match nothing
+    assert pairs == {str(q): ["whole", q + 2, "near"] for q in (1, 2, 3, 4)}  # the copy repeats the larger
+    assert ident["pages"]["whole"] == {}  # the larger file is read first: its pages repeat nothing
     _transcribe(sr, {"part": part_texts or whole[2:], "whole": whole_texts or whole}, skip)
     return _select(sr)
 
@@ -86,3 +87,39 @@ def test_a_value_one_reading_missed_is_kept_from_the_other(tmp_path: Path) -> No
     compose = tmp_path / "runs" / "alpha" / "update" / "compose"
     assert pain not in (compose / "whole.txt").read_text() and pain in (compose / "part.txt").read_text()
     assert pain not in (tmp_path / "text" / "whole.txt").read_text()  # no transcript is rewritten
+
+
+def test_twins_fill_an_unpaired_page_from_its_neighbours_and_keep_a_true_disagreement() -> None:
+    from jobs.medchron.update import twins as TW
+
+    a, b, c = (_record(i) for i in (5, 6, 7))
+    other_day = _record(6, "03/09/2026", 4)  # the same form, another visit
+    mine = ({1: a, 2: _no_pain(b), 3: other_day}, {n: ("text", "new document") for n in (1, 2, 3)})
+    theirs = ({4: a, 5: b, 6: c}, {n: ("text", "new document") for n in (4, 5, 6)})
+    theirs[1].update({n: ("text", "new document") for n in (1, 2, 3)})
+    theirs[0].update({n: _record(30 + n) for n in (1, 2, 3)})
+    assert TW.aligned({1: 4}, 3, 6) == {1: 4, 2: 5, 3: 6}  # the unpaired pages sit at their neighbour's offset
+    assert TW.settle(mine, theirs, {1: 4}) == {}  # nothing read from another reading
+    assert mine[1][1] == ("excluded", OVERLAP)  # the same words: a repeat
+    assert mine[1][2] == ("excluded", OVERLAP)  # a reading that missed a value adds nothing
+    assert mine[1][3] == ("text", "new document")  # another date and value: read
+    assert theirs[1][6] == ("text", "new document")
+
+
+def test_a_neighbour_twin_is_never_given_another_pages_reading() -> None:
+    """Only the same scan (a picture pair) lends its reading. A twin found by
+    its neighbours' offset alone keeps its own words: the larger page that
+    adds nothing is the repeat and the smaller one is read."""
+    from jobs.medchron.update import twins as TW
+
+    a, b = _record(5), _record(6)
+    mine = ({1: a, 2: b}, {n: ("text", "new document") for n in (1, 2)})
+    theirs = ({4: a, 5: _no_pain(b)}, {n: ("text", "new document") for n in (4, 5)})
+    theirs[0].update({n: _record(30 + n) for n in (1, 2, 3)})
+    theirs[1].update({n: ("text", "new document") for n in (1, 2, 3)})
+    assert TW.settle(mine, theirs, {1: 4}) == {}
+    assert theirs[1][5] == ("excluded", OVERLAP) and theirs[0][5] == _no_pain(b)
+    assert mine[1][2] == ("text", "new document")
+    assert TW.settle(
+        ({1: b}, {1: ("text", "new document")}), ({5: _no_pain(b)}, {5: ("text", "new document")}), {1: 5}
+    ) == {5: 1}

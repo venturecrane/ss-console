@@ -19,8 +19,7 @@ exhibit as new exhibits, and composed the same visits two and three times
   tell a re-encoded copy from the same form filled in with one other number,
   so a NEAR page is transcribed and READ, never set aside: the match is
   recorded as a suspected copy (2026-11-22: a reader called 16 of 137
-  known-different page pairs copies, and a text test settled 25 pages that
-  differ as copies).
+  known-different page pairs copies).
 * A blank page (almost no ink) is never matched: every blank page looks alike.
 * Pages of one document are never compared with each other: a run of
   template visits inside one record is read whole (review fix 1).
@@ -33,6 +32,14 @@ exhibit, or a LARGER new document) or of a delivered exhibit, at least
 EXTRACT_FRAC of them to that one document, is a re-filed copy or extract: not
 an exhibit, none of its pages transcribed, named in Records Reviewed and cited
 to that document.
+
+A document that will itself never be read (`never_read`: an expert's report,
+as far as its name and text layer tell before the vision pass) stands for no
+other: a page pixel-equal to one of its pages is still recorded as such, but
+it is transcribed, and no document is its extract (2026-11-22: clinic pages
+enclosed in a report were set aside in the clinic's own production). A report
+known only by its transcribed first page is found by ``update_select``, which
+needs each extract's page matches: ``extract_pages`` keeps them.
 
 Calibration, on the real files of that update read only (numbers in the PR):
 re-encoded copies of one scan sat 2 to 25 bits apart of 256, the next
@@ -171,12 +178,18 @@ class Identity:
 
     pages: dict[str, dict[int, Hit]] = field(default_factory=dict)
     extracts: dict[str, Extract] = field(default_factory=dict)
+    #: {extract: {page: Hit}}: where each of its pages is, kept beside ``extracts``.
+    extract_pages: dict[str, dict[int, Hit]] = field(default_factory=dict)
+    never_read: set[str] = field(default_factory=set)
 
     def skipped(self, npages: dict[str, int]) -> dict[str, list[int]]:
-        """{document: pages} the vision pass never transcribes: every
-        pixel-equal page, and every page of a re-filed copy. A NEAR page is
-        transcribed and read as a suspected copy."""
-        out = {d: sorted(p for p, h in m.items() if h.exact) for d, m in self.pages.items()}
+        """{document: pages} the vision pass never transcribes: every page
+        pixel-equal to one that may be read, and every page of a re-filed
+        copy. Every other page is transcribed."""
+        out = {
+            d: sorted(p for p, h in m.items() if h.exact and h.other not in self.never_read)
+            for d, m in self.pages.items()
+        }
         out |= {d: list(range(1, npages.get(d, 0) + 1)) for d in self.extracts}
         return {d: v for d, v in out.items() if v}
 
@@ -196,24 +209,40 @@ def reading_order(docs: list[tuple[str, int]]) -> list[str]:
 
 
 def identify(
-    delivered: list[tuple[int, list[Sig]]], new: list[tuple[str, list[Sig]]], firm: set[str] | None = None
+    delivered: list[tuple[int, list[Sig]]],
+    new: list[tuple[str, list[Sig]]],
+    firm: set[str] | None = None,
+    never_read: set[str] | None = None,
 ) -> Identity:
     """Page identity across the delivered exhibits (exhibit number, sigs) and
     the new documents (id, sigs) in pull order. A firm-numbered file
     (`firm`) is never an extract: the firm holds it under its own number."""
     pairs = {d: _pairs_of(d, sigs, delivered, new) for d, sigs in new}
-    out = Identity()
-    sizes = {d: len(s) for d, s in new}
+    out = Identity(never_read=set(never_read or ()))
+    sizes = {d: len(s) for d, s in new if d not in out.never_read}  # a document never read is nobody's whole
     for d, sigs in new:
         ex = None if d in (firm or set()) else _extract(d, sigs, pairs[d], sizes)
         if ex is not None:
             out.extracts[d] = ex
     _resolve(out.extracts)
     order = reading_order([(d, len(s)) for d, s in new])
+    drawn = dict(new)
     for d, sigs in new:
+        hits = _page_hits(d, len(sigs), pairs[d], order, out.extracts, out.never_read)
         if d not in out.extracts:
-            out.pages[d] = _page_hits(d, len(sigs), pairs[d], order, out.extracts)
+            out.pages[d] = hits
+            continue
+        ex = out.extracts[d]
+        out.extract_pages[d] = _faint(sigs, drawn.get(ex.parent, []), ex.parent) | hits
     return out
+
+
+def _faint(sigs: list[Sig], whole: list[Sig], parent: str) -> dict[int, Hit]:
+    """The uninked pages of an extract that are, pixel for pixel, a page of
+    its whole document: a page with almost no ink is never matched, but the
+    same pixels say the same thing when the extract has to be read."""
+    at = {o.exact: j for j, o in reversed(list(enumerate(whole, 1)))}
+    return {p: Hit(REPEAT, parent, at[s.exact], True) for p, s in enumerate(sigs, 1) if not s.inked and s.exact in at}
 
 
 def _pairs_of(
@@ -227,8 +256,7 @@ def _pairs_of(
 
 def _extract(d: str, sigs: list[Sig], pairs: _Pairs, sizes: dict[str, int]) -> Extract | None:
     """A re-filed copy or extract, by pixel equality only (a page known by a
-    near match is transcribed and read, so its document is
-    read)."""
+    near match is transcribed and read, so its document is read)."""
     inked = {i for i, s in enumerate(sigs, 1) if s.inked}
     exact = {o: {p for p, (_, e) in m.items() if e} for o, m in pairs.items()}
     delivered: set[int] = set().union(*(m for o, m in exact.items() if o.startswith(DELIVERED)))
@@ -257,28 +285,42 @@ def _resolve(found: dict[str, Extract]) -> None:
         found[d] = Extract(d, cur.parent, cur.exhibit, ex.pages, ex.matched)
 
 
-def _page_hits(d: str, npages: int, pairs: _Pairs, order: list[str], extracts: dict[str, Extract]) -> dict[int, Hit]:
-    """Per page, the best hit: pixel-equal before near, a delivered page
-    before a new one read earlier (``reading_order``). Never a page of this
-    document, of one read later, or of a re-filed copy (it is not read)."""
+def _page_hits(
+    d: str,
+    npages: int,
+    pairs: _Pairs,
+    order: list[str],
+    extracts: dict[str, Extract],
+    never_read: set[str],
+) -> dict[int, Hit]:
+    """Per page, the best hit: pixel-equal before near, a page that may be
+    read before one that will not, a delivered page before a new one read
+    earlier (``reading_order``). Never a page of this document, of one read
+    later, or of a re-filed copy (it is not read)."""
     earlier = [o for o in order[: order.index(d)] if o not in extracts]
     sources = [o for o in pairs if o.startswith(DELIVERED)] + [o for o in earlier if o in pairs]
     out: dict[int, Hit] = {}
     for p in range(1, npages + 1):
-        found = [(not pairs[o][p][1], i, o) for i, o in enumerate(sources) if p in pairs[o]]
+        found = [(not pairs[o][p][1], o in never_read, i, o) for i, o in enumerate(sources) if p in pairs[o]]
         if found:
-            o = min(found)[2]
+            o = min(found)[3]
             q, exact = pairs[o][p]
             out[p] = Hit(ALREADY if o.startswith(DELIVERED) else REPEAT, o, q, exact)
     return out
 
 
+def _hits_json(pages: dict[str, dict[int, Hit]]) -> dict:
+    return {
+        d: {str(p): [h.reason, h.other, h.page, "exact" if h.exact else "near"] for p, h in m.items()}
+        for d, m in pages.items()
+    }
+
+
 def to_json(ident: Identity) -> dict:
     return {
-        "pages": {
-            d: {str(p): [h.reason, h.other, h.page, "exact" if h.exact else "near"] for p, h in m.items()}
-            for d, m in ident.pages.items()
-        },
+        "pages": _hits_json(ident.pages),
+        "extract_pages": _hits_json(ident.extract_pages),
+        "never_read": sorted(ident.never_read),
         "extracts": {
             d: {"parent": e.parent, "exhibit": e.exhibit, "pages": e.pages, "matched": e.matched}
             for d, e in ident.extracts.items()

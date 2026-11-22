@@ -86,8 +86,26 @@ def test_a_text_extract_of_a_new_document_is_read_its_pages_suspected_copies(tmp
     rows = {(r["doc"], r["page"]): r for r in PR.read(tmp_path / "runs" / "alpha")}
     ext = [rows[("ext", p)] for p in range(1, 6)]
     assert all(r["status"] == PR.READ and r["evidence"][PR.SUSPECTED] for r in ext)
+    assert {r["evidence"][PR.SUSPECTED] for r in ext} == {"words_extract"}
     assert {r["evidence"]["cover"]["doc"] for r in ext} == {"whole"} and not any(PR.charged(r) for r in ext)
     assert all(PR.charged(rows[("tmpl", p)]) for p in range(1, 6))  # template visits on other dates
+
+
+def test_an_extract_with_a_page_stating_its_own_value_is_read() -> None:
+    from jobs.medchron.update import subsets as SUB
+
+    whole = dict(enumerate(_whole_pages(), 1))
+    ext = dict(enumerate(_extract_pages(), 1))
+    assert set(SUB.refiled_subsets([("ext", ext), ("whole", whole)])) == {"ext"}
+    # Ten pages, nine of them the whole one's, one a visit of its own with a value it alone states.
+    nine = {n: _visit(n - 1) for n in range(1, 10)}
+    own = {**nine, 10: _visit(0).replace("03/01/2026", "05/20/2026").replace("Pain rated 2", "Pain rated 9")}
+    assert SUB.refiled_subsets([("own", own), ("whole", whole)]) == {}
+    # A whole copy of the same size stays with select.Earlier (read once, its copy excluded page by page).
+    assert SUB.refiled_subsets([("a", whole), ("b", whole)]) == {}
+    # A firm-numbered file and a document with an unread page are never extracts.
+    assert SUB.refiled_subsets([("ext", ext), ("whole", whole)], firm={"ext"}) == {}
+    assert SUB.refiled_subsets([("ext", {**ext, 6: "[page transcription failed]"}), ("whole", whole)]) == {}
 
 
 # ---- fix 22: a sentence an entry states twice is said once -------------------------

@@ -9,8 +9,10 @@ document, and which new documents are re-filed copies or extracts.
 Writes ``update/page_identity.json`` for ``update_select`` and
 ``vision_skip.json`` for the vision pass: a page pixel-equal to one already
 read, and every page of a re-filed copy, is never transcribed (a near match
-is transcribed and confirmed by its words in ``update_select``). A re-filed scan was once
-transcribed, composed and filed as five new exhibits (2026-10-14).
+is transcribed and read). A re-filed scan was once
+transcribed, composed and filed as five new exhibits (2026-10-14). An
+expert's report, as far as its name and text layer tell here, is never read,
+so it stands for no other document's page (``pageid``, `never_read`).
 
 A file this cannot open settles nothing: its pages go to vision as before.
 
@@ -29,12 +31,13 @@ import json
 from pathlib import Path
 
 from ..medchron import pages_record as PR
-from ..medchron.update import pageid as PI, pageid_io as PG
+from ..medchron.update import medlegal as ML, pageid as PI, pageid_io as PG
+from ..medchron.update.locate import vendor_name
 from . import identity_pages, page_rows
 from .identity_redecide import redecide
 from .base import StageRun, read_jsonl
 from .update_base import plan, update_dir
-from .update_select import REDECIDED_FILE, _candidates, delivered_read
+from .update_select import REDECIDED_FILE, _candidates, _texts, delivered_read
 
 
 def _sigs(path: Path, log) -> list[PI.Sig] | None:
@@ -53,7 +56,7 @@ def run(sr: StageRun) -> int:
     ud = update_dir(sr)
     read = delivered_read(sr, p)
     listed = {e["exhibit"] for e in read}
-    firm_sha = {e["sha256"] for e in p["exhibits"] if e["exhibit"] not in listed}
+    firm_sha = {e["sha256"]: e["name"] for e in p["exhibits"] if e["exhibit"] not in listed}
     delivered = []
     for e in read:
         s = _sigs(sr.slug_dir / "delivered" / e["name"], sr.log)
@@ -74,7 +77,14 @@ def run(sr: StageRun) -> int:
         if s is not None:
             new.append((str(r["id"]), s))
     firm = {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm_sha}
-    ident = PI.identify(delivered, new, firm)
+    never = {
+        str(r["id"])
+        for r in rows
+        if ML.is_medlegal(
+            [vendor_name(r), firm_sha.get(str(r.get("sha256") or ""), "")], _texts(sr, str(r["id"])).get(1) or ""
+        )
+    }
+    ident = PI.identify(delivered, new, firm, never)
     (ud / PG.NAME).write_text(json.dumps(PI.to_json(ident), indent=1), encoding="utf-8")
     skip = ident.skipped({d: len(s) for d, s in new})
     (sr.slug_dir / "vision_skip.json").write_text(json.dumps(skip, indent=1), encoding="utf-8")

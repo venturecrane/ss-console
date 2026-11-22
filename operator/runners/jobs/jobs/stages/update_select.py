@@ -27,13 +27,14 @@ attachment folded from a named email) is a candidate, in pull order:
   by its pictures (``update/pageid``, ``stages/update_pages``, which runs
   before the vision pass): not an exhibit; the whole document is, and the
   extract is recorded in ``selection.json`` "subsets" (its id, name and the
-  whole one's exhibit) so Records Reviewed names it as a re-filed extract;
+  whole one's exhibit) so Records Reviewed names it as a re-filed extract. A
+  document whose WORDS are an extract of another (``update/subsets``) is read,
+  every page a suspected copy;
 * a document NONE of whose pages is read because every one is pixel-equal to
-  a delivered page that was read (blank pages aside): a re-filed copy of
-  delivered pages, recorded in "subsets" against the delivered exhibit most
-  of its pages are in, never a new exhibit (``select.delivered_home``; a
-  re-printed hospital record was once filed again as a new exhibit,
-  2026-10-14);
+  a delivered page (blank pages aside): a re-filed copy of delivered pages,
+  recorded in "subsets" against the delivered exhibit most of its pages are
+  in, never a new exhibit (``select.delivered_home``; a re-printed hospital
+  record was once filed again as a new exhibit, 2026-10-14);
 * otherwise it becomes ``Exhibit N - <name> (Medical Records)``, numbered after
   the highest exhibit the delivered folder holds, its PDF built in
   ``out/<unit>/`` from the source as it is (so its page numbers are the
@@ -44,12 +45,12 @@ attachment folded from a named email) is a candidate, in pull order:
   documents are READ largest first (``pageid.reading_order``; numbered in
   pull order), so a page two of them share is read in the larger; a document
   every page of which is pixel-equal to one read before it is a re-filed
-  copy, cited there and never an exhibit (``select.new_home``). A 124-page
-  file that was pages 281 to 404 of a 404-page file was once filed as a
-  second exhibit and a visit itemized twice (2026-10-14). Only a pixel-equal
-  page is set aside; every page a rule only SUSPECTS of being a copy (a near
-  picture, a text match) is read, recorded with the page it may copy, and not charged
-  (2026-11-22). A page the
+  copy, cited there and never an exhibit (``select.new_home``). A page that
+  any other rule calls a copy (a near picture, its words, a run of pages, an
+  undated page beside one, a twin reading, a words extract) is READ, recorded
+  with the page it may copy and not charged (``update_suspects.read_suspects``, 2026-11-22).
+  So is a page pixel-equal to a page of a document that is never read, an
+  expert's report: it has no reading elsewhere. A page the
   transcription could not read holds (exit 2): it is never skipped silently.
   The one exception (2026-10-25): an IMAGE file (a photograph) the
   transcription could not read is set aside by rule and named
@@ -68,6 +69,7 @@ import json
 import re
 import shutil
 from dataclasses import dataclass, field
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -85,10 +87,11 @@ from ..medchron.update import (
 from ..medchron.update import outcome as UO
 from ..medchron.audit.page_text import duplicate_exhibits
 from ..medchron.update.locate import vendor_name
-from . import identity_redecide, prior_reading
+from . import identity_redecide, prior_reading, update_suspects as SP
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
 from .update_base import HELD, plan, update_dir
+from .update_suspects import texts_of as _texts
 from .vision import load_partial
 
 #: What ``update_pages`` decided for each file the other-person rule withheld
@@ -272,21 +275,28 @@ class _Read:
     decisions: dict[int, tuple[str, str]]
     medlegal: bool
     home: str | None  # the new document it re-files whole (``select.new_home``)
-    #: {page: the page it may copy}, for each READ page a rule suspected
-    #: (``select.SUSPECTED``). A page set aside names its cover in the
-    #: picture record (``pageid_io``).
-    suspects: dict[int, S.Cover] = field(default_factory=dict)
+    #: {page: the page it may copy}, for each page a rule called a copy
+    #: (``select.Cover``); every one of them but a pixel-equal one is read.
+    covers: dict[int, S.Cover] = field(default_factory=dict)
 
 
 def _classify(
-    sr: StageRun, rows: list[dict[str, Any]], seen: S.Delivered, ident: PG.Loaded, firm: dict[str, str]
+    sr: StageRun,
+    rows: list[dict[str, Any]],
+    seen: S.Delivered,
+    ident: PG.Loaded,
+    text_of: Callable[[str, int], str],
+    firm: dict[str, str],
+    words: dict[str, SUB.Subset] | None = None,
 ) -> dict[str, _Read]:
     """{id: _Read} for every candidate, its pages decided in READING order
     (``pageid.reading_order``: the most pages first). A page two new
-    documents share is read in the larger and is set aside in the smaller
-    when pixel-equal, and a smaller document every page of which is set aside
-    so is re-filed whole there (``select.new_home``). `firm`: {id: the firm's
-    numbered file name}; such a file is never re-filed whole."""
+    documents share is read in the larger and is a repeat in the smaller,
+    and a smaller document every page of which repeats one read before it is
+    re-filed whole there (``select.new_home``). `firm`: {id: the firm's
+    numbered file name}; such a file is never re-filed whole. `words`: the
+    documents whose words are an extract of another; they are decided apart
+    (``_words_extract``), so they change no other document's answer."""
     out = sr.slug_dir / "out" / sr.unit.unit
     pdfs = {str(r["id"]): out / f".pending-{r['id']}.pdf" for r in rows}
     sizes = [
@@ -294,11 +304,18 @@ def _classify(
     ]
     by_id, npages, order = {str(r["id"]): r for r in rows}, dict(sizes), PI.reading_order(sizes)
     earlier, got = S.Earlier(), {}
+    for rid in (d for d in order if d not in (words or {})):
+        image = PG.reasons(ident.pages.get(rid) or {}, _texts(sr, rid), text_of)
+        got[rid] = _read_one(sr, by_id[rid], pdfs[rid], npages[rid], seen, earlier, firm.get(rid), image)
+        for pg in image if not got[rid].medlegal else ():  # a page excluded by its picture: that page covers it
+            h = ident.pages[rid][pg]
+            src = S.DELIVERED_SRC if PG.delivered_exhibit(h.other) is not None else S.EARLIER_SRC
+            got[rid].covers[pg] = S.Cover(src, h.other, h.page, S.BY_PICTURE)
+    SP.settle_twins(got, ident)
+    for rid, sub in (words or {}).items():
+        got[rid] = _words_extract(sr, by_id[rid], pdfs[rid], npages[rid], sub, ident.pages.get(rid) or {})
     for rid in order:
-        found = ident.pages.get(rid) or {}
-        got[rid] = _read_one(sr, by_id[rid], pdfs[rid], npages[rid], seen, earlier, firm.get(rid), PG.aside(found))
-        if not got[rid].medlegal:
-            _suspected_by_picture(got[rid], found)
+        SP.read_suspects(rid, got, ident)
     for rid in (d for d in order if not got[d].medlegal and d not in firm):
         c = got[rid]
         hits = {pg: h.other for pg, h in (ident.pages.get(rid) or {}).items() if c.decisions[pg][1] == S.OVERLAP}
@@ -306,14 +323,23 @@ def _classify(
     return got
 
 
-def _suspected_by_picture(c: _Read, found: dict[int, PG.Page]) -> None:
-    """A READ page whose picture nearly matches another page is a suspected
-    copy of it (``select.SUSPECTED``), whatever else matched it."""
-    for pg, h in found.items():
-        if not h.aside and c.decisions.get(pg, ("",))[0] == S.READ:
-            src = S.DELIVERED_SRC if PG.delivered_exhibit(h.other) is not None else S.EARLIER_SRC
-            c.decisions[pg] = (S.READ, S.SUSPECTED)
-            c.suspects[pg] = S.Cover(src, h.other, h.page, S.BY_PICTURE)
+def _words_extract(
+    sr: StageRun, r: dict[str, Any], pdf: Path, npages: int, sub: SUB.Subset, found: dict[int, PG.Page]
+) -> _Read:
+    """A document whose words are an extract of another (``update/subsets``):
+    every page not pixel-equal to another is a suspected copy, named with the
+    page that holds it."""
+    image = {pg: h.reason for pg, h in found.items() if h.aside}
+    c = _read_one(sr, r, pdf, npages, S.Delivered(), None, None, image)
+    if not c.medlegal:
+        c.covers.update({pg: SP.picture(found[pg]) for pg in image})
+    whole = _texts(sr, sub.parent)
+    for pg, (d, _) in c.decisions.items():
+        if d == S.READ:
+            c.decisions[pg] = (S.EXCLUDED, S.OVERLAP)
+            at = SUB.page_of(c.pages.get(pg) or "", whole)
+            c.covers[pg] = S.Cover(S.EARLIER_SRC, sub.parent, at, S.BY_EXTRACT)
+    return c
 
 
 def _read_one(
@@ -322,7 +348,7 @@ def _read_one(
     pdf: Path,
     npages: int,
     seen: S.Delivered,
-    earlier: S.Earlier,
+    earlier: S.Earlier | None,
     firm: str | None,
     image: dict[int, str] | None,
 ) -> _Read:
@@ -331,9 +357,9 @@ def _read_one(
     pages = _texts(sr, str(r["id"]))
     if ML.is_medlegal([vendor_name(r), firm or ""], pages.get(1) or ""):
         return _Read(pdf, pages, {i: (S.EXCLUDED, ML.REASON) for i in range(1, npages + 1)}, True, None)
-    suspects: dict[int, S.Cover] = {}
-    decided = S.classify_new(pages, npages, seen, earlier, image, suspects_out=suspects, doc_id=str(r["id"]))
-    return _Read(pdf, pages, decided, False, None, suspects=suspects)
+    covers: dict[int, S.Cover] = {}
+    decided = S.classify_new(pages, npages, seen, earlier, image, covers_out=covers, doc_id=str(r["id"]))
+    return _Read(pdf, pages, decided, False, None, covers=covers)
 
 
 def _exhibit(
@@ -410,11 +436,13 @@ def run(sr: StageRun) -> int:
     # Only what the delivery READ is "already read": a firm-numbered file the
     # delivered list never named was never read, so its words exclude nothing.
     seen = _seen(sr, read_by_delivery)
-    ident = PG.load(ud)
+    text_of = _text_of(sr, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
+    firm_of = {str(r["id"]): firm[r["sha256"]]["name"] for r in rows if (r.get("sha256") or "") in firm}
+    ident, filled = SP.fill(sr, rows, PG.load(ud), firm_of)
     extracts = dict(ident.extracts)
     ordered = [x for x in rows if str(x["id"]) not in extracts]
-    firm_of = {str(r["id"]): firm[r["sha256"]]["name"] for r in ordered if (r.get("sha256") or "") in firm}
-    read = _classify(sr, ordered, seen, ident, firm_of)
+    words = _words_extracts(sr, ordered, set(firm_of), extracts)
+    read = _classify(sr, ordered, seen, ident, text_of, firm_of, words)
     recs, units, k, whole = [], [], 0, {}
     for r in ordered:  # exhibit numbers follow pull order
         rid, f = str(r["id"]), firm.get(r.get("sha256") or "")
@@ -448,7 +476,7 @@ def run(sr: StageRun) -> int:
         sr.log(HELD + f"two files carry one exhibit number: {sorted(dupes)[:5]}")
         return 2
     subs = _subset_records(rows, recs, extracts, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
-    _write(sr, ud, recs, units, skipped, subs)
+    _write(sr, ud, recs, units, skipped, subs, filled)
     pages = sum(len(r["read"]) for r in recs)
     if not pages:
         # An answer, not a hold (2026-10-25): delivered already current, nothing filed (``update/outcome``).
@@ -475,6 +503,14 @@ def _record_pages(
         _write_page_rows(sr, ordered, read, extracts, skipped, ident)
     except Exception as exc:  # noqa: BLE001 - the page record is evidence; its failure is logged, never the run's
         sr.log(f"update_select: page record not written ({type(exc).__name__}: {str(exc)[:160]})")
+
+
+def _words_extracts(
+    sr: StageRun, ordered: list[dict[str, Any]], firm: set[str], by_image: dict[str, SUB.Subset]
+) -> dict[str, SUB.Subset]:
+    """The documents whose words are an extract of another's (``update/subsets``)."""
+    by_text = SUB.refiled_subsets([(str(r["id"]), _texts(sr, str(r["id"]))) for r in ordered], firm)
+    return {d: s for d, s in PG.merge_extracts(by_text, by_image).items() if d not in by_image}
 
 
 def _seen(sr: StageRun, read_by_delivery: list[dict[str, Any]]) -> S.Delivered:
@@ -602,9 +638,22 @@ def _refiled_whole(sr: StageRun, rec: dict[str, Any], found: dict[int, PG.Page])
     return SUB.Subset(rec["id"], f"{PI.DELIVERED}{home}", int(rec["pages"]), int(rec["excluded"].get(S.ALREADY, 0)))
 
 
-def _texts(sr: StageRun, rid: str) -> dict[int, str]:
-    tp = sr.slug_dir / "text" / f"{rid}.txt"
-    return S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else "")
+def _text_of(sr: StageRun, delivered: dict[int, str]) -> Callable[[str, int], str]:
+    """Reads the page a picture matched: a delivered exhibit's text layer
+    ("exhibit:N") or a new document's transcription."""
+    cache: dict[str, dict[int, str]] = {}
+
+    def get(other: str, page: int) -> str:
+        if other not in cache:
+            n = PG.delivered_exhibit(other)
+            pdf = sr.slug_dir / "delivered" / delivered.get(n, "") if n is not None else None
+            if pdf is not None:
+                cache[other] = dict(enumerate(S.pdf_pages(pdf), 1)) if pdf.is_file() else {}
+            else:
+                cache[other] = _texts(sr, other)
+        return cache[other].get(page, "")
+
+    return get
 
 
 def _subset_records(
@@ -627,11 +676,20 @@ def _subset_records(
     return out
 
 
-def _write(sr: StageRun, ud: Path, recs: list[dict], units: list[dict], skipped: dict, subs: list[dict]) -> None:
+def _write(
+    sr: StageRun,
+    ud: Path,
+    recs: list[dict],
+    units: list[dict],
+    skipped: dict,
+    subs: list[dict],
+    filled: list[dict] | None = None,
+) -> None:
     (sr.slug_dir / "units").mkdir(parents=True, exist_ok=True)
     (sr.slug_dir / "units" / f"{sr.unit.unit}.json").write_text(json.dumps(units, indent=1), encoding="utf-8")
     (ud / "new_exhibits.json").write_text(json.dumps(recs, indent=1), encoding="utf-8")
     sel = {"exhibits": recs, "skipped": skipped, "excluded_named": _excluded_named(sr), "subsets": subs}
+    sel["filled"] = filled or []
     (ud / "selection.json").write_text(json.dumps(sel, indent=1), encoding="utf-8")
 
 

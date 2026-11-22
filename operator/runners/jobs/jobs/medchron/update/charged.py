@@ -84,13 +84,24 @@ def chargeable_pages(slug_dir: Path, unit: str) -> int | None:
     return sum(1 for r in rows if PR.charged(r))
 
 
+def _uncharged(x: dict[str, Any]) -> int:
+    already, suspected = _int((x.get("excluded") or {}).get(ALREADY)), set(x.get("suspected") or [])
+    if suspected and set(x.get("read") or []) <= suspected:
+        return max(_int(x.get("pages")), already + len(suspected))
+    return already + len(suspected)
+
+
 def delivered_pages(slug_dir: Path, unit: str) -> int:
-    """Pages of this update's pulled documents the delivered chronology already
-    read (the 2026-11-06 rule's deduction)."""
+    """Pages of this update's pulled documents not charged under the 2026-11-06
+    rule (``old_rule_pages``): those the delivered chronology already read, and
+    those read only as suspected copies, which the rule's own days set aside
+    (2026-11-22: without them this charge, the one a run with no page record
+    pays, would have grown). A document with no page read on its own account
+    is left out whole, as a re-filed copy of delivered pages was."""
     sel = read_json(slug_dir / "runs" / unit / "update" / "selection.json", None)
     if not isinstance(sel, dict):
         return 0
-    n = sum(_int((x.get("excluded") or {}).get(ALREADY)) for x in sel.get("exhibits") or [] if isinstance(x, dict))
+    n = sum(_uncharged(x) for x in sel.get("exhibits") or [] if isinstance(x, dict))
     n += sum(
         _int(s.get("pages"))
         for s in sel.get("subsets") or []

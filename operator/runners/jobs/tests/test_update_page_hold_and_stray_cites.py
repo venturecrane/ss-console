@@ -1,10 +1,10 @@
-"""An update knows a repeated page and carries no stray citation lines
-(2026-11-17). A firm filed two overlapping exports of one clinic's records
-whose pages differed only in print stamps and pagination, and the update left
-64 lines that were only a citation. Since 2026-11-22 a text match never sets a
-page aside: it marks the page a SUSPECTED copy (read, not charged, its
-restated visit trimmed at collect), so the tests of the stamp and window
-rules assert the suspicion. Every name and value is invented."""
+"""An update reads each repeated page once and carries no stray citation
+lines (2026-11-17). A firm filed two overlapping exports of one clinic's
+records whose pages differed only in print stamps and pagination, so the
+shared pages were composed twice, and the update left 64 lines that were
+only a citation. Each test here fails on the code before the fix unless it
+says it pins behaviour that must not change. Every name and value is
+invented."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from jobs.medchron.update import (
     body as B,
     entry_edits as EE,
     measure_repeats as M,
+    pageid_io as PG,
     proofs as P,
     select as S,
     uncited as U,
@@ -50,19 +51,17 @@ def _stamped(stamp: str, note: str = NOTE) -> str:
         ("11/02/2026 3:14 PM", "11/09/2026 8:01 AM"),  # a bare date-time header
     ],
 )
-def test_a_page_differing_only_in_its_export_stamp_is_a_suspected_copy(a: str, b: str) -> None:
-    seen = S.Delivered.of_docs([[_stamped(a)]], ["exhibit:1"])
-    assert S.classify_new({1: _stamped(b)}, 1, seen) == {1: (S.READ, S.SUSPECTED)}
-    assert S.without_furniture(_stamped(a)) == S.without_furniture(_stamped(b))
+def test_a_page_differing_only_in_its_export_stamp_is_the_same_page(a: str, b: str) -> None:
+    assert PG.confirmed(_stamped(a), _stamped(b))
 
 
 def test_a_real_clinical_date_difference_is_never_a_stamp() -> None:
     other = NOTE.replace("Date of service: 03/04/2026", "Date of service: 03/11/2026")
-    seen = S.Delivered.of_docs([[_stamped("Run Date: 11/02/2026")]], ["exhibit:1"])
-    assert S.classify_new({1: _stamped("Run Date: 11/02/2026", other)}, 1, seen) == {1: (S.READ, S.NEW)}
+    assert not PG.confirmed(_stamped("Run Date: 11/02/2026"), _stamped("Run Date: 11/02/2026", other))
     # a bare date-time line in the BODY is when something happened, not a print header
-    mid = NOTE.replace("Blood pressure", "03/04/2026 10:15\nBlood pressure")
-    assert "03/04/2026 10:15" in S.strip_stamps(_stamped("Exported 11/02/2026", mid))
+    mid_a = NOTE.replace("Blood pressure", "03/04/2026 10:15\nBlood pressure")
+    mid_b = NOTE.replace("Blood pressure", "03/05/2026 10:15\nBlood pressure")
+    assert not PG.confirmed(_stamped("Exported 11/02/2026", mid_a), _stamped("Exported 11/09/2026", mid_b))
     # a clinical "report" line is not a stamp
     assert S.strip_stamps("Report: MRI of the lumbar spine 03/04/2026") == "Report: MRI of the lumbar spine 03/04/2026"
 
@@ -111,18 +110,19 @@ def _decide(pages: list[str], seen: S.Delivered, earlier: S.Earlier | None = Non
     return S.classify_new(dict(enumerate(pages, 1)), len(pages), seen, earlier)
 
 
-def test_a_second_export_of_delivered_pages_paginated_otherwise_is_read_as_suspected_copies() -> None:
+def test_a_second_export_of_delivered_pages_paginated_otherwise_is_already_read() -> None:
     seen = S.Delivered.of_docs([_export_a()])
     got = _decide(_export_b(), seen)
-    assert got == {p: (S.READ, S.SUSPECTED) for p in (1, 2, 3)}
+    assert {p: d for p, (d, _) in got.items()} == {1: S.EXCLUDED, 2: S.EXCLUDED, 3: S.EXCLUDED}
+    assert {why for _, why in got.values()} == {S.ALREADY}
 
 
-def test_a_second_export_overlapping_an_earlier_new_one_is_read_as_suspected_copies() -> None:
+def test_a_second_export_overlapping_an_earlier_new_one_is_a_repeat_not_read_twice() -> None:
     earlier = S.Earlier()
     first = _decide(_export_a(), S.Delivered(), earlier)
-    assert first == {p: (S.READ, S.NEW) for p in (1, 2)}
+    assert all(d == S.READ for d, _ in first.values())
     second = _decide(_export_b(), S.Delivered(), earlier)
-    assert second == {p: (S.READ, S.SUSPECTED) for p in (1, 2, 3)}
+    assert all(d == S.EXCLUDED and why == S.OVERLAP for d, why in second.values())
 
 
 @pytest.mark.parametrize(
@@ -180,9 +180,9 @@ def _mri_window() -> S.Delivered:
     return S.Delivered.of_docs([["\n".join(lines[:5]) + "\nPage 1 of 2", "\n".join(lines[5:]) + "\nPage 2 of 2"]])
 
 
-def test_a_page_identical_but_for_its_print_stamp_is_a_suspected_copy() -> None:
+def test_a_page_identical_but_for_its_print_stamp_is_held() -> None:
     got = _decide([f"Printed 11/09/2026 4:02 PM by records\n{MRI}\nPage 1 of 1"], _mri_window())
-    assert got == {1: (S.READ, S.SUSPECTED)}
+    assert got == {1: (S.EXCLUDED, S.ALREADY)}
 
 
 def test_a_page_identical_but_for_one_added_negative_finding_is_read() -> None:
@@ -190,9 +190,9 @@ def test_a_page_identical_but_for_one_added_negative_finding_is_read() -> None:
     ("foci") is elsewhere in the window, so the old allowance of missing
     words held the page. Now no token may be missing."""
     page = MRI.replace("The labrum is intact.", f"The labrum is intact. {NEGATIVE}")
-    assert _decide([f"Printed 11/09/2026 4:02 PM by records\n{page}"], _mri_window())[1] == (S.READ, S.NEW)
+    assert _decide([f"Printed 11/09/2026 4:02 PM by records\n{page}"], _mri_window())[1][0] == S.READ
     one_word = MRI.replace("moderate tendinosis", "moderate diffuse tendinosis")  # one plain word more
-    assert _decide([one_word], _mri_window())[1] == (S.READ, S.NEW)
+    assert _decide([one_word], _mri_window())[1][0] == S.READ
 
 
 def test_two_deliveries_joined_keep_each_exhibit_its_own_document() -> None:
@@ -235,13 +235,13 @@ def test_a_negative_finding_whose_words_are_scattered_in_the_window_is_read() ->
     assert _decide([page], seen)[1][0] == S.READ
 
 
-def test_a_page_differing_only_by_its_print_stamp_and_line_wraps_is_a_suspected_copy() -> None:
+def test_a_page_differing_only_by_its_print_stamp_and_line_wraps_is_held() -> None:
     """(c) The same words in the same order, broken into other lines, under another stamp."""
     words = MRI.split()
     rewrapped = "\n".join(" ".join(words[i : i + 9]) for i in range(0, len(words), 9))
     assert rewrapped.split() == MRI.split() and rewrapped != MRI
     got = _decide([f"Report Date/Time: 11/09/2026 08:01\n{rewrapped}\nPage 1 of 1"], _mri_window())
-    assert got == {1: (S.READ, S.SUSPECTED)}
+    assert got == {1: (S.EXCLUDED, S.ALREADY)}
 
 
 def test_a_stamp_inside_a_page_breaks_its_runs() -> None:
@@ -255,15 +255,16 @@ def test_a_stamp_inside_a_page_breaks_its_runs() -> None:
     assert CT.stream_of("Run Date: 11/02/2026\none two\nPage 1 of 2") == ("one", "two")
 
 
-def test_an_undated_page_beside_a_suspected_one_is_read_as_new() -> None:
+def test_an_undated_page_is_held_only_beside_a_held_page() -> None:
     """The delivered export broke the visit's body across two pages; the new
     export holds its header on one page and its whole undated body on the
-    next, which no single delivered page covers. The rule that held such a
-    body beside a held page set pages aside and is gone (2026-11-22)."""
+    next, which no single delivered page covers."""
     lines = VISIT_1.split("\n")
     head, body = "\n".join(lines[:4]), "\n".join(lines[4:])
     seen = S.Delivered.of_docs([[f"{head}\n{lines[4]}", "\n".join(lines[5:]) + "\n" + VISIT_2]])
-    assert _decide([head, body], seen) == {1: (S.READ, S.SUSPECTED), 2: (S.READ, S.NEW)}
+    assert _decide([body], seen)[1][0] == S.READ  # no date, no held neighbour: read
+    got = _decide([head, body], seen)
+    assert got[1] == (S.EXCLUDED, S.ALREADY) and got[2] == (S.EXCLUDED, S.ALREADY)
 
 
 D = "03/04/2026"
@@ -344,18 +345,16 @@ def _job(tmp_path: Path) -> Path:
     return job
 
 
-def test_the_measuring_command_reports_suspected_pages_and_stray_lines(
+def test_the_measuring_command_reports_held_pages_and_stray_lines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     job = _job(tmp_path)
     assert M.main([str(job)]) == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["pages"]["decisions"] == {f"{S.READ}: {S.SUSPECTED}": 3}
-    # the page broken mid-visit is suspected by the run of pages that holds it
-    assert out["pages"]["suspected_by_text"] == {
-        "suspected by text (delivered)": 2,
-        "suspected by contained (delivered)": 1,
-    }
+    assert out["pages"]["decisions"] == {f"{S.EXCLUDED}: {S.ALREADY}": 3}
+    assert out["pages"]["held_by_text"] == {"held by a run of delivered pages": 1}  # the page broken mid-visit
+    assert out["pages"]["held_by_text_tokens_absent_from_window"] == {"d2 p.2": 0}
+    assert out["pages"]["held_by_text_runs_absent_from_window"] == {"d2 p.2": 0}
     assert out["stray_citations"] == {
         "entries": 1,
         "citation_only_lines_before": 4,

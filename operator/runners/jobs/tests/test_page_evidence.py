@@ -31,38 +31,59 @@ NOTE = (
 )
 
 
-# ---- A.1: a text match is read, and the page it may copy is recorded (2026-11-22) -----
+# ---- A.1: the cover is recorded; no page changes status because of it ----------------
 
 
-def test_a_text_match_is_read_and_records_the_delivered_page_it_may_copy() -> None:
+def test_a_text_exclusion_records_the_delivered_page_that_covers_it() -> None:
     seen = S.Delivered.of_docs([["cover sheet " * 20, NOTE]], ["exhibit:3"])
-    suspects: dict[int, S.Cover] = {}
-    out = S.classify_new({1: NOTE}, 1, seen, suspects_out=suspects)
-    assert out[1] == (S.READ, S.SUSPECTED)  # read: no text test sets a page aside
-    assert suspects[1] == S.Cover(S.DELIVERED_SRC, "exhibit:3", 2, S.BY_TEXT)
-    assert suspects[1].as_dict() == {"exhibit": 3, "page": 2, "exact": False}
+    covers: dict[int, S.Cover] = {}
+    out = S.classify_new({1: NOTE}, 1, seen, covers_out=covers)
+    assert out[1] == (S.EXCLUDED, S.ALREADY)
+    assert covers[1] == S.Cover(S.DELIVERED_SRC, "exhibit:3", 2, S.BY_TEXT)
+    assert covers[1].as_dict() == {"exhibit": 3, "page": 2, "exact": False}
 
 
-def test_a_text_match_that_names_no_page_is_read_as_new() -> None:
+def test_an_exclusion_that_names_no_cover_is_still_excluded_as_on_main() -> None:
+    """Record only: a cover check never changes a page's status (the lead, 2026-11-17)."""
     nameless = S.Delivered.of_docs([[NOTE]], [""])
-    suspects: dict[int, S.Cover] = {}
-    assert S.classify_new({1: NOTE}, 1, nameless, suspects_out=suspects)[1] == (S.READ, S.NEW)
-    assert suspects == {}
+    covers: dict[int, S.Cover] = {}
+    assert S.classify_new({1: NOTE}, 1, nameless, covers_out=covers)[1] == (S.EXCLUDED, S.ALREADY)
+    assert covers == {}  # no cover recorded, and the page is excluded exactly as main excludes it
 
 
-def test_a_service_date_the_matched_exhibit_never_states_is_not_a_suspicion() -> None:
+def test_a_service_date_the_covering_exhibit_never_states_means_the_page_is_read() -> None:
     later = NOTE.replace("04/01/2025", "05/06/2025")  # the same template, a later visit
     seen = S.Delivered.of_docs([[NOTE]], ["exhibit:3"])
-    assert S.classify_new({1: later}, 1, seen)[1] == (S.READ, S.NEW)
-    assert S.classify_new({1: NOTE}, 1, seen)[1] == (S.READ, S.SUSPECTED)  # the same date: a suspected copy
+    assert S.classify_new({1: later}, 1, seen)[1] == (S.READ, "new document")
+    assert S.classify_new({1: NOTE}, 1, seen)[1][0] == S.EXCLUDED  # the same date: a re-filed copy
 
 
-def test_a_text_copy_of_an_earlier_new_document_is_read_and_names_that_document() -> None:
-    earlier, suspects = S.Earlier(), {}
+def test_a_refiled_copy_of_an_earlier_new_document_names_that_document() -> None:
+    earlier, covers = S.Earlier(), {}
     S.classify_new({1: NOTE}, 1, S.Delivered(), earlier, doc_id="first")
-    out = S.classify_new({1: NOTE}, 1, S.Delivered(), earlier, suspects_out=suspects, doc_id="second")
-    assert out[1] == (S.READ, S.SUSPECTED)
-    assert (suspects[1].doc, suspects[1].page) == ("first", 1)
+    out = S.classify_new({1: NOTE}, 1, S.Delivered(), earlier, covers_out=covers, doc_id="second")
+    assert out[1] == (S.EXCLUDED, S.OVERLAP)
+    assert (covers[1].doc, covers[1].page) == ("first", 1)
+
+
+def test_a_twin_reading_excluded_records_the_page_it_repeats() -> None:
+    """2026-11-17 rehearsal: two "repeat" pages named no cover; both were twins
+    (``update/twins``), settled with no record of the page they repeat."""
+    from jobs.medchron.update import twins as TW
+    from jobs.stages.update_select import _Read
+    from jobs.stages.update_suspects import settle_twins
+
+    got = {
+        "small": _Read(Path("s.pdf"), {1: NOTE}, {1: (S.READ, "new document")}, False, None),
+        "large": _Read(Path("l.pdf"), {5: NOTE + " Reviewed."}, {p: (S.READ, "") for p in range(1, 6)}, False, None),
+    }
+    got["large"].pages.update({p: f"other page {p} " * 20 for p in range(1, 5)})
+    settle_twins(got, PG.Loaded(pages={"small": {1: PG.Page(S.OVERLAP, "large", 5, False)}}))
+    assert got["small"].decisions[1] == (S.EXCLUDED, S.OVERLAP)  # as main decides it
+    assert got["small"].covers[1] == S.Cover(S.EARLIER_SRC, "large", 5, S.BY_TWIN)
+    mine: dict[int, int] = {}
+    TW.settle(({1: NOTE}, {1: (S.READ, "")}), ({5: NOTE + " x"}, {5: (S.READ, "")}), {1: 5}, mine)
+    assert mine == {1: 5}
 
 
 #: the cover document's state in each case the review named
@@ -100,7 +121,7 @@ def test_a_picture_copy_keeps_mains_decision_whatever_its_cover_became(case, job
         )
         rows.append({"id": rid, "name": label, "ext": ".pdf", "path": str(path)})
     ident = PG.Loaded(pages={"small": {1: PG.Page(S.OVERLAP, "big", 1, True)}})
-    got = US._classify(sr, rows, S.Delivered(), ident, {})
+    got = US._classify(sr, rows, S.Delivered(), ident, lambda _o, _p: "", {})
     assert got["small"].decisions[1] == (S.EXCLUDED, S.OVERLAP)
     assert S.row(9, "", got["small"].decisions, got["small"].pages)["unread"] == []
 

@@ -91,7 +91,7 @@ def test_a_misread_on_pages_already_delivered_as_the_clients_does_not_withhold(
     surnames, dobs = FI.identities(sr.job.units)
     assert US._page_findings(sr, RID, surnames, dobs, exempt) == []
     # The picture record still skips pp.2-25 as already read; pp.1 and 26-34 are read.
-    already = PG.aside(ident.pages[RID])
+    already = PG.reasons(ident.pages[RID], {}, lambda _o, _p: "")
     assert sorted(already) == list(DELIVERED_PAGES) and set(already.values()) == {S.ALREADY}
     assert sorted(set(range(1, NPAGES + 1)) - set(already)) == [1, *range(26, NPAGES + 1)]
 

@@ -54,14 +54,30 @@ def klass(reason: str) -> str:
 
 
 #: The rule that suspected a READ page of copying another (``evidence.suspected``).
-NEAR_PICTURE, TEXT_OVERLAP, RUN_OF_PAGES = "near_picture", "text_overlap", "run_of_pages"
+NEAR_PICTURE, NEVER_READ, TEXT_OVERLAP, RUN_OF_PAGES, UNDATED_NEIGHBOUR, TWIN_BY_WORDS, WORDS_EXTRACT = (
+    "near_picture",
+    "picture_of_a_page_never_read",
+    "text_overlap",
+    "run_of_pages",
+    "undated_neighbour",
+    "twin_by_words",
+    "words_extract",
+)
+_RULE = {
+    S.BY_PICTURE: (NEAR_PICTURE, PR.PICTURE),
+    S.BY_TEXT: (TEXT_OVERLAP, PR.TEXT),
+    S.BY_RUN: (RUN_OF_PAGES, PR.CONTAINED),
+    S.BY_NEIGHBOUR: (UNDATED_NEIGHBOUR, PR.CONTAINED),
+    S.BY_TWIN: (TWIN_BY_WORDS, PR.TEXT),
+    S.BY_EXTRACT: (WORDS_EXTRACT, PR.TEXT),
+}
 
 
-def suspicion(c: S.Cover) -> tuple[str, str]:
+def suspicion(c: S.Cover | None) -> tuple[str, str]:
     """(the rule that suspected the page, its evidence kind)."""
-    if c.kind == S.BY_PICTURE:
-        return NEAR_PICTURE, PR.PICTURE
-    return (RUN_OF_PAGES, PR.CONTAINED) if c.kind == S.BY_RUN else (TEXT_OVERLAP, PR.TEXT)
+    if c is None:
+        return TEXT_OVERLAP, PR.TEXT
+    return (NEVER_READ, PR.PICTURE) if c.exact else _RULE[c.kind]
 
 
 def _kind(reason: str) -> str:
@@ -139,11 +155,10 @@ def candidate_rows(
 def _decided_row(rid: str, sha: str, p: int, d: str, why: str, cover: S.Cover | None, h: PG.Page | None) -> dict:
     """One decided page's row. `cover`: the page that covers it, or, for a
     READ page, the page it is suspected of copying."""
-    if d == S.READ and cover is not None:
+    if d == S.READ and why == S.SUSPECTED:
         rule, kind = suspicion(cover)
-        return PR.row(
-            rid, sha, p, PR.READ, klass(S.SUSPECTED), kind, BY_SELECT, cover.as_dict(), **{PR.SUSPECTED: rule}
-        )
+        at = cover.as_dict() if cover is not None else None
+        return PR.row(rid, sha, p, PR.READ, klass(why), kind, BY_SELECT, at, **{PR.SUSPECTED: rule})
     if d == S.READ:
         return PR.row(rid, sha, p, PR.READ, "new", PR.NONE, BY_SELECT)
     if d == S.UNREAD:
@@ -176,8 +191,7 @@ def selection_rows(
         c = decided[rid]
         found = ident.pages.get(rid) or {}
         for p, (d, why) in sorted(c.decisions.items()):
-            cover = c.suspects.get(p) if d == S.READ else None
-            out[(rid, p)] = _decided_row(rid, sha.get(rid, ""), p, d, why, cover, found.get(p))
+            out[(rid, p)] = _decided_row(rid, sha.get(rid, ""), p, d, why, c.covers.get(p), found.get(p))
     for rid, sub in extracts.items():
         if any(k[0] == rid for k in out):
             continue

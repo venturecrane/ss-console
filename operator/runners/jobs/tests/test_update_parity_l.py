@@ -9,10 +9,9 @@ columns in another order (so its 8-word shingles barely overlapped). Those
 pages were composed again, the copy became a new exhibit and an Exhibit List
 line, and one of them produced a duplicate entry. Every record is invented.
 
-Since 2026-11-22 the words no longer confirm a near picture (a paid proof
-showed the word test calling differing pages the same): a re-print whose
-pages are PIXEL-EQUAL to delivered pages is the re-filed copy; one known only
-by a near picture is read, each page a suspected copy, not charged."""
+Since 2026-11-22 the words' agreement only suspects: a re-print whose pages
+are PIXEL-EQUAL to delivered pages is the re-filed copy; one known only by a
+near picture is read, each page a suspected copy, not charged."""
 
 from __future__ import annotations
 
@@ -89,6 +88,24 @@ def _seed(tmp: Path, delivered: list[list[str]], docs: dict[str, list[list[str]]
         log=log.append,
         logged=log,
     )
+
+
+def test_a_reprint_with_a_new_print_date_and_reflowed_columns_is_confirmed() -> None:
+    from jobs.medchron.update import pageid_io as PG
+    from jobs.medchron.update import select as S
+
+    original = "\n".join(_page(1))
+    copy = "\n".join(_reprint(_page(1)))
+    assert len(S.shingles(copy) & S.shingles(original)) < 0.8 * len(S.shingles(copy))  # the text rule misses it
+    assert PG.confirmed(copy, original)
+
+
+def test_a_near_picture_that_states_another_date_or_value_is_never_confirmed() -> None:
+    from jobs.medchron.update import pageid_io as PG
+
+    original = "\n".join(_page(1))
+    assert not PG.confirmed("\n".join(_reprint(_page(1, date="11/10/2025"))), original)  # another visit
+    assert not PG.confirmed("\n".join(_reprint(_page(1, bp="142/90"))), original)  # another reading
 
 
 def test_a_reprint_known_only_by_a_near_picture_is_read_as_suspected_copies(tmp_path: Path) -> None:

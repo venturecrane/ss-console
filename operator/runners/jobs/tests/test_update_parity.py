@@ -23,7 +23,7 @@ RECORD = (
 
 
 # ---- change 1: overlap BETWEEN new files ---------------------------------------
-def test_a_page_repeating_an_earlier_new_page_is_a_suspected_copy_unless_it_adds_a_clinical_value() -> None:
+def test_a_page_repeating_an_earlier_new_page_is_skipped_unless_it_adds_a_clinical_value() -> None:
     """Before: a page was only checked against the DELIVERED exhibits, so two
     re-filed copies of one new record (different fax headers) were both
     composed. Now the second is skipped, unless it carries a lab, vital or
@@ -39,8 +39,8 @@ def test_a_page_repeating_an_earlier_new_page_is_a_suspected_copy_unless_it_adds
         S.Delivered(),
         earlier,
     )
-    assert again[1] == (S.READ, S.SUSPECTED)  # read since 2026-11-22, never set aside by its words
-    assert again[2] == (S.READ, S.NEW)  # a new lab value: not even a suspected copy
+    assert again[1] == (S.EXCLUDED, S.OVERLAP)
+    assert again[2][0] == S.READ  # a new lab value is read even on a repeated page
     # Fax, page and time digits are not clinical values.
     assert S.clinical_values(FAX_A) == set() and "hemo 11.2" in S.clinical_values("Hemoglobin 11.2 g/dL")
 
