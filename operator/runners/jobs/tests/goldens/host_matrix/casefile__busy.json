@@ -69,8 +69,10 @@
           "children": [
             {
               "alive": true,
+              "before_boot": false,
               "file": "child.pid",
-              "pid": "<PID>"
+              "pid": "<PID>",
+              "stale": false
             }
           ],
           "errors": [],

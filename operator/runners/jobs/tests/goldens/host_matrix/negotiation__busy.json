@@ -68,8 +68,10 @@
           "children": [
             {
               "alive": true,
+              "before_boot": false,
               "file": "demand-child.pid",
-              "pid": "<PID>"
+              "pid": "<PID>",
+              "stale": false
             }
           ],
           "errors": [],
