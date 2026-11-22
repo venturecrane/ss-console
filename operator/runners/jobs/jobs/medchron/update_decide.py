@@ -227,9 +227,10 @@ def load_repeats(path: Path) -> list[dict[str, str]]:
     out = []
     for i, r in enumerate(rows):
         vals = [r.get(k) if isinstance(r, dict) else None for k in ("entry", "paragraph", "why")]
-        if not all(isinstance(v, str) and v.strip() for v in vals):
+        text = [v for v in vals if isinstance(v, str) and v.strip()]
+        if len(text) != 3:
             raise Refused(f"repeat {i + 1}: entry, paragraph and why are all required")
-        out.append({"entry": vals[0].strip(), "paragraph": vals[1].strip("\n"), "why": vals[2].strip()[:400]})
+        out.append({"entry": text[0].strip(), "paragraph": text[1].strip("\n"), "why": text[2].strip()[:400]})
     return out
 
 
