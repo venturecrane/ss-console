@@ -89,6 +89,10 @@ broker, daemon or queue is read, no resume marker is written, the decisions
 file is kept for the live act, and a directory that is not such a copy, or
 whose data root lies outside it, is refused. ``jobs rehearse <copy>`` then
 walks the settled update review and every $0 stage behind it.
+
+PRE-DELIVERY (2026-11-22). A job held by the pre-delivery review
+(``review_held``) on a sentence the page contradicts takes the same command
+and corrections only: ``update_decide_review``, which ``main`` routes it to.
 """
 
 from __future__ import annotations
@@ -675,14 +679,14 @@ def main(argv: list[str] | None = None) -> int:
         "--offline", type=Path, metavar="COPY", help="decide a rehearsal copy of the job instead (no daemon)"
     )
     a = ap.parse_args(argv)
-    from . import lane as lane_mod
+    from . import lane as lane_mod, update_decide_review as UDR  # it routes a pre-delivery review hold
 
     try:
         d = None if a.offline else lane_mod.build()
         corrections, closures = load_decisions(a.corrections)
         confirmed = load_confirmed(a.corrections)
         repeats = load_repeats(a.corrections)
-        p = plan(
+        p = UDR.route_plan(
             d,
             a.job_id,
             corrections=corrections,
@@ -704,7 +708,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps({"dry_run": a.dry_run, **summary}, indent=1))
     if a.dry_run:
         return 0
-    apply(d, p, a.corrections)
+    UDR.route_apply(d, p, a.corrections)
     print(
         f"recorded SMD's decision in the copy {a.offline}; nothing was queued; rehearse it with: jobs rehearse {a.offline}"
         if a.offline
