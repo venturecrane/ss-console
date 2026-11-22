@@ -492,6 +492,35 @@ class Doorway:
                 on_result(by_id[cid], None, err)
         return summary
 
+    def _fresh_item(
+        self,
+        stage: str,
+        model: str,
+        max_tokens: int,
+        shape: dict[str, Any],
+        it: Any,
+        fresh: list[dict[str, Any]],
+        seen: set[str],
+        summary: Any,
+        on_result: Any,
+    ) -> tuple[Any, int]:
+        """Build one batch item's request and add it to ``fresh``, unless it is too
+        large for the model: then it is that item's failure, never submitted.
+        Returns the request's effort and cache-marker count."""
+        p, mk = build_params_marked(
+            stage, model=model, messages=it.messages, max_tokens=max_tokens, caching=self.caching, **shape
+        )
+        effort = p.get("output_config", {}).get("effort")
+        try:
+            p = request_size.fit(self, stage, p, custom_id=it.custom_id, pages=count_pages(it.messages), batch=True)
+        except RequestTooLarge as exc:
+            seen.add(it.custom_id)
+            summary.failed[it.custom_id] = str(exc)
+            on_result(it, None, str(exc))
+            return effort, mk
+        fresh.append({"custom_id": it.custom_id, "params": p})
+        return effort, mk
+
     def _round(
         self,
         stage: str,
@@ -527,18 +556,7 @@ class Doorway:
         for it in todo:
             if it.custom_id in claimed:
                 continue  # already submitted (its claim file may predate the size stop): it bills either way
-            p, mk = build_params_marked(
-                stage, model=model, messages=it.messages, max_tokens=max_tokens, caching=self.caching, **shape
-            )
-            e, markers = p.get("output_config", {}).get("effort"), mk
-            try:  # one item too large for the model is that item's failure, never submitted
-                p = request_size.fit(self, stage, p, custom_id=it.custom_id, pages=count_pages(it.messages), batch=True)
-            except RequestTooLarge as exc:
-                seen.add(it.custom_id)
-                summary.failed[it.custom_id] = str(exc)
-                on_result(it, None, str(exc))
-                continue
-            fresh.append({"custom_id": it.custom_id, "params": p})
+            e, markers = self._fresh_item(stage, model, max_tokens, shape, it, fresh, seen, summary, on_result)
         n = _next_index(existing, stage)
         for group in _split_requests(fresh):
             path = batch_dir / f"batch-{stage}-{n}{'-retry' if retry else ''}.json"
