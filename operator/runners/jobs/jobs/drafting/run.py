@@ -56,7 +56,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import firm_wording, limits as limits_mod, paid, proof_mode, request_additions, stop_request
+from .. import firm_wording, limits as limits_mod, paid, proof_mode, request_additions, request_size, stop_request
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from operator_connector_sdk.library import readers
@@ -573,6 +573,8 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
             v = self._walk()
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=hold.setting, reason=f"limit: {hold.reason}")
+        except request_size.RequestTooLarge as exc:  # our machinery's: failed, resumable, SMD told, the firm not
+            v = Verdict("failed", stage=self._current(), reason=str(exc))
         except DraftingHold as h:
             v = Verdict("held", stage=self._current(), reason=str(h))
         except DraftingFailed as exc:

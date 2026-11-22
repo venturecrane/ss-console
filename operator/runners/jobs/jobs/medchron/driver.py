@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .. import __version__, limits as limits_mod, paid, proof_mode, seat as seat_mod, stop_request
+from .. import __version__, limits as limits_mod, paid, proof_mode, request_size, seat as seat_mod, stop_request
 from . import (
     allowance as allowance_mod,
     config as config_mod,
@@ -605,19 +605,20 @@ class Driver:
         runner = getattr(self, "_runner_override", {}).get(stage.name, stage.runner)
         try:
             code = int(runner(sr))
-        except limits_mod.LimitHold as hold:
-            # A limit tripped mid-stage, through the doorway hook. Whatever the
-            # stage had written stays on disk for the resume; the run stops here.
-            lines.append(f"HELD: {hold.reason}")
-            (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
-            (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
-                "\n".join(lines) + "\n", encoding="utf-8"
-            )
-            return self._hold(hold, stage, unit, st, extracted, notes)
         except StageRefusal as exc:
             code, refusal = -1, str(exc)
             lines.append(f"REFUSED: {exc}")
         except Exception as exc:  # noqa: BLE001 - a crash is a failed stage with its trace on file
+            # A limit tripped mid-stage (through the doorway hook), or a request
+            # too large for the model (request_size.as_hold): a hold, not a crash.
+            # Whatever the stage had written stays on disk for the resume.
+            if (hold := request_size.as_hold(exc)) is not None:
+                lines.append(f"HELD: {hold.reason}")
+                (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
+                (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
+                    "\n".join(lines) + "\n", encoding="utf-8"
+                )
+                return self._hold(hold, stage, unit, st, extracted, notes)
             code, crash = 1, exc
             lines.append(traceback.format_exc())
         (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)

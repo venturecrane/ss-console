@@ -47,6 +47,9 @@ REASON_CODES = (
     "nothing_approved",
     # The library matter named by number is not exactly one Open matter.
     "library_unresolved",
+    # A model request too large for its model, never sent and never billed
+    # (``request_size.py``): failed, resumable, SMD told, the firm not.
+    "request_too_large",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}

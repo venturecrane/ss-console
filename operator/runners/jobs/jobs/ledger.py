@@ -95,6 +95,17 @@ class Ledger:
             sys.stderr.write(f"jobs: usage receipt not written to {self.path} ({type(exc).__name__}: {exc})\n")
 
 
+#: The ``error`` of a row for a request that was never sent, or was refused by
+#: the API for its size before any work (``request_size.UNSENT``): zero usage,
+#: on file so the attempt is visible, and never a paid call in a count.
+UNSENT = "request_too_large"
+
+
+def unsent(row: dict[str, Any]) -> bool:
+    """True for a zero-usage row of a request the doorway stopped for its size."""
+    return row.get("error") == UNSENT
+
+
 def read_rows(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     if not path.is_file():
@@ -117,6 +128,8 @@ def report(path: Path, pricing: Pricing) -> str:
     by_stage: dict[str, dict[str, Any]] = {}
     unknown = 0
     for row in rows:
+        if unsent(row):  # never sent: no call, no tokens, no dollars
+            continue
         s = by_stage.setdefault(
             str(row.get("stage") or "?"),
             {

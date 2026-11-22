@@ -63,6 +63,9 @@ REASON_CODES = (
     # authored cap cannot be read. Written by the lane before the child starts
     # (``litigation_lane.LitigationLane._allowance_hold``); nothing was spent.
     "list_allowance",
+    # 2026-11-22: a model request too large for its model, never sent and never
+    # billed (``request_size.py``): failed, resumable, SMD told, the firm not.
+    "request_too_large",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}
