@@ -12,6 +12,9 @@ is known (the hand revision of 2026-11-04), with no model call and no write:
         [--inputs $JOBS_DRAFTING_INPUTS --class mediation_brief]   # base proof + formatting
         [--out DIR]
 
+A revision of every filed discovery response (``set_run.py``) rehearses with
+``--units DIR --request request.txt --rules rules.json`` (``set_rehearse.py``).
+
 It prints, per item, ``met`` / ``not_met`` / ``read`` and why, and every
 invariant finding; it exits 0 only when every item code can check is met and
 no invariant is broken. A rehearsal that fails on the hand revision is a
@@ -80,13 +83,28 @@ def rehearse(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="jobs.drafting.revise.rehearse", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("--request", required=True, type=Path)
-    ap.add_argument("--base", required=True, type=Path)
-    ap.add_argument("--edited", required=True, type=Path)
-    ap.add_argument("--checklist", required=True, type=Path)
+    ap.add_argument("--base", type=Path)
+    ap.add_argument("--edited", type=Path)
+    ap.add_argument("--checklist", type=Path)
     ap.add_argument("--inputs", default=None, help="the drafting firm-inputs dir: proves the base and reads size_pt")
     ap.add_argument("--class", dest="cls", default="mediation_brief")
     ap.add_argument("--out", default=None, type=Path)
+    # A set revision (set_rehearse.py): every filed response against its hand-revised key.
+    ap.add_argument("--units", type=Path, help="one folder per filed document: base.docx and key.docx")
+    ap.add_argument(
+        "--rules", type=Path, help='the rules in force: {"rules": [...]}, as a job\'s wording-rules.json holds them'
+    )
+    ap.add_argument("--recordings", type=Path, help="the model's recorded answers (default: UNITS/recordings.jsonl)")
+    ap.add_argument("--model", default="recorded", help="the model id the recordings were made with")
     a = ap.parse_args(argv)
+    if a.units is not None:
+        if a.rules is None:
+            ap.error("--units needs --rules")
+        from .set_rehearse import main_set
+
+        return main_set(a)
+    if not (a.base and a.edited and a.checklist):
+        ap.error("--base, --edited and --checklist are required without --units")
     fmt = None
     if a.inputs:
         from .. import firm as firm_mod

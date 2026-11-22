@@ -416,25 +416,28 @@ def test_an_incomplete_file_triple_is_refused(seat, change, match):
     assert _row(broker, jid)["state"] == "failed"
 
 
-def test_after_it_a_two_draft_hand_delivery_is_not_revised_in_one_document(seat):
-    """A hand delivery of two drafts is recorded as delivered, but the revise
-    runner edits ONE filed draft (revise/run.py, versions.ORDER), so the broker
-    does not route a change request to it: it would revise the first document
-    only. It keeps the path it had until the runner revises every document."""
+def test_after_it_a_two_draft_hand_delivery_is_revised_in_every_document(seat):
+    """A hand delivery of two drafts is recorded as delivered, and a change
+    request in its thread revises BOTH filed documents by id (``revise.units``,
+    revise/set_run.py), never the first only and never a fresh draft.
+    FALSIFIER: keep the one-draft guard for responses and this queues a draft."""
     broker, _client, lane, _db, _queue = seat
     jid = _ended(seat, "stopped")
-    change = validate_envelope(_envelope(REPLY, "Please change the answer to number four."))
+    change = validate_envelope(_envelope(REPLY, "Please apply the new rules to the responses."))
     assert broker.drafting._route(change, "", GATEWAY_PID) is None
 
     dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=True))
 
-    assert broker.drafting._route(change, "", GATEWAY_PID) is None
+    rev = broker.drafting._route(change, "", GATEWAY_PID)
+    assert [u["file_id"] for u in rev["units"]] == ["file-set-one", "file-set-two"]
+    # "Interrogatories" alone names no set type: the file's own headings decide in the runner.
+    assert [u["set_type"] for u in rev["units"]] == ["", "requests_for_production"]
     out = broker.handle(
-        {"action": "drafting_job_submit", "envelope": _envelope(REPLY, "Please change the answer to number four.")},
+        {"action": "drafting_job_submit", "envelope": _envelope(REPLY, "Please apply the new rules to the responses.")},
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )
-    assert out["accepted"] and out["mode"] == "draft"
+    assert out["accepted"] and out["mode"] == "revise" and out["revise_of"] == jid
 
 
 def test_dry_run_prints_the_digest_and_the_live_run_must_repeat_it(seat, monkeypatch, capsys, tmp_path):

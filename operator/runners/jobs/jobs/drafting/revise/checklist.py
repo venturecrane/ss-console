@@ -5,7 +5,9 @@ code decides whether that JSON is a checklist. An item is kept only when:
 
 * its ``kind`` is one of ``KINDS`` and its ``params`` fit that kind's shape;
 * its ``quote`` is the attorney's own words, found in the request text (as
-  words: case and spacing aside), so no item exists he did not ask for;
+  words: case and spacing aside), so no item exists he did not ask for; or,
+  for a ``rule`` item (``RULE_KIND``), its source is a rule of the firm's in
+  force, named by id (``rule_items``: code authors these, never a model);
 * its ``target`` names exactly one section of the brief, or ``document``
   (every section), or, for a formatting item, the whole file.
 
@@ -63,6 +65,9 @@ class Item:
     kind: str
     target: str
     params: dict[str, Any] = field(default_factory=dict)
+    #: Where the item comes from: "" (a quote from the request) or
+    #: ``rule:<rule id>`` (a standing rule of the firm's, ``rule_items``).
+    source: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -190,8 +195,45 @@ def _param_problems(kind: str, p: dict[str, Any]) -> list[str]:
     return out + (check(p) if check else [])
 
 
-def validate(raw: Any, request_text: str, brief: list[sec.Section]) -> list[Item]:
-    """The checklist, or ``ChecklistError`` naming every problem."""
+#: An item whose source is a standing rule of the firm's, not the request's
+#: words. Not one of ``KINDS``: the request's checklist never carries it.
+RULE_KIND = "rule"
+
+
+def rule_items(rules: list[dict[str, Any]]) -> list[Item]:
+    """One item per rule in force, authored by code from the rule itself: its
+    id is the source, its text the quote, its phrases the firm's exact words
+    (``rules.phrases``)."""
+    from .rules import phrases
+
+    return [
+        Item(
+            f"r{n}",
+            str(r["text"]),
+            RULE_KIND,
+            sec.DOCUMENT,
+            {"rule_id": str(r["rule_id"]), "phrases": phrases(r)},
+            source=f"rule:{r['rule_id']}",
+        )
+        for n, r in enumerate(rules, 1)
+    ]
+
+
+def _rule_item_problems(it: dict[str, Any], rules: list[dict[str, Any]] | None) -> list[str]:
+    rid = str((it.get("params") or {}).get("rule_id") or "")
+    known = {str(r["rule_id"]): r for r in rules or []}
+    if rid not in known:
+        return [f"its source is a rule in force, named by params.rule_id (not {rid!r})"]
+    if it.get("source") != f"rule:{rid}" or it.get("quote") != known[rid]["text"]:
+        return ["its source is rule:<id> and its quote that rule's own text"]
+    return []
+
+
+def validate(
+    raw: Any, request_text: str, brief: list[sec.Section], rules: list[dict[str, Any]] | None = None
+) -> list[Item]:
+    """The checklist, or ``ChecklistError`` naming every problem. ``rules``:
+    the rules in force, the only source a ``rule`` item may name."""
     got = raw.get("items") if isinstance(raw, dict) else None
     if not isinstance(got, list) or not got:
         raise ChecklistError(["the answer is an object with a non-empty items list"])
@@ -209,6 +251,10 @@ def validate(raw: Any, request_text: str, brief: list[sec.Section]) -> list[Item
         raw_params = it.get("params")
         params: dict[str, Any] = dict(raw_params) if isinstance(raw_params, dict) else {}
         where = f"item {iid}"
+        if kind == RULE_KIND:
+            problems += [f"{where}: {p}" for p in _rule_item_problems(it, rules)]
+            items.append(Item(iid, str(quote or ""), RULE_KIND, sec.DOCUMENT, params, str(it.get("source") or "")))
+            continue
         if kind not in KINDS:
             problems.append(f"{where}: kind is one of {list(KINDS)}")
             continue

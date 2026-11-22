@@ -96,8 +96,20 @@ attorney hears nothing more.
 
 A delivered form set's answers are kept in the lane's store,
 `<run dir>/drafting-form-answers/<job id>.json`, so a change request revises
-them. They are text from the matter file. Remove a job's or a matter's with
-`python -m jobs.drafting.forms.saved purge --job <id>` or `--matter <id>`.
+them. A delivered response job's served sets (the requests as served) and what
+each was filed as are kept in the same record, so a change request in the
+thread revises every filed response, each pinned to the request numbers served
+(`revise/set_run.py`). They are text from the matter file. Remove a job's or a
+matter's with `python -m jobs.drafting.forms.saved purge --job <id>` or
+`--matter <id>`.
+
+Rehearse a revision of every filed response at $0, before the lane takes one,
+with a folder per filed document holding `base.docx` (as filed) and `key.docx`
+(revised by hand):
+`python -m jobs.drafting.revise.rehearse --units <dir> --request request.txt --rules wording.json`.
+The first run lists each model call it needs a recording for; add them to
+`<dir>/recordings.jsonl` and run again. It passes only when each document
+changed exactly the responses its key changed, and nothing else.
 
 ## SMD names the sets by hand
 

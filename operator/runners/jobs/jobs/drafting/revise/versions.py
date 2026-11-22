@@ -79,7 +79,8 @@ def file_versions(
     pause: float = PAUSE_SECONDS,
 ) -> list[dict[str, Any]]:
     """``plan``: per role {role, file_id, name (as filed, with extension),
-    base_sha256, base_version, local_path, sha256, bytes}. Returns the proof
+    base_sha256, base_version, local_path, sha256, bytes}, and ``key`` when
+    several entries share a role (a set revision's drafts). Returns the proof
     files [{name, file_id, size, sha256, version_id}]."""
     state_p = data / "versions.json"
     state: dict[str, Any] = json.loads(state_p.read_text(encoding="utf-8")) if state_p.is_file() else {}
@@ -92,7 +93,8 @@ def file_versions(
     scratch = data / "readback"
     proven: list[dict[str, Any]] = []
     for p in sorted(plan, key=lambda x: ORDER.index(x["role"]) if x["role"] in ORDER else len(ORDER)):
-        rec = state.setdefault(p["role"], {})
+        # A set revision files several drafts: each is its own entry, by ``key``.
+        rec = state.setdefault(str(p.get("key") or p["role"]), {})
         fid = str(p["file_id"])
         meta = _meta(seat, matter_id, fid)
         vid = str(meta.get("versionId") or "")

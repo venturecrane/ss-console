@@ -147,26 +147,97 @@ def test_verbs_built_before_the_mailbox_still_route_a_revision(tmp_path, monkeyp
     assert out["accepted"] and out["mode"] == "revise" and out["revise_of"] == prior
 
 
-def test_a_delivery_of_several_drafts_is_not_revised_in_its_first_document_only(tmp_path) -> None:
-    """The revise runner edits one filed draft. FALSIFIER: drop the one-draft
-    guard and a three-document discovery delivery is 'revised' in one file."""
-    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
-    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=FIRST))
+SETS = ("Form Interrogatories", "Special Interrogatories", "Requests for Production")
+KINDS = ("form_interrogatories", "special_interrogatories", "requests_for_production")
+RESPONSE = "discovery_response"
+
+
+def _deliver_set(broker, writer, ref, ids, *, sha="0", klass=RESPONSE, proven=True, served=True) -> str:
+    """A delivered response job filing one document per id (``ids`` index ``SETS``)."""
+    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=ref, document_class=klass))
     jid = out["job_id"]
     call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="running", fields={})
-    files = [{"name": f"Response {i}.docx", "size": 1000 + i, "role": "draft"} for i in range(3)]
-    fields = {"cents": 300, "folder_id": "folder-0001", "delivery": {"files": files, "cents": 300}}
+    names = [f"Responses to {SETS[i]}, Set One.docx" for i in ids]
+    files = [{"name": n, "size": 1000 + i, "role": "draft"} for n, i in zip(names, ids)]
+    rows = [{"set": f"Responses to {SETS[i]}, Set One", "status": "filed", "document": n} for n, i in zip(names, ids)]
+    delivery = {"files": files, "cents": 300, **({"served_sets": rows} if served else {})}
+    fields = {"cents": 300, "folder_id": "folder-0001", "delivery": delivery}
     call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="delivered", fields=fields)
-    proven = [{"file_id": f"d-{i}", "size": 1000 + i, "sha256": str(i) * 64} for i in range(3)]
-    meta = {"lane": "drafting", "job_id": jid, "files": proven}
-    writer.append(
-        {
-            "action_type": "DELIVERY_PROVEN",
-            "actor": "workspace-broker",
-            "actor_role": "broker",
-            "metadata": json.dumps(meta),
+    if proven:
+        meta = {
+            "lane": "drafting",
+            "job_id": jid,
+            "files": [{"file_id": f"d-{i}", "size": 1000 + i, "sha256": sha * 64} for i in ids],
         }
-    )
+        row = {"action_type": "DELIVERY_PROVEN", "actor": "workspace-broker", "actor_role": "broker"}
+        writer.append({**row, "metadata": json.dumps(meta)})
+    return jid
+
+
+def test_a_delivery_of_several_drafts_is_revised_in_every_document(tmp_path) -> None:
+    """2026-11-21: a reply asking to change a three-document discovery delivery.
+    FALSIFIER: keep the one-draft guard for responses and it queues a fresh
+    draft; take one job's first file and two documents go unrevised."""
+    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    prior = _deliver_set(broker, writer, FIRST, [0, 1, 2])
+    reply = _envelope(request_ref=REPLY, document_class=RESPONSE, request_text="Apply all new rules to them.")
+    out = call(broker, "drafting_job_submit", envelope=reply)
+    assert out["accepted"] and out["mode"] == "revise" and out["revise_of"] == prior
+    rev = _queued(queue, out["job_id"])["revise"]
+    assert set(rev) == {"prior_job_id", "folder_id", "units"} and rev["prior_job_id"] == prior
+    assert [u["file_id"] for u in rev["units"]] == ["d-0", "d-1", "d-2"]
+    assert [u["set_type"] for u in rev["units"]] == list(KINDS)
+    assert all(u["prior_job_id"] == prior and u["folder_id"] == "folder-0001" for u in rev["units"])
+
+
+def test_a_file_refiled_by_a_later_job_is_one_unit_from_the_newest_proof(tmp_path) -> None:
+    """On the seat 7 jobs map to 8 file ids: a later job re-filed into the same
+    ids. FALSIFIER: keep the oldest proof (or both) and the stale bytes win, or
+    one file is revised twice."""
+    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    first = _deliver_set(broker, writer, FIRST, [0, 1], sha="1")
+    again = _deliver_set(broker, writer, REPLY, [1, 2], sha="2")
+    reply = _envelope(request_ref="<third@mail.firm.example>", document_class=RESPONSE)
+    broker.drafting.thread_of = {**THREADS, "<third@mail.firm.example>": "conv-1"}.__getitem__
+    rev = _queued(queue, call(broker, "drafting_job_submit", envelope=reply)["job_id"])["revise"]
+    got = {u["file_id"]: (u["prior_job_id"], u["sha256"][0]) for u in rev["units"]}
+    assert got == {"d-1": (again, "2"), "d-2": (again, "2"), "d-0": (first, "1")}
+    assert rev["prior_job_id"] == again
+
+
+def test_a_job_in_another_thread_is_not_part_of_the_set(tmp_path) -> None:
+    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    _deliver_set(broker, writer, FIRST, [0])
+    _deliver_set(broker, writer, ELSEWHERE, [2])
+    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=REPLY, document_class=RESPONSE))
+    assert [u["file_id"] for u in _queued(queue, out["job_id"])["revise"]["units"]] == ["d-0"]
+
+
+def test_one_unidentifiable_job_in_the_thread_refuses_the_whole_set(tmp_path) -> None:
+    """FALSIFIER: skip the job with no proof and its document goes unrevised, silently."""
+    broker, _db, _queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    broker.drafting.thread_of = {**THREADS, FIRST.replace("first", "second"): "conv-1"}.__getitem__
+    _deliver_set(broker, writer, FIRST, [0])
+    _deliver_set(broker, writer, FIRST.replace("first", "second"), [1], proven=False)
+    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=REPLY, document_class=RESPONSE))
+    assert out["accepted"] is False and out["code"] == "prior_unidentified"
+
+
+def test_the_set_type_comes_from_the_served_row_then_the_name() -> None:
+    from workspace_broker.drafting_revise_units import set_type_of
+
+    rows = [{"set": "Responses to Special Interrogatories, Set One", "document": "Responses A"}]
+    assert set_type_of("Responses A.docx", rows) == "special_interrogatories"
+    assert set_type_of("Responses to Requests for Admission.docx", []) == "requests_for_admission"
+    assert (
+        set_type_of("Responses to Interrogatories Set One.docx", []) == ""
+    )  # neither says: the file's headings decide
+
+
+def test_a_brief_delivered_in_several_drafts_still_drafts_afresh(tmp_path) -> None:
+    """Only a discovery response is revised whole; another class keeps the one-draft guard."""
+    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    _deliver_set(broker, writer, FIRST, [0, 1, 2], klass="mediation_brief")
     out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=REPLY))
     assert out["accepted"] and out["mode"] == "draft" and "revise" not in _queued(queue, out["job_id"])
 

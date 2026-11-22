@@ -110,12 +110,15 @@ def _cmd_draft(args: argparse.Namespace) -> int:
 
     from .drafting import firm as drafting_firm, job as drafting_job
     from .drafting.revise.run import ReviseRun
+    from .drafting.revise.set_run import ReviseSetRun
     from .drafting.run import DraftingRun
 
     try:
         # A revision of a filed brief (the broker put ``revise`` on the
-        # envelope from its job store) never reads the matter file.
-        runner = ReviseRun if drafting_job.load(Path(args.job_dir)).revise else DraftingRun
+        # envelope from its job store) never reads the matter file; one of
+        # every filed response of a request carries ``units`` (set_run.py).
+        revise = drafting_job.load(Path(args.job_dir)).revise
+        runner = (ReviseSetRun if "units" in revise else ReviseRun) if revise else DraftingRun
         r = runner(
             Path(args.job_dir),
             inputs_dir=args.inputs,
