@@ -142,6 +142,38 @@ describe('the claude shim', () => {
     expect(out).not.toContain('test-token')
   })
 
+  it('with a third account C present, prefers C, then B, then A', () => {
+    const home = makeHome()
+    const three = { ...TOKENS, CLAUDE_OAUTH_TOKEN_C: 'test-token-c' }
+    expect(shim(home, ['-p', 'hi'], three)).toMatch(/^account=C /)
+    accounts(home, 'mark', 'C', "You've hit your weekly limit · resets Mon 12:00am")
+    expect(shim(home, ['-p', 'hi'], three)).toMatch(/^account=B /)
+    accounts(home, 'mark', 'B', "You've hit your weekly limit · resets Mon 12:00am")
+    const out = shim(home, ['-p', 'hi'], three)
+    expect(out).toMatch(/^account=A /)
+    expect(out).not.toContain('test-token')
+  })
+
+  it('hands Claude no account token variable but the one it runs on, whatever its letter', () => {
+    const home = makeHome()
+    const seen = join(home, 'seen')
+    writeFileSync(
+      join(home, 'fakebin', 'real-claude'),
+      `#!/bin/bash\n{ printf 'tok=%s ' "$CLAUDE_CODE_OAUTH_TOKEN"; env | cut -d= -f1 | grep -c '^CLAUDE_OAUTH_TOKEN_'; true; } > "${seen}"\n`
+    )
+    chmodSync(join(home, 'fakebin', 'real-claude'), 0o755)
+    run(
+      'bash',
+      [SHIM, '-p', 'hi'],
+      baseEnv(home, {
+        OPS_CLAUDE_BIN: join(home, 'fakebin', 'real-claude'),
+        ...TOKENS,
+        CLAUDE_OAUTH_TOKEN_C: 'test-token-c',
+      })
+    )
+    expect(readFileSync(seen, 'utf8').trim()).toBe('tok=test-token-c 0')
+  })
+
   it('reads the tokens from ~/.claude-oauth on a workspace', () => {
     const home = makeHome()
     writeFileSync(join(home, '.claude-oauth'), "export CLAUDE_OAUTH_TOKEN_A='test-token-a'\n")
@@ -240,6 +272,48 @@ exit 0
   })
 })
 
+describe('an account added to a running Machine', () => {
+  it('a live tmux session restarts onto it, read from ~/.claude-oauth at the restart', () => {
+    const home = makeHome()
+    const log = join(home, 'launches')
+    writeFileSync(join(home, '.claude-oauth'), "export CLAUDE_OAUTH_TOKEN_B='test-token-b'\n")
+    // First run: B hits its limit and, meanwhile, C's token is written to the
+    // Machine (what ops-workspace accounts does). The restart must land on C.
+    writeFileSync(
+      join(home, 'fakebin', 'real-claude'),
+      `#!/bin/bash
+echo "token=$CLAUDE_CODE_OAUTH_TOKEN $(grep -x 'reloads=1' "$HOME/state/claude-panes/pane-7")" >> "${log}"
+if [ ! -f "$HOME/once" ]; then
+  touch "$HOME/once"
+  python3 "${ACCOUNTS}" mark B "You've hit your weekly limit · resets Mon 12:00am" >/dev/null
+  printf "export CLAUDE_OAUTH_TOKEN_B='test-token-b'\\nexport CLAUDE_OAUTH_TOKEN_C='test-token-c'\\n" > "$HOME/.claude-oauth"
+  : > "$HOME/state/claude-panes/pane-7.restart"
+  exit 143
+fi
+exit 0
+`
+    )
+    chmodSync(join(home, 'fakebin', 'real-claude'), 0o755)
+    run(
+      'bash',
+      [SHIM, '--name', 'ops-x-1', 'do the task'],
+      baseEnv(home, { TMUX_PANE: '%7', OPS_CLAUDE_BIN: join(home, 'fakebin', 'real-claude') })
+    )
+    const lines = readFileSync(log, 'utf8').trim().split('\n')
+    expect(lines).toEqual(['token=test-token-b reloads=1', 'token=test-token-c reloads=1'])
+  })
+
+  it('the shim lists the Machine accounts by name for the watcher', () => {
+    const home = makeHome()
+    writeFileSync(
+      join(home, '.claude-oauth'),
+      "export CLAUDE_OAUTH_TOKEN_A='a'\nexport CLAUDE_OAUTH_TOKEN_C='c'\n"
+    )
+    const out = run('bash', [SHIM], baseEnv(home, { OPS_CLAUDE_LIST_ACCOUNTS: '1' })).trim()
+    expect(out).toBe('C A')
+  })
+})
+
 describe('ops-tool-env: what every tool command sources', () => {
   it('keeps the workspace secrets and removes every Claude account token', () => {
     const home = makeHome()
@@ -251,6 +325,8 @@ describe('ops-tool-env: what every tool command sources', () => {
         CLAUDE_CODE_OAUTH_TOKEN: 'x',
         CLAUDE_OAUTH_TOKEN_A: 'x',
         CLAUDE_OAUTH_TOKEN_B: 'x',
+        CLAUDE_OAUTH_TOKEN_C: 'x',
+        CLAUDE_OAUTH_TOKEN_Q: 'x',
       })
     )
     expect(out).toContain('ANTHROPIC_API_KEY')
@@ -259,13 +335,14 @@ describe('ops-tool-env: what every tool command sources', () => {
 })
 
 describe('ops-claude-failover: the watcher', () => {
-  function register(home: string, account: string): void {
+  function register(home: string, account: string, reloads = true): void {
     const sleeper = spawn('sleep', ['60'])
     kids.push(sleeper)
     mkdirSync(join(home, 'state', 'claude-panes'), { recursive: true })
     writeFileSync(
       join(home, 'state', 'claude-panes', 'pane-7'),
-      `pid=${sleeper.pid}\npane=%7\naccount=${account}\nsid=abc\naccounts=B A\nstarted=${NOW}\n`
+      `pid=${sleeper.pid}\npane=%7\naccount=${account}\nsid=abc\naccounts=B A\nstarted=${NOW}\n` +
+        (reloads ? 'reloads=1\n' : '')
     )
   }
   const watch = (home: string) => run('bash', [WATCHER], baseEnv(home, { OPS_FAILOVER_DRY: '1' }))
@@ -280,6 +357,37 @@ describe('ops-claude-failover: the watcher', () => {
     const second = watch(home)
     expect(second).toContain('would: restart pane %7 on A')
     expect(stateOf(home).B.exhausted_until).toBe(Date.UTC(2026, 10, 9, 7, 0) / 1000)
+  })
+
+  it('rescues a session opened before an account was added: moves it to the new one', () => {
+    const home = makeHome()
+    register(home, 'B') // registered with the old list, "B A"
+    accounts(home, 'mark', 'A', "You've hit your weekly limit · resets Wed 12:00am")
+    writeFileSync(
+      join(home, '.claude-oauth'),
+      "export CLAUDE_OAUTH_TOKEN_A='a'\nexport CLAUDE_OAUTH_TOKEN_B='b'\nexport CLAUDE_OAUTH_TOKEN_C='c'\n"
+    )
+    writeFileSync(join(home, 'screen.txt'), LIMIT_SCREEN)
+    watch(home)
+    const out = watch(home)
+    expect(out).toContain('would: restart pane %7 on C')
+    expect(out).not.toContain('would page')
+  })
+
+  it('does not restart a window whose old shim cannot reach the new account; says how to move it', () => {
+    const home = makeHome()
+    register(home, 'B', false) // a pre-2026-11-21 shim: no reloads=1
+    accounts(home, 'mark', 'A', "You've hit your weekly limit · resets Wed 12:00am")
+    writeFileSync(
+      join(home, '.claude-oauth'),
+      "export CLAUDE_OAUTH_TOKEN_A='a'\nexport CLAUDE_OAUTH_TOKEN_B='b'\nexport CLAUDE_OAUTH_TOKEN_C='c'\n"
+    )
+    writeFileSync(join(home, 'screen.txt'), LIMIT_SCREEN)
+    watch(home)
+    const out = watch(home)
+    expect(out).not.toContain('would: restart')
+    expect(out).toContain('claude --resume abc')
+    expect(watch(home)).not.toContain('claude --resume abc') // said once, not every minute
   })
 
   it('leaves a working session alone even when it prints the words', () => {

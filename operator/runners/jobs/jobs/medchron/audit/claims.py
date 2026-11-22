@@ -165,8 +165,29 @@ def pending_reaudit(rows: list[dict[str, Any]]) -> set[str]:
     return {k for k, kind in last.items() if kind == REAUDIT}
 
 
-def done_keys(rows: list[dict[str, Any]]) -> set[str]:
-    return {r["key"] for r in rows if "key" in r} - pending_reaudit(rows)
+def text_verdict_keys(rows: list[dict[str, Any]]) -> set[str]:
+    """Keys whose latest real verdict was read from page text (``mode: text``).
+
+    When the audit runs on the picture, such a verdict no longer stands: the
+    claim is read again and its old reverse control retires
+    (``controls.assess_rows``). 2026-11-21, a live update: a firm moved from
+    text to picture after a hospital's encounter-page text layer misled 71 of
+    615 reverse controls, and a resume re-audited nothing because every text
+    verdict still counted as done."""
+    last: dict[str, str] = {}
+    for r in rows:
+        if r.get("kind") == "real" and "key" in r:
+            # A text-cluster row whose verdict came from the picture
+            # (``text_then_image``) is a picture read already.
+            last[r["key"]] = "image" if r.get("text_then_image") else str(r.get("mode") or "")
+    return {k for k, mode in last.items() if mode == "text"}
+
+
+def done_keys(rows: list[dict[str, Any]], mode: str | None = None) -> set[str]:
+    """Keys with a verdict that stands for an audit run in ``mode``: under
+    ``image``, a key whose latest verdict was read from text is not done."""
+    done = {r["key"] for r in rows if "key" in r} - pending_reaudit(rows)
+    return done - text_verdict_keys(rows) if mode == "image" else done
 
 
 def lineage_orphans(rows: list[dict[str, Any]], current_keys: set[str], sha: str) -> list[str]:
