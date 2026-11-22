@@ -250,22 +250,45 @@ def findings(
     out: list[str] = []
     sur = {s.lower() for s in surnames if s}
     ctx = text if context is None else context
+    for kind, value in labelled(text):
+        if kind == "dob" and dobs and value not in dobs:
+            out.append(f"a date of birth {value} that is not the client's")
+        elif kind == "name":
+            out += _name_finding(value, sur, firsts or set(), ctx)
+    return sorted(set(out))
+
+
+def labelled(text: str) -> list[tuple[str, str]]:
+    """("dob" | "name", value) for every patient identifier `text` labels:
+    each date of birth that is not a relative's, and each patient name."""
+    out: list[tuple[str, str]] = []
     lines = (text or "").splitlines()
     for line in lines:
         for m in DOB_TAG.finditer(line):
             d = _date_at(line[m.end() :])
-            if d and dobs and d not in dobs and not _relatives(line, m.start()):
-                out.append(f"a date of birth {d} that is not the client's")
+            if d and not _relatives(line, m.start()):
+                out.append(("dob", d))
         # A patient label is the patient's though its line names a relative too.
         for m in PATIENT_LABEL.finditer(line):
             if full_name(m.group(1), line[m.end() :]):
-                out += _name_finding(m.group(1), sur, firsts or set(), ctx)
+                out.append(("name", m.group(1)))
     for kind, value in _column(lines):
-        if kind == "dob" and dobs and value not in dobs:
-            out.append(f"a date of birth {value} that is not the client's")
-        elif kind == "name" and COLUMN_NAME.fullmatch(value) and full_name(value, ""):
-            out += _name_finding(value, sur, firsts or set(), ctx)
-    return sorted(set(out))
+        if kind == "dob" or (COLUMN_NAME.fullmatch(value) and full_name(value, "")):
+            out.append((kind, value))
+    return out
+
+
+def names_client(text: str, surnames: set[str], dobs: set[str], firsts: set[str]) -> bool:
+    """Whether `text` labels a patient as the client: the client's date of
+    birth, or a patient name that carries the surname and is not another
+    person (``_conflicts``)."""
+    sur = {s.lower() for s in surnames if s}
+    for kind, value in labelled(text):
+        if kind == "dob" and value in dobs:
+            return True
+        if kind == "name" and any(_has(s, value) for s in sur) and not _conflicts(value, sur, firsts, text):
+            return True
+    return False
 
 
 #: A value line under a "Patient Name:" label that is a name (``PATIENT_LABEL``'s name).

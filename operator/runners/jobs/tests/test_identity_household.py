@@ -168,6 +168,25 @@ def test_a_one_person_build_checks_every_file_its_unit_holds(
     assert not any("Gamma" in ln or "2008" in ln for ln in log), "the other person is never in a log line"
 
 
+def test_the_clients_own_file_with_one_misfiled_page_is_kept(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """A provider's production of the client's records with another patient's
+    page filed in it is the client's file: the sample matter's deliberate
+    misfiled page (customers/pilot-smokeball/seed/records) withheld the whole
+    orthopedic production and failed its coverage gate until this. FALSIFIER:
+    drop ``names_client`` from the identity stage and c2 is withheld."""
+    misfiled = "Patient: Alpha Example  DOB: 01/01/1970\nOffice visit.\n"
+    sd = _scene(
+        data_root,
+        [({"id": "c2", "name": "ortho records", "folder": "/Medical"}, f"[p.1]\n{misfiled}[p.2]\n{REGISTRATION}")],
+        ["c2"],
+    )
+    assert FI.names_client(misfiled, SUR, DOBS, FIRSTS) and not FI.names_client(REGISTRATION, SUR, DOBS, FIRSTS)
+    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, [])) == 0
+    assert FI.withheld(sd) == set()
+
+
 def test_a_pdf_filed_in_the_email_folder_without_a_sender_is_checked(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:

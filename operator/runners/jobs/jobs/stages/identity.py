@@ -14,7 +14,10 @@ an email folder, attached or filed there directly, and on a one-person
 full build every file the units hold (an update checks its new documents
 page by page in ``update_select``). The FILE is the unit of the decision: a
 page that names no one (a fax cover) goes with the file whose other pages
-name another person.
+name another person. A file that is not a folded attachment and that labels
+the client somewhere (her date of birth, or a patient name that is hers) is
+the client's file with a misfiled page in it (a provider's production often
+carries one): it is kept, and the page is the map's to leave out, as before.
 
 An attachment that names someone else is LEFT OUT BY RULE (2026-10-24, the
 Captain): it used to hold the run until the firm said whose it was, and a
@@ -83,8 +86,9 @@ def _foreign_folded(sr: StageRun) -> list[dict[str, Any]]:
             continue
         tp = sr.slug_dir / "text" / f"{rid}.txt"
         text = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
-        found = FI.findings(text, surnames, dobs, FI.first_names(sr.job.units))
-        if found:
+        firsts = FI.first_names(sr.job.units)
+        found = FI.findings(text, surnames, dobs, firsts)
+        if found and (r.get("from_email") or not FI.names_client(text, surnames, dobs, firsts)):
             out.append(
                 {
                     "id": rid,
