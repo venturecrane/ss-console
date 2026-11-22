@@ -69,6 +69,9 @@ class Part:
     exhibit: int = 0
     pages: list[int] = field(default_factory=list)
     note: str = ""
+    #: a duplicate check split for size: the entries of the other pieces, shown
+    #: read only by their start so a pair across a cut is still compared
+    peers: list[RR.Entry] = field(default_factory=list)
 
 
 #: exhibit -> {page: the delivered page it is a copy of, "Exhibit 1 p. 37"}
@@ -296,6 +299,7 @@ def review_content(
         ask += f"\n{part.note}"
     out.append({"type": "text", "text": f"{ask}\n\nADDED ENTRIES IN THIS PART: {names}"})
     out += [{"type": "text", "text": _entry_block(e)} for e in part.entries]
+    out += [{"type": "text", "text": _peer_block(part.peers)}] if part.peers else []
     for pg in part.pages:
         by = [e.anchor for e in part.entries if (part.exhibit, pg) in e.cites()]
         label = f"cited by {', '.join(by)}" if by else "cited by no added entry"
@@ -342,17 +346,33 @@ def size_halves(part: Part, content: list[dict[str, Any]]) -> list[Part] | None:
     by_pages = len(part.pages) > 1 and (pages * 2 >= request_tokens(content) or len(part.entries) < 2)
     if by_pages:
         h = len(part.pages) // 2
-        return [
-            replace(part, pages=part.pages[:h], note=part.note),
-            replace(part, pages=part.pages[h:], note=part.note),
-        ]
+        return [_pages_half(part, part.pages[:h]), _pages_half(part, part.pages[h:])]
     if len(part.entries) > 1:
         h = len(part.entries) // 2
-        return [
-            replace(part, entries=part.entries[:h], note=part.note),
-            replace(part, entries=part.entries[h:], note=part.note),
-        ]
+        a, b = part.entries[:h], part.entries[h:]
+        return [replace(part, entries=a, peers=part.peers + b), replace(part, entries=b, peers=part.peers + a)]
     return None
+
+
+def _pages_half(part: Part, pages: list[int]) -> Part:
+    """Half a window: its pages, with the entries that cite one of them (all
+    of the part's when none does, as a window no entry cites keeps its owner)."""
+    mine = [e for e in part.entries if any(x == part.exhibit and p in pages for x, p in e.cites())]
+    return replace(part, pages=pages, entries=mine or part.entries)
+
+
+#: How much of a peer entry a split duplicate check shows: its date and
+#: provider lines and the start of its text.
+PEER_CHARS = 240
+
+
+def _peer_block(peers: list[RR.Entry]) -> str:
+    lines = [f"{e.anchor}: {' '.join(e.text.split())[:PEER_CHARS]}" for e in peers]
+    return (
+        "OTHER ADDED ENTRIES OF THIS EXHIBIT, READ ONLY (reviewed in another part, shown here by their start): "
+        "report an entry of THIS part that repeats one of them as a duplicate of it, on the entry of this part.\n"
+        + "\n".join(lines)
+    )
 
 
 def repeated_contexts(

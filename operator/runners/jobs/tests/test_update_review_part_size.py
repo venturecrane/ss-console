@@ -86,6 +86,37 @@ def test_a_duplicate_check_is_split_by_its_entries() -> None:
     assert halves and [len(h.entries) for h in halves] == [1, 1] and all(not h.pages for h in halves)
 
 
+def test_a_split_duplicate_check_still_shows_each_piece_the_entries_of_the_others() -> None:
+    """Fails if a pair cut apart is never compared: a copy of one visit dated
+    a day off lands in the other piece, and only the read-only peer lines put
+    the two in one request."""
+    first = ENTRY
+    copy = ENTRY.replace("08/27/2026", "08/28/2026")
+    ents = RR.anchor_entries(_doc([first, copy]), {2}, K.HEADINGS)
+    part = RP.Part("duplicates", ents, 2)
+    a, b = RP.size_halves(part, RP.review_content(part, "CLIENT", _image, ents, [])) or []
+    assert [e.anchor for e in a.peers] == [ents[1].anchor] and [e.anchor for e in b.peers] == [ents[0].anchor]
+    text = "\n".join(str(x.get("text", "")) for x in RP.review_content(a, "CLIENT", _image, ents, []))
+    assert "OTHER ADDED ENTRIES OF THIS EXHIBIT, READ ONLY" in text and f"{ents[1].anchor}: 08/28/2026" in text
+    assert f"=== {ents[1].anchor} (ADDED) ===" not in text  # shown by its start, not as an entry to review
+
+
+def test_a_window_split_by_pages_keeps_only_the_entries_citing_each_half(tmp_path: Path) -> None:
+    """Fails if a half carries an entry that cites none of its pages: the
+    review would then report that entry's text missing from those pages."""
+    early = ENTRY.replace("(Exhibit 2 - p. 6)", "(Exhibit 2 - p. 2)")
+    late = ENTRY.replace("08/27/2026", "09/03/2026").replace("p. 1)", "p. 11)").replace("p. 6)", "p. 12)")
+    ents = RR.anchor_entries(_doc([early, late]), {2}, K.HEADINGS)
+    part = RP.Part("pages", ents, 2, list(range(1, 13)))
+    a, b = RP.size_halves(part, RP.review_content(part, "CLIENT", _image, ents, [])) or []
+    assert (a.pages, [e.anchor for e in a.entries]) == (list(range(1, 7)), [ents[0].anchor])
+    assert (b.pages, [e.anchor for e in b.entries]) == (list(range(7, 13)), [ents[1].anchor])
+    none = RP.Part("pages", ents[:1], 2, [7, 8])  # a window no entry cites keeps its entries
+    assert all(
+        h.entries == ents[:1] for h in RP.size_halves(none, RP.review_content(none, "C", _image, ents, [])) or []
+    )
+
+
 def test_one_entry_on_one_page_still_too_large_is_held_not_failed() -> None:
     """Nothing smaller can be sent: the part is a NOT_REVIEWED finding (held
     for SMD and reviewed again next round), never an exception."""
