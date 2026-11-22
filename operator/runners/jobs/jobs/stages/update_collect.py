@@ -43,7 +43,9 @@ from ..medchron.audit import claims as CL, page_text as PT
 from ..medchron.update import body as B, cite_read as CR, collect as C, handwritten as H, icd, legend as LG
 from ..medchron.update import providers as P
 from ..medchron.update import outcome as UO, proofs as PF, records_dates as RD, select as S, uncited as U
+from ..medchron.update import summary_pieces as SP
 from .base import StageRefusal, StageRun, read_json
+from . import entry_audit_io as EA
 from .group import Canon
 from .summarize import beyond_source
 from .update_base import headings, plan, update_dir
@@ -374,6 +376,79 @@ def added_history_line(sr: StageRun, keep: list[dict[str, Any]]) -> str:
     return f"Additional prior history from records filed through {m}-{d}-{y[2:]}"
 
 
+def _why(source: str, block: str) -> str:
+    """Why a summary reply is refused, "" when it is kept."""
+    bad = beyond_source(source, block)
+    head, _, text = block.partition("\n")
+    return (
+        "reaches beyond its source: " + str(bad[:5])
+        if bad
+        else "does not open with its heading"
+        if not B.PMH_HEAD.match(head)
+        else "carries a heading and no text"
+        if not text.strip()
+        else ""
+    )
+
+
+def _prior_history(sr: StageRun, ud: Path, added_pre: list[str]) -> str | None:
+    """The added prior history block, or None (logged) when a reply is
+    refused. One request when it fits (byte-identical to before date pieces);
+    over ``SP.TOKENS_MAX``, or refused by the API for its size, date pieces
+    (``update/summary_pieces.py``). One date too large alone is a refusal:
+    the job is held with the reason, and no request it knows will fail is sent."""
+    model, system = llm.model_for(sr.cfg, "judgment"), prompts.load("summarize-system", sr.cfg)
+
+    def send(source: str, custom_id: str) -> str:
+        return sr.doorway.call(
+            "summarize",
+            model=model,
+            system=system,
+            max_tokens=16000,
+            messages=[{"role": "user", "content": source}],
+            effort="high",
+            timeout=240.0,
+            custom_id=custom_id,
+        ).text
+
+    groups = SP.by_date(added_pre)
+    try:
+        if SP.estimate(system, added_pre) <= SP.TOKENS_MAX:
+            try:
+                block = send(SP.source(added_pre), SP.CUSTOM_ID).strip()
+                why = _why(SP.source(added_pre), block)
+                if why:
+                    sr.log(f"REJECTED: the added prior history {why}")
+                    return None
+                return block
+            except Exception as exc:
+                if not EA.ModelError(exc).too_large():
+                    raise
+                h = SP.halves(groups)
+                if h is None:
+                    raise SP.OneDateTooLarge(B.iso(added_pre[0])) from exc
+                sr.log("added prior history: refused for its size; sent in date pieces")
+                runs = [h[0], h[1]]
+        else:
+            runs = SP.plan(groups, system, SP.TOKENS_MAX)
+            sr.log(
+                f"added prior history: about {SP.estimate(system, added_pre):,} tokens, sent as {len(runs)} date pieces"
+            )
+        pieces = SP.Pieces(ud, model + "\0" + system, send, _why, lambda e: EA.ModelError(e).too_large(), sr.log).all(
+            runs
+        )
+    except SP.OneDateTooLarge as exc:
+        raise StageRefusal(str(exc)) from exc
+    blocks = [reply.strip() for _, reply in pieces]
+    for (src, _), b in zip(pieces, blocks):
+        why = _why(src, b)
+        if why:
+            sr.log(f"REJECTED: the added prior history {why}")
+            return None
+    sr.log(f"added prior history from {len(blocks)} date piece(s), joined in date order")
+    return SP.joined(blocks)
+
+
 def run_summary(sr: StageRun) -> int:
     """The prior history the added pre-incident entries hold, as a dated
     paragraph under the delivered Prior Medical History, which is never
@@ -385,31 +460,10 @@ def run_summary(sr: StageRun) -> int:
     if not added_pre:
         sr.log("no pre-incident visit added; the delivered Prior Medical History stands alone")
         return 0
-    r = sr.doorway.call(
-        "summarize",
-        model=llm.model_for(sr.cfg, "judgment"),
-        system=prompts.load("summarize-system", sr.cfg),
-        max_tokens=16000,
-        messages=[{"role": "user", "content": "\n\n".join(added_pre)}],
-        effort="high",
-        timeout=240.0,
-        custom_id="update-summarize",
-    )
-    block = r.text.strip()
-    bad = beyond_source("\n".join(added_pre), block)
-    head, _, text = block.partition("\n")
-    why = (
-        "reaches beyond its source: " + str(bad[:5])
-        if bad
-        else "does not open with its heading"
-        if not B.PMH_HEAD.match(head)
-        else "carries a heading and no text"
-        if not text.strip()
-        else ""
-    )
-    if why:
-        sr.log(f"REJECTED: the added prior history {why}")
+    block = _prior_history(sr, ud, added_pre)
+    if block is None:
         return 1
+    head, _, text = block.partition("\n")
     # A sentence a new dated entry already carries is said once, in the entry
     # (proof 7 counts cited sentences; 2026-11-20 it failed a job on one).
     text, restated = PF.drop_restated(text.strip("\n"), new_ents)
