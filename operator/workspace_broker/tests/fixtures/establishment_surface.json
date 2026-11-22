@@ -5,16 +5,10 @@
   },
   "ACT_CONFIG_KEYS": {
     "type": "tuple",
-    "value": [
-      "self_initiation",
-      "document_library",
-      "operator_matter"
-    ]
+    "value": ["self_initiation", "document_library", "operator_matter"]
   },
   "ACT_NAME_KEYS": {
-    "keys": [
-      "mcp_smokeball_create_matter"
-    ],
+    "keys": ["mcp_smokeball_create_matter"],
     "type": "dict"
   },
   "ACT_PROPOSED_ACTION_TYPE": {
@@ -22,9 +16,7 @@
     "value": "ACT_PROPOSED"
   },
   "ACT_TOOLS": {
-    "keys": [
-      "mcp_smokeball_create_matter"
-    ],
+    "keys": ["mcp_smokeball_create_matter"],
     "type": "dict"
   },
   "CREATE_PENDING_RULES_INDEX_SQL": {
@@ -77,11 +69,7 @@
     "type": "type"
   },
   "EstablishmentValidationError": {
-    "members": [
-      "add_note",
-      "args",
-      "with_traceback"
-    ],
+    "members": ["add_note", "args", "with_traceback"],
     "type": "type"
   },
   "MAX_DOCS_PER_SET": {
@@ -114,11 +102,7 @@
   },
   "OPS_OUTCOMES": {
     "type": "frozenset",
-    "value": [
-      "declined",
-      "done",
-      "withdrawn"
-    ]
+    "value": ["declined", "done", "withdrawn"]
   },
   "OPS_REQUEST_CLOSED_BY_SMD_ACTION_TYPE": {
     "type": "str",
@@ -165,20 +149,11 @@
   },
   "PROPOSAL_KINDS": {
     "type": "frozenset",
-    "value": [
-      "ops_request",
-      "rule",
-      "tool_call"
-    ]
+    "value": ["ops_request", "rule", "tool_call"]
   },
   "PROPOSAL_SCOPES": {
     "type": "frozenset",
-    "value": [
-      "act",
-      "firm_adjust",
-      "ops",
-      "person"
-    ]
+    "value": ["act", "firm_adjust", "ops", "person"]
   },
   "PROPOSAL_TTL_SECONDS": {
     "type": "int",
@@ -235,10 +210,7 @@
   },
   "SPEC_PROPERTIES": {
     "type": "frozenset",
-    "value": [
-      "format",
-      "voice"
-    ]
+    "value": ["format", "voice"]
   },
   "STAGING_TTL_SECONDS": {
     "type": "int",
@@ -250,10 +222,7 @@
   },
   "SUBMIT_PHASES": {
     "type": "frozenset",
-    "value": [
-      "analyze",
-      "install"
-    ]
+    "value": ["analyze", "install"]
   },
   "TERMINAL_RETENTION_SECONDS": {
     "type": "int",
