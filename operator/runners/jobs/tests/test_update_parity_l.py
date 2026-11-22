@@ -10,8 +10,8 @@ pages were composed again, the copy became a new exhibit and an Exhibit List
 line, and one of them produced a duplicate entry. Every record is invented.
 
 Since 2026-11-22 the words' agreement only suspects: a re-print whose pages
-are PIXEL-EQUAL to delivered pages is the re-filed copy; one known only by a
-near picture is read, each page a suspected copy, not charged."""
+are PIXEL-EQUAL to delivered pages is the re-filed copy; one known by a near
+picture its words confirm is read, each page a suspected copy, not charged."""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ def test_a_near_picture_that_states_another_date_or_value_is_never_confirmed() -
     assert not PG.confirmed("\n".join(_reprint(_page(1, bp="142/90"))), original)  # another reading
 
 
-def test_a_reprint_known_only_by_a_near_picture_is_read_as_suspected_copies(tmp_path: Path) -> None:
+def test_a_reprint_known_by_a_near_picture_and_its_words_is_read_as_suspected_copies(tmp_path: Path) -> None:
     from jobs.medchron import pages_record as PR
     from jobs.stages import update_select as US
 

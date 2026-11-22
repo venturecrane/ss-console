@@ -77,8 +77,12 @@ READ, EXCLUDED, UNREAD = "text", "excluded", "unread"
 ALREADY = "already read in a delivered exhibit"
 OVERLAP = "repeats an earlier page of the new documents"
 BLANK = "no text on the page"
-#: A READ page a rule suspected of copying a page already covered.
-SUSPECTED = "read: suspected copy of a page already covered"
+#: {why the rules set a page aside as a copy: why ``update_select`` reads it}.
+SUSPECTED = {
+    ALREADY: "read: suspected copy of a delivered page",
+    OVERLAP: "read: suspected copy of an earlier page of the new documents",
+}
+SUSPECTS = frozenset(SUSPECTED.values())
 
 
 def shingles(text: str | None) -> set[str]:
@@ -206,7 +210,7 @@ def _page(doc: int, text: str, home: tuple[str, int] = ("", 0)) -> _Page:
 #: of pages (``update/contained``), an undated page beside one so held, as the
 #: twin reading of one page in another new document (``update/twins``), in a
 #: document whose words are an extract of another (``update/subsets``), or by
-#: its picture (near; pixel-equal when the matched page is never read).
+#: its picture (near, its words confirming it).
 BY_TEXT, BY_RUN, BY_NEIGHBOUR, BY_TWIN, BY_EXTRACT, BY_PICTURE = (
     "text",
     "contained",
@@ -226,12 +230,11 @@ class Cover:
     page: int  # 0 when the rule names the document only
     kind: str
     last: int = 0  # the run's last page (BY_RUN), when it is not `page`
-    exact: bool = False  # pixel-equal, to a page that is never read
 
     def as_dict(self) -> dict[str, Any]:
         n = self.doc[len(DELIVERED) :] if self.doc.startswith(DELIVERED) else ""
         where: dict[str, Any] = {"exhibit": int(n)} if n.isdigit() else {"doc": self.doc}
-        return {**where, "page": self.page or None, **({"last": self.last} if self.last else {}), "exact": self.exact}
+        return {**where, "page": self.page or None, **({"last": self.last} if self.last else {}), "exact": False}
 
 
 def service_dates(text: str) -> set[str]:
@@ -492,7 +495,7 @@ def classify_new(
 ) -> dict[int, tuple[str, str]]:
     """Per page of one new document: (text | excluded | unread, reason), as
     the rules above decide it. A page excluded here by its WORDS is read as a
-    suspected copy (``update_select._read_suspects``), never set aside.
+    suspected copy (``update_suspects.read_suspects``), never set aside.
     `unread` is a page the transcription could not read: it is never skipped
     silently, the stage holds on it. `earlier`, when given, holds the pages of
     the new documents before this one; this document's pages join it.
@@ -524,12 +527,16 @@ def classify_new(
 def row(number: int, title: str, decisions: dict[int, tuple[str, str]], pages: dict[int, str]) -> dict[str, Any]:
     """The selection record for one new exhibit."""
     read = sorted(p for p, (d, _) in decisions.items() if d == READ)
+    suspected = [p for p in read if decisions[p][1] in SUSPECTS]
+    rest = {why for d, why in decisions.values() if d != READ} | {decisions[p][1] for p in read}
     return {
         "exhibit": number,
         "title": title,
         "pages": len(decisions),
         "read": read,
-        "suspected": sorted(p for p, (d, why) in decisions.items() if d == READ and why == SUSPECTED),
+        "suspected": suspected,
+        # The rules would have re-filed the whole document under a delivered exhibit (``charged``).
+        "refiled": SUSPECTED[ALREADY] in rest and rest <= {SUSPECTED[ALREADY], ALREADY, BLANK},
         "unread": sorted(p for p, (d, _) in decisions.items() if d == UNREAD),
         "excluded": dict(Counter(r for d, r in decisions.values() if d == EXCLUDED)),
         "chars": sum(len(pages.get(p) or "") for p in read),

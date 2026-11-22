@@ -8,9 +8,9 @@ became exhibits, every citation to the larger file's copy region pointed at
 the smaller one, and where the two transcriptions of one scan disagreed (one
 reading missed a value) the page was composed from both files and a visit
 was itemized twice. The new documents are now read largest first
-(``pageid.reading_order``). Since 2026-11-22 a near picture sets nothing
-aside: the smaller file is read, every page a suspected copy, not charged,
-and the twin rule (``update/twins``) only suspects. Every record is
+(``pageid.reading_order``). Since 2026-11-22 a copy its words confirm is
+read too, every page a suspected copy, not charged, and the twin rule
+(``update/twins``) only suspects. Every record is
 invented."""
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def _run(tmp: Path, part_texts: list[str] | None = None, whole_texts: list[str] 
     return _select(sr)
 
 
-def test_a_smaller_near_copy_is_read_its_pages_suspected_copies_of_the_larger_file(tmp_path: Path) -> None:
+def test_a_smaller_copy_its_words_confirm_is_read_its_pages_suspected_copies_of_the_larger_file(tmp_path: Path) -> None:
     from jobs.medchron import pages_record as PR
 
     sel = _run(tmp_path)
@@ -70,7 +70,7 @@ def test_a_smaller_near_copy_is_read_its_pages_suspected_copies_of_the_larger_fi
     assert [(r["evidence"]["cover"]["doc"], r["evidence"]["cover"]["page"]) for r in rows] == [
         ("whole", q + 2) for q in (1, 2, 3, 4)
     ]
-    assert {r["evidence"][PR.SUSPECTED] for r in rows} == {"near_picture"} and not any(map(PR.charged, rows))
+    assert {r["evidence"][PR.SUSPECTED] for r in rows} == {"words_extract"} and not any(map(PR.charged, rows))
     whole_rows = [r for r in PR.read(tmp_path / "runs" / "alpha") if r["doc"] == "whole"]
     assert all(map(PR.charged, whole_rows))  # the larger file, read first, is charged once
 

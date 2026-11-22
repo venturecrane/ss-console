@@ -49,8 +49,7 @@ attachment folded from a named email) is a candidate, in pull order:
   any other rule calls a copy (a near picture, its words, a run of pages, an
   undated page beside one, a twin reading, a words extract) is READ, recorded
   with the page it may copy and not charged (``update_suspects.read_suspects``, 2026-11-22).
-  So is a page pixel-equal to a page of a document that is never read, an
-  expert's report: it has no reading elsewhere. A page the
+  A page the
   transcription could not read holds (exit 2): it is never skipped silently.
   The one exception (2026-10-25): an IMAGE file (a photograph) the
   transcription could not read is set aside by rule and named
@@ -91,7 +90,6 @@ from . import identity_redecide, prior_reading, update_suspects as SP
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
 from .update_base import HELD, plan, update_dir
-from .update_suspects import texts_of as _texts
 from .vision import load_partial
 
 #: What ``update_pages`` decided for each file the other-person rule withheld
@@ -314,8 +312,9 @@ def _classify(
     SP.settle_twins(got, ident)
     for rid, sub in (words or {}).items():
         got[rid] = _words_extract(sr, by_id[rid], pdfs[rid], npages[rid], sub, ident.pages.get(rid) or {})
-    for rid in order:
-        SP.read_suspects(rid, got, ident)
+    for rid, c in got.items():
+        if not c.medlegal:
+            SP.read_suspects(c, ident.pages.get(rid) or {})
     for rid in (d for d in order if not got[d].medlegal and d not in firm):
         c = got[rid]
         hits = {pg: h.other for pg, h in (ident.pages.get(rid) or {}).items() if c.decisions[pg][1] == S.OVERLAP}
@@ -329,7 +328,7 @@ def _words_extract(
     """A document whose words are an extract of another (``update/subsets``):
     every page not pixel-equal to another is a suspected copy, named with the
     page that holds it."""
-    image = {pg: h.reason for pg, h in found.items() if h.aside}
+    image = {pg: h.reason for pg, h in found.items() if h.exact}
     c = _read_one(sr, r, pdf, npages, S.Delivered(), None, None, image)
     if not c.medlegal:
         c.covers.update({pg: SP.picture(found[pg]) for pg in image})
@@ -438,7 +437,7 @@ def run(sr: StageRun) -> int:
     seen = _seen(sr, read_by_delivery)
     text_of = _text_of(sr, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
     firm_of = {str(r["id"]): firm[r["sha256"]]["name"] for r in rows if (r.get("sha256") or "") in firm}
-    ident, filled = SP.fill(sr, rows, PG.load(ud), firm_of)
+    ident = PG.load(ud)
     extracts = dict(ident.extracts)
     ordered = [x for x in rows if str(x["id"]) not in extracts]
     words = _words_extracts(sr, ordered, set(firm_of), extracts)
@@ -476,7 +475,7 @@ def run(sr: StageRun) -> int:
         sr.log(HELD + f"two files carry one exhibit number: {sorted(dupes)[:5]}")
         return 2
     subs = _subset_records(rows, recs, extracts, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
-    _write(sr, ud, recs, units, skipped, subs, filled)
+    _write(sr, ud, recs, units, skipped, subs)
     pages = sum(len(r["read"]) for r in recs)
     if not pages:
         # An answer, not a hold (2026-10-25): delivered already current, nothing filed (``update/outcome``).
@@ -629,13 +628,18 @@ def _refiled_whole(sr: StageRun, rec: dict[str, Any], found: dict[int, PG.Page])
     and it takes no exhibit number."""
     if rec.get("not_itemized"):
         return None
-    image_ex = {pg: n for pg, h in found.items() if h.aside and (n := PG.delivered_exhibit(h.other)) is not None}
+    image_ex = {pg: n for pg, h in found.items() if h.exact and (n := PG.delivered_exhibit(h.other)) is not None}
     home = S.delivered_home(rec, image_ex)
     if home is None:
         return None
     (sr.slug_dir / "out" / sr.unit.unit / f"{rec['title']}.pdf").unlink(missing_ok=True)
     (update_dir(sr) / "compose" / f"{rec['id']}.txt").unlink(missing_ok=True)
     return SUB.Subset(rec["id"], f"{PI.DELIVERED}{home}", int(rec["pages"]), int(rec["excluded"].get(S.ALREADY, 0)))
+
+
+def _texts(sr: StageRun, rid: str) -> dict[int, str]:
+    tp = sr.slug_dir / "text" / f"{rid}.txt"
+    return S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else "")
 
 
 def _text_of(sr: StageRun, delivered: dict[int, str]) -> Callable[[str, int], str]:
@@ -683,13 +687,11 @@ def _write(
     units: list[dict],
     skipped: dict,
     subs: list[dict],
-    filled: list[dict] | None = None,
 ) -> None:
     (sr.slug_dir / "units").mkdir(parents=True, exist_ok=True)
     (sr.slug_dir / "units" / f"{sr.unit.unit}.json").write_text(json.dumps(units, indent=1), encoding="utf-8")
     (ud / "new_exhibits.json").write_text(json.dumps(recs, indent=1), encoding="utf-8")
     sel = {"exhibits": recs, "skipped": skipped, "excluded_named": _excluded_named(sr), "subsets": subs}
-    sel["filled"] = filled or []
     (ud / "selection.json").write_text(json.dumps(sel, indent=1), encoding="utf-8")
 
 

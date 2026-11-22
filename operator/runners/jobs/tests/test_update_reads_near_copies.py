@@ -3,11 +3,13 @@
 WHY. A paid proof failed: a reader called 16 of 137 known-different page
 pairs copies, and a free text test settled 25 differing pages as copies. On
 the largest saved update the rules that set non-identical pages aside took
-558 pages, and 75 pages' facts never reached a delivered update. Now a new
-page is set aside as a copy ONLY when its picture is pixel-identical to a
-page already covered (the delivered pages and the new pages read before it,
-as before); every other match is read, recorded as a suspected copy with
-the page it may copy, and not charged against the firm's page allowance.
+558 pages, and 75 pages' facts never reached a delivered update. Now, of the
+pages the rules set aside as copies, only one pixel-identical to a page
+already covered stays set aside; every other is read, recorded as a
+suspected copy with the page it may copy, and not charged against the firm's
+page allowance. A page the rules read, a near picture whose words disagree
+among them, is read and charged as before
+(``test_update_set_aside_matches_base`` holds the two trees side by side).
 
 Each test names the rule it pins. Every name, date and value is invented.
 """
@@ -26,7 +28,7 @@ from jobs.stages import page_rows, update_select as US, update_suspects as SP
 from jobs.stages.base import StageRun
 from jobs_testkit import FakeSeat, make_pdf
 from test_update_parity_b import _seed as words_seed, _visit as visit
-from test_update_parity_h import _pages_run, _record, _scan, _seed as scan_seed, _transcribe
+from test_update_parity_h import _record
 
 NOTE = (
     "Progress note. Date of service: 04/01/2025. Chief complaint: neck pain after the collision. "
@@ -63,7 +65,7 @@ def test_a_pixel_identical_page_is_set_aside_and_never_transcribed() -> None:
     assert (hit.reason, hit.other, hit.page, hit.exact) == (PI.ALREADY, "exhibit:4", 2, True)
     assert ident.skipped({"d1": 2}) == {"d1": [1]}  # vision never reads it; page 2 is read
     loaded = PG._page(PI.to_json(ident)["pages"]["d1"]["1"])
-    assert loaded is not None and loaded.aside
+    assert loaded is not None and loaded.exact
 
 
 def test_a_refiled_pixel_copy_of_a_delivered_exhibit_is_still_an_extract() -> None:
@@ -78,9 +80,9 @@ def test_a_refiled_pixel_copy_of_a_delivered_exhibit_is_still_an_extract() -> No
 # ---- 2. every other match is read, recorded and not charged ------------------------------
 
 
-def _scene(sr: StageRun, small_hit: PG.Page) -> dict:
+def _scene(sr: StageRun, small_hit: PG.Page, matched: str) -> dict:
     rows = []
-    for rid, pages in (("large", [NOTE, OTHER]), ("small", [NOTE])):
+    for rid, pages in (("large", [OTHER.replace("04/08", "04/09"), OTHER]), ("small", [NOTE + " Seen."])):
         path = sr.slug_dir / f"{rid}.pdf"
         path.write_bytes(make_pdf(pages))
         (sr.slug_dir / "text" / f"{rid}.txt").write_text(
@@ -88,7 +90,7 @@ def _scene(sr: StageRun, small_hit: PG.Page) -> dict:
         )
         rows.append({"id": rid, "name": f"Example {rid}", "ext": ".pdf", "path": str(path)})
     ident = PG.Loaded(pages={"small": {1: small_hit}})
-    got = US._classify(sr, rows, S.Delivered(), ident, lambda _o, _p: "", {})
+    got = US._classify(sr, rows, S.Delivered(), ident, lambda _o, _p: matched, {})
     page_record = page_rows.selection_rows(rows, got, {}, {}, ident, {}, lambda _r: 0)
     PR.write(sr.slug_dir / "runs" / sr.unit.unit, page_record)
     return {"got": got, "rows": {(r["doc"], r["page"]): r for r in page_record}}
@@ -97,27 +99,36 @@ def _scene(sr: StageRun, small_hit: PG.Page) -> dict:
 @pytest.mark.parametrize(
     "hit",
     [PG.Page(S.OVERLAP, "large", 1, False), PG.Page(S.ALREADY, "exhibit:4", 2, False)],
-    ids=["near-picture-twin-in-another-new-document", "near-picture-of-a-delivered-page"],
+    ids=["a-page-of-another-new-document", "a-delivered-page"],
 )
-def test_a_near_picture_is_read_recorded_and_not_charged(
+def test_a_near_picture_its_words_confirm_is_read_recorded_and_not_charged(
     hit: PG.Page, job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
     sr = _sr(job_dir, firm_config_path, data_root)
-    out = _scene(sr, hit)
-    assert out["got"]["small"].decisions[1] == (S.READ, S.SUSPECTED)
+    out = _scene(sr, hit, NOTE)
     row = out["rows"][("small", 1)]
-    assert row["status"] == PR.READ and row["class"] == "suspected_copy"
-    assert row["evidence"][PR.SUSPECTED] == page_rows.NEAR_PICTURE
+    _suspect(row, page_rows.NEAR_PICTURE)
     assert row["evidence"]["cover"] == PR.picture_cover(hit)  # "possible copy of <that page>"
-    assert not PR.charged(row) and PR.charged(out["rows"][("large", 1)])
-    sd = sr.slug_dir
-    assert charged.read_pages(sd, sr.unit.unit) == 3 and charged.charged_pages(sd, sr.unit.unit, 0) == 2
-    assert charged.figures(sd, sr.unit.unit)["pages_suspected_copies"] == 1
+    assert PR.charged(out["rows"][("large", 1)])
+    sd, unit = sr.slug_dir, sr.unit.unit
+    assert charged.read_pages(sd, unit) == 3 and charged.charged_pages(sd, unit, 0) == 2
+    assert charged.figures(sd, unit)["pages_suspected_copies"] == 1
+
+
+def test_a_near_picture_whose_words_disagree_is_read_and_charged(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The same form on another day: no rule calls it a copy, so it is the firm's page."""
+    sr = _sr(job_dir, firm_config_path, data_root)
+    out = _scene(sr, PG.Page(S.OVERLAP, "large", 1, False), NOTE.replace("04/01/2025", "05/06/2025"))
+    row = out["rows"][("small", 1)]
+    assert row["class"] == "new" and PR.SUSPECTED not in row["evidence"] and PR.charged(row)
+    assert charged.charged_pages(sr.slug_dir, sr.unit.unit, 0) == 3
 
 
 def test_an_exact_picture_is_excluded_not_read(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
     sr = _sr(job_dir, firm_config_path, data_root)
-    out = _scene(sr, PG.Page(S.OVERLAP, "large", 1, True))
+    out = _scene(sr, PG.Page(S.OVERLAP, "large", 1, True), "")
     assert out["got"]["small"].decisions[1] == (S.EXCLUDED, S.OVERLAP)
     assert out["rows"][("small", 1)]["status"] == PR.EXCLUDED
 
@@ -171,16 +182,18 @@ def test_each_words_rule_names_itself() -> None:
     covers: dict[int, S.Cover] = {}
     page = "FAX 555-0100 06/01/2026 PAGE 4 OF 9\n" + NOTE
     assert S.classify_new({1: page}, 1, seen, covers_out=covers)[1] == (S.EXCLUDED, S.ALREADY)
-    row = page_rows._decided_row("d1", "", 1, S.READ, S.SUSPECTED, covers[1], None)
+    row = page_rows._decided_row("d1", "", 1, S.READ, S.SUSPECTED[S.ALREADY], covers[1], None)
     _suspect(row, page_rows.TEXT_OVERLAP)
     assert row["evidence"]["cover"] == {"exhibit": 3, "page": 2, "exact": False}
     run = page_rows._decided_row(
-        "d1", "", 1, S.READ, S.SUSPECTED, S.Cover(S.DELIVERED_SRC, "exhibit:2", 1, S.BY_RUN, last=2), None
+        "d1", "", 1, S.READ, S.SUSPECTED[S.ALREADY], S.Cover(S.DELIVERED_SRC, "exhibit:2", 1, S.BY_RUN, last=2), None
     )
     _suspect(run, page_rows.RUN_OF_PAGES)
     assert run["evidence"]["cover"] == {"exhibit": 2, "page": 1, "last": 2, "exact": False}
     assert set(page_rows._RULE) == {S.BY_PICTURE, S.BY_TEXT, S.BY_RUN, S.BY_NEIGHBOUR, S.BY_TWIN, S.BY_EXTRACT}
-    nameless = page_rows._decided_row("d1", "", 1, S.READ, S.SUSPECTED, None, None)  # a match that names no page
+    nameless = page_rows._decided_row(
+        "d1", "", 1, S.READ, S.SUSPECTED[S.OVERLAP], None, None
+    )  # a match that names no page
     assert not PR.charged(nameless) and nameless["evidence"]["cover"] is None
     assert PR.charged(page_rows._decided_row("d1", "", 1, S.READ, "new document", None, None))
 
@@ -226,90 +239,6 @@ def test_a_words_extract_is_read_whole_its_odd_page_too_and_charges_nothing(tmp_
     assert charged.charged_pages(tmp_path, "alpha", 0) == 12
 
 
-# ---- 2b. a page whose only other copy is never read is read here ---------------------------
-
-LETTER = "Independent medical examination report\nPrepared for counsel on review of the enclosed records"
-
-
-def _scans(tmp_path: Path, docs: dict[str, list[str]]):
-    sr = scan_seed(tmp_path, {}, {d: [_scan(t) for t in pages] for d, pages in docs.items()})
-    skip = _pages_run(sr)
-    _transcribe(sr, docs, skip)
-    return sr, skip
-
-
-def _select(tmp_path: Path, sr) -> dict[str, dict]:
-    assert US.run(sr) == 0, sr.logged
-    sel = json.loads((tmp_path / "runs/alpha/update/selection.json").read_text())
-    return {r["id"]: r for r in sel["exhibits"]} | {"subsets": sel["subsets"], "filled": sel["filled"]}
-
-
-def test_clinic_pages_enclosed_in_a_report_are_read_in_the_clinics_own_file(tmp_path: Path) -> None:
-    """The report is known only once its scanned first page is transcribed, so
-    the vision pass had already skipped the clinic's pages; they are given the
-    report's reading of the same pixels, are read, and are their own exhibit."""
-    clinic = [_record(i) for i in (1, 4, 9)]
-    sr, skip = _scans(tmp_path, {"letter": [LETTER, *clinic], "clinic": clinic})
-    assert skip == {"clinic": [1, 2, 3]}
-    sel = _select(tmp_path, sr)
-    assert sel["letter"]["read"] == [] and sel["letter"].get("not_itemized")
-    assert sel["clinic"]["read"] == [1, 2, 3] and sel["subsets"] == []
-    assert [(f["doc"], f["page"], f["from_page"]) for f in sel["filled"]] == [("clinic", p, p + 1) for p in (1, 2, 3)]
-    composed = (tmp_path / "runs/alpha/update/compose/clinic.txt").read_text()
-    assert all(t in composed for t in clinic)
-    rows = _rows_of(tmp_path)
-    for p in (1, 2, 3):
-        _suspect(rows[("clinic", p)], page_rows.NEVER_READ)
-    assert charged.charged_pages(tmp_path, "alpha", 0) == 0
-    assert _select(tmp_path, sr)["clinic"]["read"] == [1, 2, 3]  # a redo decides the same
-
-
-def test_a_report_known_by_its_name_never_stops_the_transcription(tmp_path: Path) -> None:
-    clinic = [_record(i) for i in (1, 4, 9)]
-    sr, skip = _scans(tmp_path, {"record review": [_record(20), *clinic], "clinic": [*clinic, _record(13)]})
-    assert skip == {}  # nothing to fill: the clinic's pages go to the vision pass
-    sel = _select(tmp_path, sr)
-    assert sel["clinic"]["read"] == [1, 2, 3, 4] and sel["filled"] == []
-    rows = _rows_of(tmp_path)
-    assert [PR.charged(rows[("clinic", p)]) for p in (1, 2, 3, 4)] == [False, False, False, True]
-
-
-def test_a_second_copy_of_the_report_itself_is_still_a_report(tmp_path: Path) -> None:
-    """Its first page is the report's: it is reviewed and not itemized, never composed as treatment."""
-    pages = [LETTER, _record(4), _record(9)]
-    sr, _skip = _scans(tmp_path, {"report": [*pages, _record(13)], "again": [*pages, _record(15)]})
-    sel = _select_or_current(tmp_path, sr)
-    assert sel["again"]["read"] == [] and sel["again"].get("not_itemized")
-
-
-def _select_or_current(tmp_path: Path, sr) -> dict[str, dict]:
-    from jobs.medchron.update import outcome as UO
-
-    assert US.run(sr) == UO.EXIT, sr.logged  # nothing to read is an answer
-    sel = json.loads((tmp_path / "runs/alpha/update/selection.json").read_text())
-    return {r["id"]: r for r in sel["exhibits"]}
-
-
-def test_a_page_equal_to_an_unreadable_one_is_unread_never_left_out(
-    job_dir: Path, firm_config_path: Path, data_root: Path
-) -> None:
-    sr = _sr(job_dir, firm_config_path, data_root)
-    texts = {"photo": ["[page transcription failed]"], "copy": [PI.SKIPPED, NOTE]}
-    rows = []
-    for rid, pages in texts.items():
-        path = sr.slug_dir / f"{rid}.pdf"
-        path.write_bytes(make_pdf(["x"] * len(pages)))
-        body = "".join(f"[p.{i}]\n{t}\n" for i, t in enumerate(pages, 1))
-        (sr.slug_dir / "text" / f"{rid}.txt").write_text(body, encoding="utf-8")
-        rows.append({"id": rid, "name": f"Example {rid}", "ext": ".pdf", "path": str(path)})
-    pages = {"copy": {1: PG.Page(S.OVERLAP, "photo", 1, True)}}
-    for tested, want in ((True, S.UNREAD), (False, S.EXCLUDED)):  # an old record's page stays as that rule left it
-        ident = PG.Loaded(pages=pages, tested=tested)
-        got = US._classify(sr, rows, S.Delivered(), ident, lambda _o, _p: "", {})
-        assert got["copy"].decisions[1][0] == want and got["copy"].home is None
-        assert got["copy"].decisions[2] == (S.READ, "new document")
-
-
 # ---- 2c. a run with no page record charges no more than it did -----------------------------
 
 
@@ -321,30 +250,12 @@ def test_the_fallback_charge_leaves_out_suspected_copies(tmp_path: Path) -> None
     (ud / "selection.json").write_text(json.dumps({"exhibits": [rec]}))
     assert charged.read_pages(tmp_path, "alpha") is None  # no page record
     assert charged.charged_pages(tmp_path, "alpha", 100) == 70
-    # a document read only as copies was set aside whole, its blank pages with it
-    whole = {"pages": 40, "read": [1, 2], "suspected": [1, 2], "excluded": {S.BLANK: 38}}
-    (ud / "selection.json").write_text(json.dumps({"exhibits": [whole]}))
-    assert charged.charged_pages(tmp_path, "alpha", 100) == 60
-
-
-# ---- 3. the page question counts no page a picture already suspects ------------------------
-
-
-def test_the_page_question_does_not_count_a_candidate_a_picture_suspects(tmp_path: Path) -> None:
-    ud = tmp_path / "runs" / "u1" / "update"
-    ud.mkdir(parents=True)
-    ident = PI.Identity(pages={"d1": {1: PI.Hit(PI.ALREADY, "exhibit:4", 7, False)}})
-    (ud / PG.NAME).write_text(json.dumps(PI.to_json(ident)), encoding="utf-8")
-    rows = page_rows.candidate_rows([("d1", 3, [True, True, True])], PG.load(ud), {"d1": "a" * 64})
-    assert rows[0]["evidence"][PR.SUSPECTED] == page_rows.NEAR_PICTURE
-    PR.write(tmp_path / "runs" / "u1", rows)
-    assert charged.read_pages(tmp_path, "u1") == 3 and charged.asked_pages(tmp_path, "u1", 0) == 2
-    # once selected: four pages read, one more a suspected copy; two charged, never above the asked figure
-    later = [*rows, PR.row("d1", "", 4, PR.READ, "suspected_copy", PR.TEXT, "update_select", None,
-                           **{PR.SUSPECTED: page_rows.TEXT_OVERLAP})]  # fmt: skip
-    PR.write(tmp_path / "runs" / "u1", later)
-    assert charged.read_pages(tmp_path, "u1") == 4 and charged.capped(tmp_path, "u1") is None
-    assert charged.charged_pages(tmp_path, "u1", 0) == 2 and charged.figures(tmp_path, "u1")["read_exceeds_asked"] == 0
+    # every page a copy of delivered pages: re-filed whole before, left out whole still, blank pages too
+    of_delivered = {1: (S.READ, S.SUSPECTED[S.ALREADY]), 2: (S.EXCLUDED, S.BLANK)}
+    of_new = {1: (S.READ, S.SUSPECTED[S.OVERLAP]), 2: (S.EXCLUDED, S.BLANK)}
+    for decisions, left in ((of_delivered, 98), (of_new, 99)):
+        (ud / "selection.json").write_text(json.dumps({"exhibits": [S.row(2, "x", decisions, {})]}))
+        assert charged.charged_pages(tmp_path, "alpha", 100) == left
 
 
 # ---- 4. resume across the release --------------------------------------------------------
@@ -359,9 +270,8 @@ def test_a_resumed_run_keeps_its_pixel_equal_pages_aside_and_reads_its_near_ones
     ud.mkdir()
     old = {"pages": {"d1": {"1": ["already", "exhibit:4", 2, "exact"], "2": ["already", "exhibit:4", 3, "near"]}}}
     (ud / PG.NAME).write_text(json.dumps(old), encoding="utf-8")
-    loaded = PG.load(ud)
-    assert not loaded.tested
+    found = PG.load(ud).pages["d1"]
     c = US._Read(Path("x.pdf"), {1: PI.SKIPPED, 2: NOTE}, {}, False, None)
-    c.decisions = S.classify_new(c.pages, 2, S.Delivered(), image={1: S.ALREADY})
-    SP.read_suspects("d1", {"d1": c}, loaded)
-    assert c.decisions == {1: (S.EXCLUDED, S.ALREADY), 2: (S.READ, S.SUSPECTED)}
+    c.decisions = S.classify_new(c.pages, 2, S.Delivered(), image=PG.reasons(found, c.pages, lambda _o, _p: NOTE))
+    SP.read_suspects(c, found)
+    assert c.decisions == {1: (S.EXCLUDED, S.ALREADY), 2: (S.READ, S.SUSPECTED[S.ALREADY])}

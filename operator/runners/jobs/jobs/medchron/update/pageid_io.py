@@ -6,11 +6,11 @@ file reads as "nothing settled by picture", so the text rules decide every
 page exactly as before (the record is an addition, never a precondition).
 
 A pixel-equal page is excluded as it stands (it was never transcribed). A
-NEAR page was transcribed and is READ: it is a suspected copy (2026-11-22),
-never set aside. ``confirmed`` says whether its words agree with its picture
-(the same dates and the same clinical values as the page it matched, print
-stamps aside, and most of the same words in any order); it once set the page
-aside, and the rules below it still build on that answer. A re-printed hospital record once failed both: its "Generated on"
+NEAR page was transcribed, and is called a copy only when its words confirm the
+picture (``confirmed``; since 2026-11-22 a page so called is read as a suspected
+copy, not charged, and one whose words disagree is read and charged as before): the same dates and the same clinical values as the
+page it matched (print stamps aside), and most of the same words in any
+order. A re-printed hospital record once failed both: its "Generated on"
 stamp carried a new date and its columns flowed in another order, so three
 of its delivered pages were composed again as a new exhibit (2026-10-14). A form filled in with one other
 number looks like its twin and says another thing; it is read.
@@ -44,20 +44,11 @@ class Page:
     page: int
     exact: bool
 
-    @property
-    def aside(self) -> bool:
-        """Pixel-equal: the only match that sets a page aside as a copy."""
-        return self.exact
-
 
 @dataclass
 class Loaded:
     pages: dict[str, dict[int, Page]] = field(default_factory=dict)
     extracts: dict[str, Subset] = field(default_factory=dict)
-    #: {extract: {page: Page}}, for an extract whose whole document turns out never read.
-    extract_pages: dict[str, dict[int, Page]] = field(default_factory=dict)
-    #: The record asked which documents will not be read (2026-11-22). One written before never did.
-    tested: bool = False
 
 
 def delivered_exhibit(parent: str) -> int | None:
@@ -120,24 +111,7 @@ def load(ud: Path) -> Loaded:
         raw = {}
     if not isinstance(raw, dict):
         raw = {}
-    return Loaded(
-        _pages(raw.get("pages")),
-        _extracts(raw.get("extracts")),
-        _pages(raw.get("extract_pages")),
-        isinstance(raw.get("never_read"), list),
-    )
-
-
-def reopened(ident: Loaded, never_read: set[str]) -> Loaded:
-    """`ident` with every extract of a document that is never read decided
-    page by page (``extract_pages``) instead of set aside whole."""
-    back = {d for d, s in ident.extracts.items() if s.parent in never_read and ident.extract_pages.get(d)}
-    return Loaded(
-        ident.pages | {d: ident.extract_pages[d] for d in back},
-        {d: s for d, s in ident.extracts.items() if d not in back},
-        ident.extract_pages,
-        ident.tested,
-    )
+    return Loaded(_pages(raw.get("pages")), _extracts(raw.get("extracts")))
 
 
 def _words(text: str) -> Counter[str]:
@@ -149,7 +123,7 @@ def _words(text: str) -> Counter[str]:
 
 
 def confirmed(mine: str, theirs: str) -> bool:
-    """A near picture match has its words' agreement when both transcriptions state
+    """A near picture match is a repeat only when both transcriptions state
     the same dates and the same clinical values (fax, print and export
     stamp lines aside, ``select.without_furniture``: a re-printed copy
     carries a new print date) and share most words, in any order."""
