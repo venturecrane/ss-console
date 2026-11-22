@@ -220,12 +220,35 @@ def regenerate(work: Path, py: Path, cap: Path | None, out: Path, names: set[str
         run([str(cap), "bin/capture-seat-config-callers.py", "--out", str(dest)], work, check=False)
 
 
+def as_own_base(tree: Path) -> str:
+    """Make the extracted base a one-commit git checkout and return that commit.
+
+    The base's own goldens code reads its allowed lists against a merge-base
+    (``bin/lib/golden_diff._base``). An extracted tree is no checkout, so a
+    leftover entry on main (one no clearing PR removed) failed every golden PR's
+    manifest step. The base IS the merge-base: committed as itself, every entry
+    in its lists is inherited and none is counted as new."""
+    top = tree.parent
+    git = ["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=goldens", "-c", "user.email=goldens@example.test"]
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    if not (top / ".git").exists():
+        for args in (["init", "--quiet"], ["add", "-A"], ["commit", "--quiet", "-m", "base"]):
+            subprocess.run([*git, *args], cwd=top, check=True, capture_output=True, env=clean)  # noqa: S603 - a fixed git argv in this job's scratch tree
+    head = [*git, "rev-parse", "HEAD"]
+    return subprocess.run(head, cwd=top, check=True, capture_output=True, text=True, env=clean).stdout.strip()  # noqa: S603 - a fixed git argv in this job's scratch tree
+
+
 def manifest(tree: Path, py: Path) -> dict[str, Any]:
+    env = code_path(tree)
+    if tree != OPERATOR:
+        env["GOLDENS_BASE"] = as_own_base(tree)
     raw = subprocess.run(  # noqa: S603 - this repo's own manifest script over this repo's tree
         [str(py), str(OPERATOR / "bin" / "goldens" / "golden_manifest.py"), str(tree)],
-        cwd=tree, check=True, capture_output=True, text=True, env=code_path(tree),
-    ).stdout  # fmt: skip
-    return json.loads(raw)
+        cwd=tree, check=False, capture_output=True, text=True, env=env,
+    )  # fmt: skip
+    if raw.returncode != 0:
+        sys.exit(f"golden_manifest.py failed on {tree} (exit {raw.returncode}):\n{raw.stderr[-4000:]}")
+    return json.loads(raw.stdout)
 
 
 def manifest_losses(base: dict[str, Any], pr: dict[str, Any]) -> dict[str, list[str]]:
