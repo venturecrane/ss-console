@@ -38,7 +38,7 @@ def _api_type(exc: BaseException) -> str:
         import anthropic
     except ImportError:  # the audit venv may lack the SDK
         return ""
-    kind = exc.type if isinstance(exc, anthropic.APIStatusError) else None
+    kind: object = getattr(exc, "type", None) if isinstance(exc, anthropic.APIStatusError) else None
     return f" ({kind})" if isinstance(kind, str) and kind in TRANSIENT_API_TYPES else ""
 
 
