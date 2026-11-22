@@ -173,6 +173,105 @@ def load_decisions(path: Path) -> tuple[list[dict[str, str]], list[dict[str, Any
     return corrections, closures
 
 
+def load_confirmed(path: Path) -> list[dict[str, str]]:
+    """``confirmed_drops`` from the decisions file: claims the audit dropped
+    that SMD read on the page and confirms were rightly dropped (a false or
+    unreadable statement), each ``{"key": <claim key>, "why": <text>}``.
+    2026-11-22, on a real update: proof 10 listed a value lost with a claim the
+    audit gate dropped as unreadable, a page number inside a false statement;
+    nothing true was lost, and nothing could say so."""
+    body = json.loads(path.read_text(encoding="utf-8"))
+    rows = body.get("confirmed_drops") if isinstance(body, dict) else None
+    if rows is None:
+        return []
+    if not isinstance(rows, list):
+        raise Refused("confirmed_drops in the file is not a list")
+    out = []
+    for i, r in enumerate(rows):
+        key, why = (r.get("key"), r.get("why")) if isinstance(r, dict) else (None, None)
+        if not isinstance(key, str) or not key.strip() or not isinstance(why, str) or not why.strip():
+            raise Refused(f"confirmed drop {i + 1}: key and why are both required")
+        out.append({"key": key.strip(), "why": why.strip()[:400]})
+    return out
+
+
+def _confirmed(out: Path, rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Each confirmed drop with the values its claim carried (named for proof
+    10). Refused when a key is not a claim the audit dropped."""
+    from .update.values import numbers
+
+    rec = json.loads((out / "audit-dropped-claims.json").read_text(encoding="utf-8")) if rows else {}
+    by_key = {str(c.get("key")): c for c in rec.get("claims") or [] if isinstance(c, dict)}
+    res = []
+    for n, r in enumerate(rows, 1):
+        claim = by_key.get(r["key"])
+        if claim is None or not isinstance(claim.get("claim"), str):
+            raise Refused(f"confirmed drop {n}: {r['key']} is not a claim the audit dropped")
+        res.append({**r, "values": sorted(numbers(claim["claim"]))})
+    return res
+
+
+def load_repeats(path: Path) -> list[dict[str, str]]:
+    """``repeats`` from the decisions file: a paragraph of an added entry that
+    another added entry states word for word, each ``{"entry": <the entry's
+    date line and provider line>, "paragraph": <the paragraph exactly>, "why":
+    <text>}``. 2026-11-22, on a real update: two added entries of one day each
+    carried the same two cited sentences as paragraphs of their own; proof 7
+    failed and no correction could remove a paragraph."""
+    body = json.loads(path.read_text(encoding="utf-8"))
+    rows = body.get("repeats") if isinstance(body, dict) else None
+    if rows is None:
+        return []
+    if not isinstance(rows, list):
+        raise Refused("repeats in the file is not a list")
+    out = []
+    for i, r in enumerate(rows):
+        vals = [r.get(k) if isinstance(r, dict) else None for k in ("entry", "paragraph", "why")]
+        text = [v for v in vals if isinstance(v, str) and v.strip()]
+        if len(text) != 3:
+            raise Refused(f"repeat {i + 1}: entry, paragraph and why are all required")
+        out.append({"entry": text[0].strip(), "paragraph": text[1].strip("\n"), "why": text[2].strip()[:400]})
+    return out
+
+
+def _drop_repeats(md: str, entries: list[str], repeats: list[dict[str, str]]) -> str:
+    """The document with each repeated paragraph removed from the one entry
+    named. Refused unless every line of the paragraph is, word for word, a line
+    of ONE other added entry ON THE SAME DATE (so no fact, citation or
+    heading leaves that date, which proof 10 reads per date), the entry keeps
+    a citation of its own, and no paragraph that follows is left without the
+    section heading the removed paragraph opened."""
+    from .audit import claims as CL
+    from .update import body as B
+
+    for n, r in enumerate(repeats, 1):
+        hits = [i for i, e in enumerate(entries) if "\n".join(e.split("\n")[:2]) == r["entry"]]
+        if len(hits) != 1:
+            raise Refused(f"repeat {n}: {len(hits)} added entries have that date line and provider line, not one")
+        i = hits[0]
+        paras = entries[i].split("\n\n")
+        if r["paragraph"] not in paras[1:]:
+            raise Refused(f"repeat {n}: the paragraph is not a paragraph of that entry, exactly")
+        lines = [ln for ln in r["paragraph"].split("\n") if ln.strip()]
+        others = [set(e.split("\n")) for j, e in enumerate(entries) if j != i and B.iso(e) == B.iso(entries[i])]
+        if not any(all(ln in o for ln in lines) for o in others):
+            raise Refused(
+                f"repeat {n}: no other added entry of the same date states every line of the paragraph word for word"
+            )
+        at = paras.index(r["paragraph"], 1)
+        going = {x["paragraph"] for x in repeats if x["entry"] == r["entry"]}
+        nxt = next((q for q in paras[at + 1 :] if q not in going), "")
+        # A paragraph that opens with a cited line continues the section above it.
+        if any(not CL.CITE.search(ln) for ln in lines) and nxt and CL.CITE.search(nxt.split("\n", 1)[0]):
+            raise Refused(f"repeat {n}: it would leave the next paragraph without its section heading")
+        kept = "\n\n".join(p for k, p in enumerate(paras) if k != at)
+        if not CL.CITE.search(kept):
+            raise Refused(f"repeat {n}: the entry would keep no citation of its own")
+        md = md.replace(entries[i], kept, 1)
+        entries[i] = kept
+    return md
+
+
 def load_corrections(path: Path) -> list[dict[str, str]]:
     corrections, _ = load_decisions(path)
     if not corrections:
@@ -358,6 +457,8 @@ def plan(
     reason: str,
     closures: list[dict[str, Any]] | None = None,
     copy: Path | None = None,
+    confirmed: list[dict[str, str]] | None = None,
+    repeats: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Every check, and what would be written. Raises Refused. `copy`: a
     rehearsal copy of the job (``copy_dir``), decided offline: no broker,
@@ -392,6 +493,7 @@ def plan(
     from ..stages.update_review_io import page_counts
 
     new_md, touched, removed = _edit(md, base, list(entries), corrections, page_counts(slug_dir / "out" / unit))
+    new_md = _drop_repeats(new_md, list(B.entries_of(new_md)[1]), list(repeats or []))
     if len(B.entries_of(new_md)[1]) != len(entries):
         raise Refused("the corrections change how many entries the document holds")
     closed = _close(
@@ -410,6 +512,8 @@ def plan(
         "corrections": corrections,
         "closures": closed,
         "attested": attested,
+        "repeats": list(repeats or []),
+        "confirmed": _confirmed(slug_dir / "out" / unit, list(confirmed or [])),
         "removed": removed,
         "decision": {"by": by.strip(), "source": source.strip(), "reason": reason.strip()[:500]},
         "marker": None
@@ -495,6 +599,18 @@ def _close_record(rec: dict[str, Any], p: dict[str, Any], who: str, at: str) -> 
         notes.append(
             {"grade": "NOTE", "finding": f"the review asked for content from {ask}; it is already in {c['where']}"}
         )
+    for c in p.get("confirmed") or []:  # a rightly dropped claim's values, named for proof 10
+        findings.append(
+            {
+                "anchor": f"drop {c['key']}",
+                "klass": "drop confirmed by SMD",
+                "outcome": "applied",
+                "removed": c["values"],
+                "why": c["why"],
+                "by": dec["by"],
+                "source": dec["source"],
+            }
+        )
     rec["rounds"] = list(rec.get("rounds") or []) + [
         {
             "round": "smd",
@@ -519,7 +635,7 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     who = f"{dec['by']}, {dec['source']}"
     # A closure changes no text: with closures only, the document and the audit rows are untouched.
-    written = _write_corrections(rd, slug_dir, p, who, at) if p["corrections"] else []
+    written = _write_corrections(rd, slug_dir, p, who, at) if p["corrections"] or p.get("repeats") else []
     record = rd / "update" / UR.RECORD
     rec = json.loads(record.read_text(encoding="utf-8"))
     notes = _close_record(rec, p, who, at)
@@ -543,7 +659,7 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
 _SHAPE = (
     '{"corrections": [{"old": ..., "new": ..., "covers": ["N7.c2"] (optional)}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
     '"composed_in": {"added": "N89"} or {"delivered": "<date line>\\n<heading line>, verbatim, once in the delivered '
-    'chronology>"}, "why": ...}]}; either list may be empty, not both'
+    'chronology>"}, "why": ...}]}; either list may be empty, not both; optional "repeats": [{"entry", "paragraph", "why"}] and "confirmed_drops": [{"key", "why"}]'
 )
 
 
@@ -564,11 +680,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         d = None if a.offline else lane_mod.build()
         corrections, closures = load_decisions(a.corrections)
+        confirmed = load_confirmed(a.corrections)
+        repeats = load_repeats(a.corrections)
         p = plan(
             d,
             a.job_id,
             corrections=corrections,
             closures=closures,
+            confirmed=confirmed,
+            repeats=repeats,
             by=a.by,
             source=a.source,
             reason=a.reason,
@@ -580,6 +700,7 @@ def main(argv: list[str] | None = None) -> int:
     # Counts only: the corrected text and the closures' words stay in the job's files.
     summary = {"corrections": len(p["corrections"]), "closures": len(p["closures"])}
     summary |= {"sentences_attested": len(p["attested"]), "values_named": len(p["removed"])}
+    summary |= {"repeats_removed": len(p.get("repeats") or []), "drops_confirmed": len(p.get("confirmed") or [])}
     print(json.dumps({"dry_run": a.dry_run, **summary}, indent=1))
     if a.dry_run:
         return 0
