@@ -18,9 +18,13 @@ already in the job directory, the finder does nothing.
   Council form (`DISC-001` and "Page N of 8"), which is always form
   interrogatories. Byte copies in a second folder count once (the report
   lists the copies). A set our client propounded is not served on us and is
-  dropped. A file with no text whose name reads as discovery is only listed;
-  a file SMD wrote (named "DRAFT ...", or in an Operator delivery folder) is
-  never counted as one.
+  dropped. A form set our side propounded is dropped before any read too: a
+  file SMD wrote, one in a folder that holds a set our client propounded and
+  no set served on us, or one in a folder that names our client's side
+  ("Plaintiff Propounded") and not the other side or what came in
+  ("Received"). A file with no text whose name reads as discovery is only
+  listed; a file SMD wrote (named "DRAFT ...", or in an Operator delivery
+  folder) is never counted as one.
 - **Recognises response papers** by their title ("RESPONSES TO ..."). One of
   ours with a later listed date answers its served set (same kind, set number
   and asking party), and that set is dropped. The other side's responses to
@@ -39,8 +43,13 @@ already in the job directory, the finder does nothing.
   the count is the free pixel read's checked boxes, the set number is the file
   name's ("Set Two"), or 1 for the matter's only form set when no form response
   or draft is on file (the one draft's number when one is), and our client is
-  the answering party when the record names exactly one. Anything else stops
-  `served_ambiguous`.
+  the answering party when the record names exactly one. The asking party is
+  the one the text sets served with it name (a set that shares a served or
+  listed date with the form, or whose proof of service lists form
+  interrogatories), else the job's caption record, else the read's value
+  marked for SMD to confirm. Sets served with it that name different parties,
+  or one the caption record does not name, stop `served_ambiguous`, as does
+  anything else no source settles.
 - **Narrows to the request**: "responses to the special interrogatories"
   plans only those; otherwise every unanswered set. Only a sentence that asks
   for responses to be drafted narrows; a kind named in passing, or in a

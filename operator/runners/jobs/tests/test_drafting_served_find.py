@@ -190,7 +190,8 @@ def test_a_disc_001_page_types_the_file_form_interrogatories_though_its_body_nam
     sets_ = json.loads((jd / served.FILE).read_text())["sets"]
     assert sets_[0]["set_type"] == "form_interrogatories" and sets_[0]["responding_party"] == CLIENT
     row = next(r for r in json.loads((jd / served_find.REPORT).read_text())["candidates"] if r["id"] == "f1")
-    assert row["party_source"].startswith("read")  # no party lines as text and no caption record: said so
+    # No party lines as text and no caption record: the special interrogatories served with it name the asking party.
+    assert row["party_source"].startswith("the text sets served with it")
 
 
 def test_labelled_requests_with_blank_response_lines_slice_and_number(tmp_path):
@@ -490,8 +491,12 @@ def test_an_emailed_copy_of_a_served_form_folds_by_its_pixel_read_before_any_mod
 
 def test_a_form_set_our_client_propounded_is_dropped_never_served_on_us(tmp_path):
     """F2: the asking party is not in the form's text; the read names our client."""
-    docs = [{"id": "f1", "name": "Pltf Form Rogs.pdf", "pages": form(), "folder": "/Discovery/Plaintiff"},
-            {"id": "s1", "name": "s.pdf", "pages": srog(2)}]  # fmt: skip
+    # In the shared discovery folder, so nothing before the read shows the form is ours (one in our
+    # client's own folder is dropped before any read: test_drafting_served_find_drawn_form.py).
+    docs = [
+        {"id": "f1", "name": "Pltf Form Rogs.pdf", "pages": form()},
+        {"id": "s1", "name": "s.pdf", "pages": srog(2)},
+    ]
     data, jd = matter(tmp_path, docs)
     ours_form = {**THREE["DISC-001"], "propounding_party": "Gamma Example", "responding_party": "Delta Example Corp"}
     run(data, jd, Fake({"DISC-001": ours_form, "SPECIAL": values("special_interrogatories", 2)}))

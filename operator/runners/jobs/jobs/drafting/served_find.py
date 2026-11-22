@@ -24,7 +24,8 @@ What code decides, and what the one model call per set returns:
 2. A candidate whose title reads RESPONSE(S) TO / ANSWERS TO is a response
    paper: ours (our client responding) answers a served set; the other side's
    is its answer to OUR discovery and is ignored. A set our client propounded
-   is not served on us and is dropped before any call.
+   is not served on us and is dropped before any call, and so is a form set
+   code shows is our side's (``served_formset.ours_form``).
 3. One capped call per served candidate (``FIND_MAX`` sets, ``FIND_CAP_USD``)
    returns ONLY values (``VALUE_KEYS``); code checks each against the page:
    the type is code's own title match, each party is on the page, the set
@@ -33,7 +34,8 @@ What code decides, and what the one model call per set returns:
    "<label> NO. n" or a bare unbroken "n." run under the section heading) with
    N the call's count. A form set carries no request text: its ``source`` is
    the file, its checked numbers the form reader's, and the values its text
-   layer cannot hold (drawn, not typed) are ``served_formset.py``'s.
+   layer cannot hold (drawn, not typed) are ``served_formset.py``'s; text sets
+   are read first, so a form's asking party can come from those served with it.
 4. A served set answered by a later response paper of ours (same type, number
    and asking party) that shows it was SERVED (``served_papers.was_served``) is
    dropped; a draft never answers, and a draft of a set still owed (the
@@ -61,6 +63,7 @@ from . import served as served_mod
 from .outcome import DraftingFailed
 from .served import OTHER, SET_TYPES, ServedSet, found_drafted_by
 from . import served_formset as formset, served_papers as papers
+from .served_docs import EXCERPT_CHARS as EXCERPT_CHARS, Doc, docs as docs, load as _load, other_side as other_side
 from .served_slice import RESPONDING as _RESPONDING, TITLE as _TITLE, TITLES as _TITLES, slice_requests as _slice
 
 REPORT = "found-report.json"
@@ -75,8 +78,6 @@ FIND_MAX = 12
 #: a dozen reads of 12,000 characters cost well under this; a stage that would
 #: pass it is reading something it should not, so SMD looks (``served_many``).
 FIND_CAP_USD = 0.50
-#: What one call reads: the first three pages and the last page, at most this.
-EXCERPT_CHARS = 12_000
 MAX_TOKENS = 600
 VALUE_KEYS = ("set_type", "set_number", "propounding_party", "responding_party", "request_count", "date_served")
 SYSTEM = (
@@ -87,7 +88,6 @@ SYSTEM = (
     'are checked), "date_served" (YYYY-MM-DD from its proof of service, or null). No other text.'
 )
 
-_PAGE = re.compile(r"(?m)^\[p\.(\d+)\]$")
 _ASKING = re.compile(r"(?im)^[ \t]*(?:PROPOUNDING|REQUESTING|DEMANDING)[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
 #: A SET line: "SET ONE", "SET NO.: 2", or "SET NO.:" with its value on the next
 #: non-blank line (measured 2026-11-20: every real text set prints it below).
@@ -119,34 +119,6 @@ class Stop(DraftingFailed):
 
 
 @dataclass
-class Doc:
-    id: str
-    name: str
-    folder: str
-    pages: dict[int, str]
-    listed: str | None
-    sha: str | None
-    copies: list[str] = field(default_factory=list)
-    ext: str = ""
-    kind: str = ""
-    path: str = ""
-
-    @property
-    def first(self) -> str:
-        return "\n".join(self.pages.get(n, "") for n in (1, 2))
-
-    @property
-    def text(self) -> str:
-        return "\n".join(self.pages[n] for n in sorted(self.pages))
-
-    def excerpt(self) -> str:
-        nums = sorted(self.pages)
-        pick = [*nums[:3], *([nums[-1]] if len(nums) > 3 else [])]
-        out = "\n".join(f"[p.{n}]\n{self.pages[n]}" for n in pick)
-        return out if len(out) <= EXCERPT_CHARS else out[: EXCERPT_CHARS - 3000] + "\n...\n" + out[-3000:]
-
-
-@dataclass
 class Found:
     """What one finder pass decided: the report rows and the sets it keeps."""
 
@@ -157,60 +129,6 @@ class Found:
     def note(self, doc: Doc | None, kind: str, kept: bool, why: str, **more: Any) -> None:
         head = {"id": doc.id, "name": doc.name, "folder": doc.folder, "copies": doc.copies} if doc else {}
         self.rows.append({**head, "kind": kind, "kept": kept, "why": why, **more})
-
-
-# ---- reading the job's disk ----------------------------------------------------------------
-
-
-def _pages(text: str) -> dict[int, str]:
-    marks = list(_PAGE.finditer(text))
-    if not marks:
-        return {1: text} if text.strip() else {}
-    return {int(m.group(1)): text[m.end() : (marks[i + 1].start() if i + 1 < len(marks) else len(text))].strip()
-            for i, m in enumerate(marks)}  # fmt: skip
-
-
-def _load(path: Path, default: Any) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else default
-    except ValueError:
-        return default
-
-
-def docs(data: Path) -> list[Doc]:
-    """Every extracted document but email bodies, byte copies folded into one."""
-    listing = {str(r.get("id")): r for r in _load(Path(data) / "manifest.json", []) if isinstance(r, dict)}
-    corpus = [r for r in _load(Path(data) / "corpus.json", []) if isinstance(r, dict)]
-    shas = {str(r.get("id")): r.get("sha256") for r in corpus}
-    paths = {str(r.get("id")): str(r.get("path") or "") for r in corpus}
-    p = Path(data) / "extracted.jsonl"
-    rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()] if p.is_file() else []
-    out: list[Doc] = []
-    by_sha: dict[str, Doc] = {}
-    for r in rows:
-        if r.get("kind") == "email_body":
-            continue
-        rid, tp = str(r.get("id")), r.get("text_path")
-        text = Path(tp).read_text(encoding="utf-8", errors="replace") if tp and Path(tp).is_file() else ""
-        lst = listing.get(rid) or {}
-        d = Doc(rid, str(r.get("name") or ""), str(r.get("folder") or ""), _pages(text),
-                str(lst.get("created") or lst.get("modified") or "")[:10] or None, shas.get(rid),
-                ext=str(r.get("ext") or Path(str(r.get("name") or "")).suffix).lower(), kind=str(r.get("kind") or ""),
-                path=paths.get(rid, ""))  # fmt: skip
-        if d.sha and d.sha in by_sha:
-            by_sha[d.sha].copies.append(f"{d.folder}/{d.name}")
-            continue
-        by_sha.update({d.sha: d} if d.sha else {})
-        out.append(d)
-    return out
-
-
-def other_side(data: Path) -> list[str]:
-    """The other side's parties in the job's caption record, when one is on disk
-    (a form set's asking party when its form fields carry no text)."""
-    cap = _load(Path(data) / "caption.json", {})
-    rows = cap.get("parties") if isinstance(cap, dict) else None
-    return [str(r["name"]) for r in rows or [] if isinstance(r, dict) and r.get("side") != "client" and r.get("name")]
 
 
 # ---- code's own reading of a page ------------------------------------------------------------
@@ -352,27 +270,29 @@ def _check_parties(d: Doc, v: dict[str, Any], clients: list[str]) -> str:
     return ""
 
 
-def _form_parties(d: Doc, v: dict[str, Any], clients: list[str], other_side: list[str]) -> tuple[str, str, str]:
-    """A form set's (asking, answering, where each came from): the form's own
-    text when the value is on it, else the matter's record. The read's
-    responding party, when it names one, must be our client (else
-    ``served_ambiguous``: never a default); one it leaves empty (the form's
-    fill-ins are drawn, not text) is the one client the record names. A set our
-    client propounded is dropped before this (``read_set``)."""
+def _form_parties(
+    d: Doc, v: dict[str, Any], clients: list[str], other_side: list[str], peers: list[formset.Peer]
+) -> tuple[str, str, str]:
+    """A form set's (asking, answering, where the values came from): the form's
+    own text when the value is on it. The read's responding party, when it
+    names one, must be our client (else ``served_ambiguous``: never a default);
+    one it leaves empty (the form's fill-ins are drawn, not text) is the one
+    client the record names. An asking party not on the text comes from the
+    text sets served with the form, else the record (``served_formset.asking``).
+    A set our client propounded is dropped before this (``read_set``)."""
     named = v["responding_party"].strip()
     if (named and not ours(named, clients)) or not (named or formset.answering(clients)):
         raise Stop("served_ambiguous", f"{d.name!r}: the read cannot establish our client as the responding party "
                    f"({named[:80]!r})")  # fmt: skip
     asking = v["propounding_party"] if on_page(v["propounding_party"], d.text) else ""
-    answering = named if on_page(named, d.text) else ""
-    src = "page" if asking and answering else "record"
-    asking = asking or (other_side[0] if other_side else v["propounding_party"].strip())
-    answering = answering or named or formset.answering(clients)
-    if not asking:
-        raise Stop("served_ambiguous", f"{d.name!r}: the asking party is not on the form's text, in the read or in "
-                   "the record")  # fmt: skip
-    if not other_side and not on_page(v["propounding_party"], d.text):
-        src = "read (not on the form's text nor in the record; SMD confirms)"
+    answering = (named if on_page(named, d.text) else "") or named or formset.answering(clients)
+    if asking:
+        return asking, answering, "page" if on_page(named, d.text) else "record"
+    try:
+        mates = formset.filing(peers, [v["date_served"], d.listed])
+        asking, src = formset.asking(v["propounding_party"].strip(), mates, other_side)
+    except formset.Unresolved as exc:
+        raise Stop("served_ambiguous", f"{d.name!r}: {exc}") from None
     return asking, answering, src
 
 
@@ -398,7 +318,13 @@ class Reader:
 
 
 def read_set(
-    d: Doc, kind: str, reader: Reader, clients: list[str], other_side: list[str], ctx: formset.Context | None = None
+    d: Doc,
+    kind: str,
+    reader: Reader,
+    clients: list[str],
+    other_side: list[str],
+    ctx: formset.Context | None = None,
+    peers: list[formset.Peer] | None = None,
 ) -> tuple[ServedSet | None, dict]:
     """One served candidate, read and checked: the set (None: our client
     propounded it, so it is not served on us), and its report extras."""
@@ -410,7 +336,7 @@ def read_set(
     if kind == "form_interrogatories":
         if ours(v["propounding_party"], clients):
             return None, {"values": v}
-        return _form_set(d, v, clients, other_side, ctx or formset.Context())
+        return _form_set(d, v, clients, other_side, ctx or formset.Context(), peers or [])
     why = _check_parties(d, v, clients)
     if why:
         raise Stop("served_ambiguous", f"{d.name!r}: {why}")
@@ -424,8 +350,8 @@ def read_set(
     return s, {"values": v, "numbered_as": style}
 
 
-def _form_set(d: Doc, v: dict[str, Any], clients: list[str], other: list[str], ctx: formset.Context) -> tuple:
-    asking, answering, src = _form_parties(d, v, clients, other)
+def _form_set(d: Doc, v: dict, clients: list[str], other: list[str], ctx: formset.Context, peers: list) -> tuple:
+    asking, answering, src = _form_parties(d, v, clients, other, peers)
     try:
         n, count, extra = formset.resolve(d.name, d.path, v, set_numbers(d.text), ctx)
     except formset.Unresolved as exc:
@@ -492,6 +418,7 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
 def sort_docs(f: Found, all_docs: list[Doc], clients: list[str]) -> Sorted:
     """Every document by code's own reading; a set our client propounded is dropped here."""
     out = Sorted()
+    ours_folders: set[str] = set()
     for d in all_docs:
         what, kind = classify(d)
         if what == "response" and kind:
@@ -500,14 +427,34 @@ def sort_docs(f: Found, all_docs: list[Doc], clients: list[str]) -> Sorted:
             asking = _value(_ASKING, d.first)
             if asking and ours(asking, clients):
                 f.note(d, "served", False, "propounded by our client: not served on us", set_type=kind)
+                ours_folders.add(d.folder)
             else:
                 out.served.append((d, kind))
         elif what == "other_set":
             out.others.append(d)
         elif what == "scan":
             out.scans.append(d)
-    out.served = fold_copies(f, out.served)
+    out.served = fold_copies(f, _drop_our_forms(f, out.served, all_docs, clients, ours_folders))
     return out
+
+
+def _drop_our_forms(
+    f: Found, served: list[tuple[Doc, str]], all_docs: list[Doc], clients: list[str], ours_folders: set[str]
+) -> list[tuple[Doc, str]]:
+    """A form set OUR side propounded is not served on us (``served_formset.ours_form``):
+    out before forms are counted, folded or numbered."""
+    lines = [x for d in all_docs for x in (_value(_RESPONDING, d.first), _value(_ASKING, d.first)) if ours(x, clients)]
+    texts = {d.folder for d, k in served if k != "form_interrogatories"}
+    keep = []
+    for d, kind in served:
+        why = kind == "form_interrogatories" and formset.ours_form(
+            d.name, d.folder, our_role=formset.role(lines), ours_folders=ours_folders, served_folders=texts
+        )
+        if why:
+            f.note(d, "served", False, f"our side's form set ({why}): not served on us", set_type=kind)
+        else:
+            keep.append((d, kind))
+    return keep
 
 
 def _set_key(d: Doc, kind: str) -> tuple[str, int, str, str]:
@@ -610,20 +557,31 @@ def _read_all(
 ) -> None:
     seen: dict[tuple[str, int, str], str] = {}
     ctx = formset.Context.of([k for _d, k in got.served], [r[1] for r in got.responses], form_drafts)
-    for d, kind in got.served:
-        s, extra = read_set(d, kind, reader, clients, other_side, ctx)
+    peers: list[formset.Peer] = []
+    kept: list[tuple[int, ServedSet, str | None]] = []
+    # Text sets first: a form's asking party may come from the sets served with it.
+    order = sorted(enumerate(got.served), key=lambda x: x[1][1] == "form_interrogatories")
+    for i, (d, kind) in order:
+        s, extra = read_set(d, kind, reader, clients, other_side, ctx, peers)
         if s is None:
             f.note(d, "served", False, "propounded by our client (the read): not served on us", set_type=kind)
             continue
+        when = extra["values"]["date_served"]
+        if kind != "form_interrogatories":
+            peers.append(
+                formset.peer(s.propounding_party, s.label.removeprefix("Responses to "), [when, d.listed], d.text)
+            )
         key = (s.set_type, s.set_number, norm(s.propounding_party))
         if key in seen:
             raise Stop(
                 "served_ambiguous", f"{seen[key]!r} and {d.name!r} are both {s.label} from {s.propounding_party}"
             )
         seen[key] = d.name
-        f.keep.append(s)
-        f.dates.append(extra["values"]["date_served"] or d.listed)
+        kept.append((i, s, when or d.listed))
         f.note(d, "served", True, "served on our client", set_type=kind, label=s.label, **extra)
+    for _i, s, when in sorted(kept, key=lambda x: x[0]):  # the matter file's order, as before
+        f.keep.append(s)
+        f.dates.append(when)
 
 
 def _answered(f: Found, got: Sorted) -> None:
