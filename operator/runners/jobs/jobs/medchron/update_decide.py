@@ -22,7 +22,12 @@ This is SMD's act, as root on the seat, with the jobs venv's python::
 The corrections file is ``{"corrections": [{"old": "...", "new": "..."}]}``:
 each ``old`` is text of an ADDED entry exactly as the held document has it
 (once in the document, never in the delivered chronology), each ``new`` keeps
-its citations, its paragraphs and the entry's date line. Every open finding
+every citation and paragraph of ``old`` and the entry's date line; it may ADD
+a paragraph carrying its own citation to an exhibit the entry already cites (a
+sentence read from a page of the same record). ``"covers": ["N139.c31"]`` on a
+correction names the open findings it settles by anchor, for a record whose
+anchors no longer number the entries (the review folds duplicates after it
+anchors its findings). Every open finding
 must sit on an entry a correction touches, or be closed (below), or nothing
 is written. What is written, in one act:
 
@@ -127,7 +132,10 @@ def _corrections(rows: object) -> list[dict[str, str]]:
             raise Refused(f"correction {i + 1}: old and new must both be non-empty text")
         if old == new:
             raise Refused(f"correction {i + 1}: new is the same as old")
-        out.append({"old": old, "new": new})
+        covers = r.get("covers") or []
+        if not isinstance(covers, list) or not all(isinstance(a, str) and a.strip() for a in covers):
+            raise Refused(f"correction {i + 1}: covers must be a list of open findings' anchors")
+        out.append({"old": old, "new": new, "covers": [a.strip() for a in covers]})
     return out
 
 
@@ -184,9 +192,42 @@ def _anchor_index(anchor: str) -> int | None:
     return int(head[1:]) - 1 if head.startswith("N") and head[1:].isdigit() else None
 
 
-def _edit(md: str, base: str, entries: list[str], corrections: list[dict[str, str]]) -> tuple[str, set[int], list]:
-    """The corrected document, the entries touched, and the values each edit removed."""
+def _kept_and_added(old: str, new: str, entry: str, n: int, npages: Any) -> None:
+    """`new` is a rewrite of `old` followed by any paragraphs SMD adds.
+
+    The rewrite (the first as many paragraphs as `old` has) keeps every
+    citation of `old`, in order, and adds none: a correction never moves an
+    old sentence onto another page. Each added paragraph, after it, carries
+    its own citation to an exhibit the entry already cites and a page that
+    exhibit has (2026-11-22: a review found a physical exam left out, on the
+    page after the one the entry cited). A new source, an uncited added
+    paragraph or a removed paragraph is refused."""
     from .audit import claims as CL
+
+    was, now = old.split("\n\n"), new.split("\n\n")
+    if len(now) < len(was):
+        raise Refused(f"correction {n}: it removes a paragraph; a correction rewrites words or adds paragraphs")
+    rewrite, added = "\n\n".join(now[: len(was)]), now[len(was) :]
+    if CL.CITE.findall(rewrite) != CL.CITE.findall(old):
+        raise Refused(f"correction {n}: it changes a citation; a correction keeps every citation as it was")
+    cited = {m.group(1) for m in CL.CITE.finditer(entry)}
+    for para in added:
+        cites = list(CL.CITE.finditer(para))
+        if not cites:
+            raise Refused(f"correction {n}: it adds a paragraph with no citation; an added paragraph needs its own")
+        for m in cites:
+            if m.group(1) not in cited:
+                raise Refused(f"correction {n}: it adds a citation to an exhibit the entry does not cite")
+            last = npages(int(m.group(1)))
+            pages = CL.parse_pages(m.group(2) or "") or [1]
+            if last and any(not 1 <= pg <= last for pg in pages):
+                raise Refused(f"correction {n}: it cites a page Exhibit {m.group(1)} does not have (it has {last})")
+
+
+def _edit(
+    md: str, base: str, entries: list[str], corrections: list[dict[str, str]], npages: Any = lambda _ex: 0
+) -> tuple[str, set[int], list]:
+    """The corrected document, the entries touched, and the values each edit removed."""
     from .update import values as V
 
     touched: set[int] = set()
@@ -198,10 +239,7 @@ def _edit(md: str, base: str, entries: list[str], corrections: list[dict[str, st
         if old in base:
             raise Refused(f"correction {n}: its old text is in the delivered chronology, which an update never edits")
         i = _entry_index(entries, old, n)
-        if CL.CITE.findall(old) != CL.CITE.findall(new):
-            raise Refused(f"correction {n}: it changes a citation; a correction keeps every citation as it was")
-        if old.count("\n\n") != new.count("\n\n"):
-            raise Refused(f"correction {n}: it adds or removes a paragraph; a correction rewrites words only")
+        _kept_and_added(old, new, entries[i], n, npages)
         if entries[i].split("\n", 1)[0] != entries[i].replace(old, new).split("\n", 1)[0]:
             raise Refused(f"correction {n}: it changes the entry's date line")
         md = md.replace(old, new)
@@ -239,8 +277,28 @@ def _where(c: dict[str, Any], entries: list[str], base: str, n: int) -> str:
     return "the delivered entry for " + " ".join(text.split())
 
 
+def _covered(rec: dict[str, Any], covers: list[str]) -> set[int]:
+    """The open findings a correction names by anchor (``covers``): a finding
+    whose anchor no longer numbers the entry it is on. The review folds
+    duplicate entries after it anchors its findings, so a held record can
+    name N139 for what the document now holds as N138 (2026-11-22). Each
+    anchor named must be exactly one open finding's."""
+    out: set[int] = set()
+    for a in covers:
+        hits = [i for i, f in enumerate(rec["open"]) if isinstance(f, dict) and str(f.get("anchor") or "") == a]
+        if len(hits) != 1:
+            raise Refused(f"covers {a}: it names {len(hits)} open findings, not one")
+        out.add(hits[0])
+    return out
+
+
 def _close(
-    rec: dict[str, Any], closures: list[dict[str, Any]], entries: list[str], base: str, touched: set[int]
+    rec: dict[str, Any],
+    closures: list[dict[str, Any]],
+    entries: list[str],
+    base: str,
+    touched: set[int],
+    covers: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Each closure with its one open finding and where its content is.
     Refused when a closure matches none or several, two close one finding,
@@ -258,10 +316,15 @@ def _close(
             raise Refused(f"closures {taken[hits[0]]} and {n} close the same open finding")
         taken[hits[0]] = n
         out.append({**c, "finding": hits[0], "where": _where(c, entries, base, n)})
+    named = _covered(rec, covers or [])
+
+    def by_number(f: Any) -> bool:  # the anchor's number names a touched entry; never once covers is used
+        return not covers and isinstance(f, dict) and _anchor_index(str(f.get("anchor") or "")) in touched
+
     uncovered = [
         f"entry {f.get('anchor') if isinstance(f, dict) else '?'}"
         for i, f in enumerate(rec["open"])
-        if i not in taken and (not isinstance(f, dict) or _anchor_index(str(f.get("anchor") or "")) not in touched)
+        if i not in taken and i not in named and not by_number(f)
     ]
     if uncovered:
         raise Refused(
@@ -326,10 +389,14 @@ def plan(
     if rec.get("doc_sha_out") != _sha(md):
         raise Refused("the document changed since the review held on it; correct the document the review read")
     entries, base = B.entries_of(md)[1], base_p.read_text(encoding="utf-8")
-    new_md, touched, removed = _edit(md, base, list(entries), corrections)
+    from ..stages.update_review_io import page_counts
+
+    new_md, touched, removed = _edit(md, base, list(entries), corrections, page_counts(slug_dir / "out" / unit))
     if len(B.entries_of(new_md)[1]) != len(entries):
         raise Refused("the corrections change how many entries the document holds")
-    closed = _close(rec, list(closures or []), entries, base, touched)
+    closed = _close(
+        rec, list(closures or []), entries, base, touched, [a for c in corrections for a in c.get("covers", [])]
+    )
     keep = set(exhibit_paths(slug_dir / "out" / unit))
     old_keys = {c["key"] for c in CL.extract_claims(CL.body_of(md), keep)}
     attested = [c for c in CL.extract_claims(CL.body_of(new_md), keep) if c["key"] not in old_keys]
@@ -474,7 +541,7 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
 
 
 _SHAPE = (
-    '{"corrections": [{"old": ..., "new": ...}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
+    '{"corrections": [{"old": ..., "new": ..., "covers": ["N7.c2"] (optional)}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
     '"composed_in": {"added": "N89"} or {"delivered": "<date line>\\n<heading line>, verbatim, once in the delivered '
     'chronology>"}, "why": ...}]}; either list may be empty, not both'
 )

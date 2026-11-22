@@ -133,7 +133,7 @@ def test_a_dry_run_plan_writes_nothing(tmp_path, job_dir, data_root) -> None:
         ({}, {"reason": "update_held: the update into the delivered chronology cannot go on as asked"}, "not held"),
         ({"corrections": [{"old": "not in the document", "new": "x"}]}, {}, "occurs 0 times"),
         ({"corrections": [{"old": WRONG, "new": RIGHT.replace("p. 4", "p. 5")}]}, {}, "changes a citation"),
-        ({"corrections": [{"old": WRONG, "new": RIGHT + "\n\nA new paragraph."}]}, {}, "adds or removes a paragraph"),
+        ({"corrections": [{"old": WRONG, "new": RIGHT + "\n\nA new paragraph."}]}, {}, "a paragraph"),
         ({"corrections": [{"old": "08/27/2026", "new": "08/28/2026"}]}, {}, "date line"),
         ({"corrections": [{"old": OTHER, "new": OTHER.replace("forty", "thirty")}]}, {}, "no correction touches"),
         ({}, {"open_": []}, "not held with open findings"),
