@@ -92,7 +92,10 @@ def _round_one_tokens(slug: Path, cfg: config_mod.FirmConfig) -> int:
     base = FN.delivered_of((ud / "base.md").read_text())
     parts = RP.plan(ents, {3}, lambda _x: PAGES, {})
     assert len(parts) == PAGES // RP.WINDOW_PAGES + 1, "every window and the duplicate check"
-    image = lambda _x, _p: {"type": "image"}  # noqa: E731
+
+    def image(_x: object, _p: object) -> dict[str, str]:
+        return {"type": "image"}
+
     return sum(RP.request_tokens(RP.review_content(p, "CLIENT", image, ents, base, {}, None)) for p in parts)
 
 
