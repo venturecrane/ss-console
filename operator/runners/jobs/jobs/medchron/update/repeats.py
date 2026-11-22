@@ -18,61 +18,36 @@ twice. Between NEW entries, one with the date and provider of another whose
 values and terms it does not exceed is dropped (two copies of one record).
 
 A restatement is also known by its PAGES (2026-11-22). An update reads every
-page a rule only suspects of copying a delivered page (``update/select``,
-``SUSPECTED``), so a visit the firm already reads comes back from a second
-copy of its record, often under a provider spelled another way ("Dr. A.
-Rivera" for "Rivera, Ana MD"). An added entry EVERY page it cites is a
-suspected copy of a page ONE delivered entry of its date cites
-(``suspected_copies``, read off the page record) is that entry's visit, and
-goes through the same value-and-term test: dropped when it adds nothing,
-cut to its "Additional findings" when it does. A genuinely new visit cites
-a page no delivered entry cites, and is kept as before.
+page a rule only suspects of copying a page already covered (``update/select``,
+``SUSPECTED``), so a visit comes back from a second copy of its record, often
+under a provider spelled another way ("Dr. A. Rivera" for "Rivera, Ana MD").
+An added entry whose cited pages are suspected copies of pages inside what
+ONE entry of its date cites (``update/suspects.copies``) is that entry's
+visit, and goes through the same value-and-term test: dropped when it adds
+nothing, cut to its "Additional findings" when it does. Against a delivered
+entry at collect (``keep_decision``); against another ADDED entry when the
+pages it copies are another new document's (``dedupe_copies``: twins of one
+scan used to be settled before compose). A genuinely new visit cites a page
+read on its own account, and is kept as before.
 """
 
 from __future__ import annotations
 
 import difflib
 import re
-from typing import Any, Callable
+from typing import Callable
 
-from . import body as B
-from .. import pages_record as PR
+from . import body as B, suspects as SUS
 from .values import numbers, terms, words
 
 ADDITIONAL = "Additional findings"
 SAME_VISIT = "dropped: same visit as a delivered entry, no value or finding it lacks"
 REPEAT_NEW = "dropped: repeats another new entry of that date and provider"
+COPY_NEW = "dropped or trimmed: its pages are copies of another new entry's pages"
 NEAR = 0.95  # how alike two texts read to count as one restated
 SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
 Canon = Callable[[str], str]
-#: {(new exhibit, page): (delivered exhibit, page)}: the delivered page each
-#: page read as a suspected copy may copy (``suspected_copies``).
-Suspects = dict[tuple[int, int], tuple[int, int]]
-
-
-def suspected_copies(rows: list[dict[str, Any]], exhibit_of: dict[str, int]) -> Suspects:
-    """``Suspects`` from the update's page record (``runs/<unit>/pages.jsonl``):
-    each READ row a rule suspected (``evidence.suspected``) whose suspected
-    page is a delivered exhibit's. `exhibit_of`: {document id: its new
-    exhibit number as composed}."""
-    out: Suspects = {}
-    for r in rows:
-        ev = r.get("evidence")
-        cov = ev.get("cover") if isinstance(ev, dict) else None
-        if not isinstance(ev, dict) or not ev.get(PR.SUSPECTED) or not isinstance(cov, dict):
-            continue
-        ex, p, n, q = exhibit_of.get(str(r.get("doc"))), r.get("page"), cov.get("exhibit"), cov.get("page")
-        if ex is not None and isinstance(p, int) and isinstance(n, int) and isinstance(q, int):
-            out[(ex, p)] = (n, q)
-    return out
-
-
-def _copies(e: str, b: str, suspects: Suspects) -> bool:
-    """Every page `e` cites is a suspected copy of a page `b` cites."""
-    from .encounter import cited_pages
-
-    mine = cited_pages(e)
-    return bool(mine) and all(suspects.get(x) in set(cited_pages(b)) for x in mine)
+Suspects = SUS.Suspects
 
 
 def _same(e: str, others: list[str], canon: Canon, suspects: Suspects | None = None) -> list[str]:
@@ -84,7 +59,7 @@ def _same(e: str, others: list[str], canon: Canon, suspects: Suspects | None = N
         and (
             canon(B.provider_of(b)) == canon(B.provider_of(e))
             or B.score(e, b) >= 0.5
-            or (bool(suspects) and _copies(e, b, suspects or {}))
+            or (suspects is not None and bool(suspects) and SUS.copies(e, b, suspects))
         )
     ]
 
@@ -167,6 +142,27 @@ def keep_decision(
         return SAME_VISIT, None
     row = additional(e, same_day)
     return ("keep: additional findings", row) if row else ("keep", e)
+
+
+def dedupe_copies(kept: list[str], canon: Canon, suspects: Suspects | None) -> tuple[list[str], int]:
+    """Added entries less what one restates of ANOTHER added entry of its date
+    whose pages its own pages copy (``suspects.copies``): dropped when it adds
+    no value or finding, cut to its "Additional findings" when it does. The
+    entry citing the pages read on their own account is the one kept whole."""
+    if not suspects:
+        return kept, 0
+    out: list[str | None] = list(kept)
+    n = 0
+    for i, e in enumerate(kept):
+        other = next(
+            (b for j, b in enumerate(kept) if j != i and B.iso(b) == B.iso(e) and SUS.copies(e, b, suspects)), None
+        )
+        if other is None or SUS.copies(other, e, suspects):
+            continue
+        verdict, row = keep_decision(e, [other], canon, suspects)
+        if verdict != "keep":
+            out[i], n = row, n + 1
+    return [e for e in out if e is not None], n
 
 
 _DRAW_TIME = re.compile(r"\b(\d{1,2}:\d{2})\b")

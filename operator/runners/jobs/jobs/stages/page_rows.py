@@ -62,6 +62,11 @@ NEAR_PICTURE, UNREAD_KEEPER, TEXT_OVERLAP, RUN_OF_PAGES = (
 )
 
 
+def _rule(h: PG.Page) -> str:
+    """The rule a picture match that sets nothing aside suspects a copy by."""
+    return UNREAD_KEEPER if h.exact else NEAR_PICTURE
+
+
 def suspicion(c: S.Cover) -> tuple[str, str]:
     """(the rule that suspected the page, its evidence kind)."""
     if c.kind == S.BY_PICTURE:
@@ -91,9 +96,10 @@ def candidate_rows(
     read: a page is set aside here only when it is CERTAINLY never sent to a
     model, pixel-equal to a page that was read (the vision pass never
     transcribes it) or a page of an exact re-filed copy. Any other picture
-    match is read as a suspected copy, so it counts as to be read (its match
-    named under ``evidence.near``), as does every page of a file that could
-    not be drawn."""
+    match is read as a suspected copy: its row is ``read`` with its match
+    named under ``evidence.near`` and ``evidence.suspected``, so the page
+    question does not count it (it is never charged). Every page of a file
+    that could not be drawn counts as to be read."""
     out = []
     for rid, n, inked in new:
         found = ident.pages.get(rid) or {}
@@ -132,7 +138,7 @@ def candidate_rows(
                     )  # fmt: skip
                 )
             else:  # no match, or one that only suspects a copy: to be read
-                ev = {"near": PR.picture_cover(h)} if h is not None else {}
+                ev = {"near": PR.picture_cover(h), PR.SUSPECTED: _rule(h)} if h is not None else {}
                 out.append(PR.row(rid, sha.get(rid, ""), p, PR.READ, "candidate", PR.NONE, BY_PAGES, inked=ink, **ev))
     for rid, n in (unrendered or {}).items():
         for p in range(1, max(1, n) + 1):

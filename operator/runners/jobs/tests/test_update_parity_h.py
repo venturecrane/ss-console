@@ -80,6 +80,13 @@ def _seed(tmp: Path, delivered: dict[int, list[bytes]], docs: dict[str, list[byt
         (tmp / "delivered" / name).write_bytes(_scan_pdf(imgs))
         exhibits.append({"exhibit": n, "name": name, "sha256": hashlib.sha256(_scan_pdf(imgs)).hexdigest()})
     (ud / "update_plan.json").write_text(json.dumps({"exhibits": exhibits, "top_exhibit": max(delivered or {0: 0})}))
+    # The delivered chronology cites every delivered page (``update/keepers``: an uncited page is no keeper).
+    cites = " ".join(f"(Exhibit {n} - p. 1-{len(imgs)})" for n, imgs in delivered.items())
+    rows_ = "".join(f"| {n} | Example Family Clinic (Medical Records) |\n" for n in delivered)
+    (ud / "base.md").write_text(
+        f"## Medical Chronology\n\n01/02/2026\nExample Family Clinic | Visit\n\nVisit\nSeen. {cites}\n\n"
+        f"## Exhibit List\n\n| Exhibit | Description |\n| --- | --- |\n{rows_}"
+    )
     rows = []
     for rid, imgs in docs.items():
         pdf = tmp / "raw" / f"{rid}.pdf"

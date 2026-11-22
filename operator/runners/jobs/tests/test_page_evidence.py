@@ -19,7 +19,7 @@ import yaml
 
 from jobs.medchron import config as config_mod, job as job_mod, pages_record as PR
 from jobs.medchron.gates import foreign_identity as FI
-from jobs.medchron.update import billing_page_dates as BPD, pageid as PI, pageid_io as PG, select as S
+from jobs.medchron.update import billing_page_dates as BPD, medlegal as ML, pageid as PI, pageid_io as PG, select as S
 from jobs.stages import page_rows
 from jobs.stages.base import StageRun
 from jobs_testkit import FakeSeat, make_pdf
@@ -77,9 +77,12 @@ COVER_CASES = {
 
 @pytest.mark.parametrize("case", sorted(COVER_CASES))
 def test_a_picture_copy_keeps_mains_decision_whatever_its_cover_became(case, job_dir, firm_config_path, data_root):
-    """The five cases the review named: the copy page (skipped by vision for its
-    exact picture match) stays EXCLUDED, as on main, and nothing is unread, so
-    the update cannot hold on it."""
+    """The five cases the review named. The copy page was skipped by vision for
+    its exact picture match. It stays EXCLUDED as on main unless its keeper is
+    never read (bug review 2026-11-22, F2): a copy of an expert's report page
+    is excluded as that report is; a copy of a withheld file's page had no
+    keeper, and with no text of its own it is unread, so the update holds on
+    it rather than leave it out silently."""
     from jobs.stages import update_select as US
 
     job = job_mod.load(job_dir)
@@ -100,9 +103,11 @@ def test_a_picture_copy_keeps_mains_decision_whatever_its_cover_became(case, job
         )
         rows.append({"id": rid, "name": label, "ext": ".pdf", "path": str(path)})
     ident = PG.Loaded(pages={"small": {1: PG.Page(S.OVERLAP, "big", 1, True)}})
-    got = US._classify(sr, rows, S.Delivered(), ident, {})
-    assert got["small"].decisions[1] == (S.EXCLUDED, S.OVERLAP)
-    assert S.row(9, "", got["small"].decisions, got["small"].pages)["unread"] == []
+    left_out = {"big"} if case == "withheld_first_time" else set()
+    got = US._classify(sr, rows, S.Delivered(), ident, {}, left_out)
+    want = {"expert_report": (S.EXCLUDED, ML.REASON), "withheld_first_time": (S.UNREAD,)}
+    assert got["small"].decisions[1][: len(want.get(case, ()) or (0, 0))] == want.get(case, (S.EXCLUDED, S.OVERLAP))
+    assert S.row(9, "", got["small"].decisions, got["small"].pages)["unread"] == ([1] if left_out else [])
 
 
 def test_a_text_layer_copy_of_a_billing_page_is_never_read() -> None:

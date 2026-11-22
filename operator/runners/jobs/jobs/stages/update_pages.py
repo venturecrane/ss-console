@@ -9,9 +9,13 @@ document, and which new documents are re-filed copies or extracts.
 Writes ``update/page_identity.json`` for ``update_select`` and
 ``vision_skip.json`` for the vision pass: a page pixel-equal to one already
 READ, and every page of a re-filed copy, is never transcribed; every other
-page is (a near match, or a pixel-equal one whose page a past update set
-aside unread, ``update/keepers``, is read in ``update_select`` as a suspected
-copy). A re-filed scan was once transcribed, composed and filed as five new
+page is (a near match, or a pixel-equal one whose page is no keeper, is read
+in ``update_select`` as a suspected copy). No keeper: a delivered page the
+delivered chronology never cites (``update/keepers``), and every page of a
+new document that will not be read, an expert report or a file whose text
+names another person, as far as its text before the vision pass tells
+(``_unread_docs``; ``update_select`` reads any page whose keeper it later
+finds unread, ``_reread``). A re-filed scan was once transcribed, composed and filed as five new
 exhibits (2026-10-14).
 
 A file this cannot open settles nothing: its pages go to vision as before.
@@ -31,13 +35,13 @@ import json
 from pathlib import Path
 
 from ..medchron import pages_record as PR
-from ..medchron.update import keepers, pageid as PI, pageid_io as PG
+from ..medchron.update import keepers, medlegal as ML, pageid as PI, pageid_io as PG
+from ..medchron.update.locate import vendor_name
 from . import identity_pages, page_rows
 from .identity_redecide import redecide
 from .base import StageRun, read_jsonl
 from .update_base import plan, update_dir
-from .update_select import REDECIDED_FILE, _candidates, delivered_read
-from .vision_seed import delivered_same_matter
+from .update_select import REDECIDED_FILE, _candidates, _identity_holds, _texts, delivered_read
 
 
 def _sigs(path: Path, log) -> list[PI.Sig] | None:
@@ -77,8 +81,9 @@ def run(sr: StageRun) -> int:
         if s is not None:
             new.append((str(r["id"]), s))
     firm = {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm_sha}
-    unread = _unread_keepers(sr, read)
-    ident = PI.identify(delivered, new, firm, unread)
+    unread = _unread_keepers(sr, ud, delivered)
+    firm_names = {e["sha256"]: e["name"] for e in p["exhibits"] if e["exhibit"] not in listed}
+    ident = PI.identify(delivered, new, firm, unread, _unread_docs(sr, rows, firm_names))
     (ud / PG.NAME).write_text(json.dumps(PI.to_json(ident), indent=1), encoding="utf-8")
     skip = ident.skipped({d: len(s) for d, s in new})
     (sr.slug_dir / "vision_skip.json").write_text(json.dumps(skip, indent=1), encoding="utf-8")
@@ -100,17 +105,33 @@ def run(sr: StageRun) -> int:
     total = sum(len(v) for v in skip.values())
     sr.log(
         f"update_pages: {sum(len(s) for _, s in new)} new page(s) against {sum(len(s) for _, s in delivered)} "
-        f"delivered ({sum(len(v) for v in unread.values())} delivered page(s) a past update never read are no "
+        f"delivered ({sum(len(v) for v in unread.values())} delivered page(s) the chronology never cites are no "
         f"keeper); {total} pixel-equal to a page read elsewhere and not transcribed; "
         f"{len(ident.extracts)} re-filed cop(ies) or extract(s)"
     )
     return 0
 
 
-def _unread_keepers(sr: StageRun, read: list[dict]) -> dict[int, set[int]]:
-    """The delivered pages a past update filed and never read (``update/keepers``)."""
+def _unread_keepers(sr: StageRun, ud: Path, delivered: list[tuple[int, list[PI.Sig]]]) -> dict[int, set[int]]:
+    """The delivered pages the delivered chronology never cites (``update/keepers``).
+    With no delivered chronology to read, no delivered page is a keeper."""
+    base = ud / "base.md"
+    md = base.read_text(encoding="utf-8") if base.is_file() else ""
+    return keepers.uncited_pages(md, {n: len(s) for n, s in delivered})
+
+
+def _unread_docs(sr: StageRun, rows: list[dict], firm_names: dict[str, str]) -> set[str]:
+    """The new documents whose pages will not be read, as far as their text
+    before the vision pass tells: an expert's report (``update/medlegal``, by
+    name or first page) and a file whose text names another person
+    (``update_select._identity_holds``). Their pages are no keeper."""
+    out = set()
+    for r in rows:
+        firm = firm_names.get(str(r.get("sha256") or ""), "")
+        if ML.is_medlegal([vendor_name(r), firm], _texts(sr, str(r["id"])).get(1) or ""):
+            out.add(str(r["id"]))
     try:
-        return keepers.from_jobs(read, delivered_same_matter(sr.job, sr.slug_dir.name), sr.unit.unit)
-    except Exception as exc:  # noqa: BLE001 - an unreadable past record settles nothing: every delivered page counts as read, as before
-        sr.log(f"update_pages: past updates' read pages not loaded ({type(exc).__name__}: {str(exc)[:160]})")
-        return {}
+        out |= {h.split(":", 1)[0] for h in _identity_holds(sr, rows)}
+    except Exception as exc:  # noqa: BLE001 - an identity read that fails names no file; update_select still re-reads
+        sr.log(f"update_pages: identity not read before vision ({type(exc).__name__}: {str(exc)[:160]})")
+    return out

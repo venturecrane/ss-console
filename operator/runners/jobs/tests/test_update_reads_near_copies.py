@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,7 +24,7 @@ import pytest
 import update_testkit as K
 from jobs.medchron import config as config_mod, job as job_mod, pages_record as PR
 from jobs.medchron.update import body as B, charged, keepers, pageid as PI, pageid_io as PG
-from jobs.medchron.update import repeats as R, select as S
+from jobs.medchron.update import repeats as R, select as S, suspects as SUS
 from jobs.stages import page_rows, update_pages as UP, update_select as US
 from jobs.stages.base import StageRun
 from jobs_testkit import FakeSeat, make_pdf
@@ -59,13 +58,27 @@ def test_a_pixel_identical_page_of_a_read_keeper_is_set_aside_and_never_transcri
     assert hit.aside and ident.skipped({"d1": 2}) == {"d1": [1]}  # vision never reads it; page 2 is read
 
 
-def test_a_pixel_identical_page_whose_keeper_a_past_update_set_aside_is_read() -> None:
-    """Exhibit 4 was filed by a past update that read only its page 1: its
-    page 2 was set aside there, so the delivered chronology never read it."""
+#: The delivered chronology: it cites Exhibit 4 p. 1 and Exhibit 5 pp. 2-3, nothing else.
+DELIVERED_MD = (
+    "## Medical Chronology\n\n03/04/2025\nExample Clinic | Visit\n\nVisit\nSeen. (Exhibit 4 - p. 1)\n\n"
+    "04/01/2025\nExample Imaging | Imaging\n\nImaging\nMRI read. (Exhibit 5 - p. 2-3)\n"
+)
+
+
+def test_an_uncited_delivered_page_is_no_keeper() -> None:
+    """The delivered chronology is the one durable record of what reached the
+    firm: a past update's own record is wiped 72 hours after delivery."""
+    assert keepers.uncited_pages(DELIVERED_MD, {4: 2, 5: 3, 6: 1}) == {4: {2}, 5: {1}, 6: {1}}
+    assert keepers.uncited_pages("", {4: 2}) == {4: {1, 2}}  # nothing on record: no delivered page is a keeper
+
+
+def test_a_pixel_identical_page_of_an_uncited_delivered_page_is_read() -> None:
+    """Exhibit 4 p. 2 is in the firm's folder, but the chronology never cites
+    it: a past update may have set it aside, so its facts are not known to be
+    written down."""
     delivered = [(4, _sigs(["ex4-p1", "ex4-p2"]))]
     new = [("d1", _sigs(["ex4-p2"]))]
-    past = [[{"title": "Exhibit 4 - Example Clinic (Medical Records)", "pages": 2, "read": [1], "sha256": "x"}]]
-    unread = keepers.unread_pages([{"exhibit": 4, "name": "Exhibit 4 - Example Clinic (Medical Records).pdf"}], past)
+    unread = keepers.uncited_pages(DELIVERED_MD, {4: 2})
     assert unread == {4: {2}}
     ident = PI.identify(delivered, new, unread=unread)
     hit = ident.pages["d1"][1]
@@ -85,42 +98,67 @@ def test_a_valid_keeper_elsewhere_still_sets_the_page_aside() -> None:
     assert hit.aside and hit.other == "exhibit:5"
 
 
-def test_a_delivered_exhibit_no_past_update_filed_reads_whole(tmp_path: Path) -> None:
-    """The full chronology read every page of its exhibits; a past update's
-    job directory that is gone settles nothing (``update/keepers``)."""
-    job = tmp_path / "j1" / "data" / "m"
-    ud = job / "runs" / "alpha" / "update"
-    ud.mkdir(parents=True)
-    rec = {"title": "Exhibit 7 - Example Imaging (Medical Records)", "pages": 3, "read": [1, 3], "sha256": "s7"}
-    (ud / keepers.FINAL).write_text(json.dumps([rec]), encoding="utf-8")
-    delivered = [
-        {"exhibit": 1, "name": "Exhibit 1 - Example Clinic.pdf", "sha256": "s1"},
-        {"exhibit": 7, "name": "renamed by the firm.pdf", "sha256": "s7"},  # matched by its bytes
-    ]
-    assert keepers.from_jobs(delivered, [job, tmp_path / "gone"], "alpha") == {7: {2}}
-
-
-def _sr(job_dir: Path, firm_config_path: Path, data_root: Path, **job_fields: object) -> StageRun:
+def _sr(job_dir: Path, firm_config_path: Path, data_root: Path) -> StageRun:
     job = job_mod.load(job_dir)
-    if job_fields:
-        job = replace(job, **job_fields)  # type: ignore[arg-type]
     sd = data_root / "example-matter"
     (sd / "text").mkdir(parents=True, exist_ok=True)
     return StageRun(job, config_mod.load(str(firm_config_path)), job.units[0], sd, {}, lambda _m: None,
                     lambda: FakeSeat([], [], {}))  # fmt: skip
 
 
-def test_update_pages_reads_the_keepers_off_the_delivered_update_jobs(
+def test_update_pages_reads_the_keepers_off_the_delivered_chronology(
     job_dir: Path, firm_config_path: Path, data_root: Path, tmp_path: Path
 ) -> None:
-    root = tmp_path / "install"
-    past = root / "jobs" / "j-past" / "data" / "example-matter" / "runs" / "alpha" / "update"
-    past.mkdir(parents=True)
-    rec = {"title": "Exhibit 3 - Example Clinic (Medical Records)", "pages": 4, "read": [2], "sha256": "s3"}
-    (past / keepers.FINAL).write_text(json.dumps([rec]), encoding="utf-8")
-    sr = _sr(job_dir, firm_config_path, data_root, install_root=root, prior_delivered=["j-past"])
-    read = [{"exhibit": 3, "name": "Exhibit 3 - Example Clinic (Medical Records).pdf", "sha256": "other"}]
-    assert UP._unread_keepers(sr, read) == {3: {1, 3, 4}}
+    sr = _sr(job_dir, firm_config_path, data_root)
+    ud = tmp_path / "update"
+    ud.mkdir()
+    (ud / "base.md").write_text(DELIVERED_MD, encoding="utf-8")
+    assert UP._unread_keepers(sr, ud, [(4, _sigs(["a", "b"])), (5, _sigs(["c", "d", "e"]))]) == {4: {2}, 5: {1}}
+
+
+# ---- a page of a new document that will not be read is no keeper (F2) -----------------------
+
+
+def test_a_new_document_that_will_not_be_read_keeps_nothing_aside() -> None:
+    """An expert's report or a file naming another person is never read, so a
+    pixel copy of its page is transcribed and read, never set aside."""
+    new = [("report", _sigs(["r1", "r2", "r3"])), ("copy", _sigs(["r2", "own"]))]
+    hit = PI.identify([], new, no_keeper={"report"}).pages["copy"][1]
+    assert hit.exact and not hit.aside
+    assert PI.identify([], new).pages["copy"][1].aside  # without the rule: set aside
+
+
+def test_update_pages_names_an_expert_report_and_another_persons_file_before_vision(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    sr = _sr(job_dir, firm_config_path, data_root)
+    (sr.slug_dir / "text" / "ime.txt").write_text("[p.1]\n" + NOTE + "\n", encoding="utf-8")
+    (sr.slug_dir / "text" / "rx.txt").write_text("[p.1]\n" + NOTE + "\n", encoding="utf-8")
+    rows = [{"id": "ime", "name": "Independent Medical Examination Report"}, {"id": "rx", "name": "Example Rehab"}]
+    assert UP._unread_docs(sr, rows, {}) == {"ime"}
+
+
+def test_a_copy_of_a_page_of_a_file_withheld_after_vision_is_read_or_held(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """A file withheld only once its pages were transcribed: a copy with its
+    own text is read as a suspected copy; one the vision pass skipped has no
+    text, so the update holds rather than leave it out silently."""
+    sr = _sr(job_dir, firm_config_path, data_root)
+    rows = []
+    for rid, pages in (("copy", [PI.SKIPPED, NOTE]),):
+        path = sr.slug_dir / f"{rid}.pdf"
+        path.write_bytes(make_pdf(["x", "y"]))
+        (sr.slug_dir / "text" / f"{rid}.txt").write_text(
+            "".join(f"[p.{i}]\n{t}\n" for i, t in enumerate(pages, 1)), encoding="utf-8"
+        )
+        rows.append({"id": rid, "name": "Example Copy", "ext": ".pdf", "path": str(path)})
+    hit = PG.Page(S.OVERLAP, "withheld", 4, True)
+    ident = PG.Loaded(pages={"copy": {1: hit, 2: hit}})
+    got = US._classify(sr, rows, S.Delivered(), ident, {}, {"withheld"})["copy"]
+    assert got.decisions[1][0] == S.UNREAD and got.decisions[2] == (S.READ, S.SUSPECTED)
+    kept = US._classify(sr, rows, S.Delivered(), ident, {}, set())["copy"]
+    assert kept.decisions[1] == (S.EXCLUDED, S.OVERLAP)  # a keeper that was read: set aside as before
 
 
 # ---- 2. every other match is read, recorded and not charged ------------------------------
@@ -212,25 +250,28 @@ def test_a_resumed_run_keeps_the_old_records_pixel_equal_pages_aside(tmp_path: P
     assert now.rule == PI.RULE and PG.aside(now.pages["d1"]) == {}
 
 
-# ---- 4. a restated delivered visit, its provider spelled another way -----------------------
+# ---- 4. a restated visit, known by its pages, its provider spelled another way ---------------
 
 DELIVERED = K.ENTRY_POST  # 01/20/2026, Example Clinic, cites Exhibit 1 p. 2
 #: The same visit composed from a second copy of its record, its provider spelled another way.
 RESTATED = (
     "01/20/2026\nRivera, Ana (D.C.) - Spine Associates of the Valley | Office Visit\n\nOffice Visit\n"
     "Seen in the office for follow up of injuries sustained in the motor vehicle collision on the stated date. "
-    "Cervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 5 - p. 3)"
+    "Cervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 5 - p. 3-4)"
 )
 LONGER = RESTATED + " Blood pressure 138/88 was recorded at the visit. (Exhibit 5 - p. 3)"
-#: A genuinely new visit on the same date: its page is no suspected copy.
+#: A genuinely new visit on the same date: Exhibit 6 p. 1 was read on its own account.
 NEW_VISIT = (
     "01/20/2026\nDesert Valley Radiology | Imaging\n\nImaging\n"
     "Radiographs of the lumbar spine showed no fracture and preserved disc heights at every level. (Exhibit 6 - p. 1)"
 )
-SUSPECTS: R.Suspects = {(5, 3): (1, 2)}
+#: Exhibit 5 pp. 3-4 are suspected copies of delivered Exhibit 1 pp. 2 and 3; p. 5 was set aside by picture.
+SUSPECTS = SUS.Suspects(covers={(5, 3): (1, 2, 2), (5, 4): (1, 3, 3)}, aside={(5, 5)}, new={5, 6})
 
 
-def test_the_pages_suspected_copies_of_a_delivered_entrys_pages_make_it_that_visit() -> None:
+def test_pages_copied_from_inside_a_delivered_entrys_span_make_it_that_visit() -> None:
+    """Pages 3-4 copy delivered pp. 2-3; the delivered entry cites p. 2 only:
+    p. 3 is inside its span, one page either side (bug review F3)."""
     _, base = B.entries_of(K.base_md())
     assert B.score(RESTATED, DELIVERED) < 0.5 and B.provider_of(RESTATED) != B.provider_of(DELIVERED)
     assert R.keep_decision(RESTATED, base, str) == ("keep", RESTATED)  # the old key cannot see it
@@ -240,16 +281,52 @@ def test_the_pages_suspected_copies_of_a_delivered_entrys_pages_make_it_that_vis
     assert "138/88" in row and "pain rated 6 of 10" not in row  # trimmed to what it adds
 
 
+def test_a_run_cover_starting_beside_the_delivered_page_is_that_visit() -> None:
+    _, base = B.entries_of(K.base_md())
+    run = SUS.Suspects(covers={(5, 3): (1, 1, 1), (5, 4): (1, 1, 3)}, new={5})
+    assert R.keep_decision(RESTATED, base, str, run) == (R.SAME_VISIT, None)
+    far = SUS.Suspects(covers={(5, 3): (1, 7, 9), (5, 4): (1, 7, 9)}, new={5})
+    assert R.keep_decision(RESTATED, base, str, far) == ("keep", RESTATED)  # another stretch of the exhibit
+
+
+def test_a_cite_of_a_page_set_aside_or_of_a_delivered_page_beside_the_copies_changes_nothing() -> None:
+    _, base = B.entries_of(K.base_md())
+    mixed = RESTATED.replace("(Exhibit 5 - p. 3-4)", "(Exhibit 5 - p. 3-5) (Exhibit 1 - p. 2)")
+    assert R.keep_decision(mixed, base, str, SUSPECTS) == (R.SAME_VISIT, None)
+
+
 def test_a_genuinely_new_visit_on_the_same_date_is_kept() -> None:
     _, base = B.entries_of(K.base_md())
     assert R.keep_decision(NEW_VISIT, base, str, SUSPECTS) == ("keep", NEW_VISIT)
     assert R.keep_decision(NEW_VISIT, base, str) == ("keep", NEW_VISIT)
-    # one cited page a suspected copy and another not: not that visit
-    mixed = RESTATED.replace("(Exhibit 5 - p. 3)", "(Exhibit 5 - p. 3-4)")
-    assert R.keep_decision(mixed, base, str, SUSPECTS) == ("keep", mixed)
+    # a page read on its own account beside the copies: the entry says something of its own
+    own = RESTATED.replace("(Exhibit 5 - p. 3-4)", "(Exhibit 5 - p. 3-4) (Exhibit 6 - p. 1)")
+    assert R.keep_decision(own, base, str, SUSPECTS) == ("keep", own)
 
 
-def test_the_suspects_are_read_off_the_page_record() -> None:
+#: Exhibit 5 (read first, the larger file) and Exhibit 6, a rescan of its p. 3 (bug review F5).
+FIRST = (
+    "02/03/2026\nExample Orthopedics | Office Visit\n\nOffice Visit\n"
+    "Knee effusion noted; aspiration performed and 30 mL of fluid removed. (Exhibit 5 - p. 3)"
+)
+RESCAN = (
+    "02/03/2026\nOrtho Partners of the Valley, J. Roe | Visit\n\nVisit\n"
+    "Aspiration of the knee with 30 mL removed for an effusion. (Exhibit 6 - p. 1)"
+)
+
+
+def test_an_entry_from_a_rescan_of_another_new_documents_page_is_deduplicated() -> None:
+    sus = SUS.Suspects(covers={(6, 1): (5, 3, 3)}, new={5, 6})
+    kept, n = R.dedupe_copies([FIRST, RESCAN], str, sus)
+    assert kept == [FIRST] and n == 1
+    more = RESCAN.replace("removed for an effusion.", "removed for an effusion. Fluid glucose was 42 mg/dL.")
+    kept, n = R.dedupe_copies([FIRST, more], str, sus)
+    assert n == 1 and kept[0] == FIRST and "42 mg/dL" in kept[1] and "Additional findings" in kept[1]
+    assert R.dedupe_copies([FIRST, RESCAN], str, SUS.Suspects(new={5, 6})) == ([FIRST, RESCAN], 0)
+
+
+def test_a_chain_of_copies_reaches_the_delivered_page() -> None:
+    """Exhibit 6 p. 1 copies Exhibit 5 p. 3, itself a copy of delivered Exhibit 1 p. 2."""
     rows = [
         PR.row(
             "d5",
@@ -263,6 +340,7 @@ def test_the_suspects_are_read_off_the_page_record() -> None:
             **{PR.SUSPECTED: page_rows.NEAR_PICTURE},
         ),  # fmt: skip
         PR.row("d5", "", 4, PR.READ, "new", PR.NONE, "update_select"),
+        PR.row("d5", "", 5, PR.EXCLUDED, "repeat", PR.PICTURE, "update_select", {"doc": "d4", "page": 1}),
         PR.row(
             "d6",
             "",
@@ -271,8 +349,44 @@ def test_the_suspects_are_read_off_the_page_record() -> None:
             "suspected_copy",
             PR.TEXT,
             "update_select",
-            {"doc": "d5", "page": 4},
+            {"doc": "d5", "page": 3},
             **{PR.SUSPECTED: page_rows.TEXT_OVERLAP},
         ),  # fmt: skip
+        PR.row(
+            "d6",
+            "",
+            2,
+            PR.READ,
+            "suspected_copy",
+            PR.CONTAINED,
+            "update_select",
+            {"doc": "d5", "page": 4, "last": 5},
+            **{PR.SUSPECTED: page_rows.RUN_OF_PAGES},
+        ),  # fmt: skip
     ]
-    assert R.suspected_copies(rows, {"d5": 5, "d6": 6}) == {(5, 3): (1, 2)}  # only a delivered page's copy
+    s = SUS.from_rows(rows, {"d5": 5, "d6": 6})
+    assert s.covers == {(5, 3): (1, 2, 2), (6, 1): (1, 2, 2), (6, 2): (5, 4, 5)}
+    assert s.aside == {(5, 5)} and s.new == {5, 6}
+    _, base = B.entries_of(K.base_md())
+    chained = RESTATED.replace("(Exhibit 5 - p. 3-4)", "(Exhibit 6 - p. 1)")
+    assert R.keep_decision(chained, base, str, s) == (R.SAME_VISIT, None)
+
+
+# ---- 5. the page question counts no page a picture already suspects (M1, M2) ----------------
+
+
+def test_the_page_question_does_not_count_a_candidate_a_picture_suspects(tmp_path: Path) -> None:
+    ud = tmp_path / "runs" / "u1" / "update"
+    ud.mkdir(parents=True)
+    ident = PI.Identity(pages={"d1": {1: PI.Hit(PI.ALREADY, "exhibit:4", 7, False)}})
+    (ud / PG.NAME).write_text(json.dumps(PI.to_json(ident)), encoding="utf-8")
+    rows = page_rows.candidate_rows([("d1", 3, [True, True, True])], PG.load(ud), {"d1": "a" * 64})
+    assert rows[0]["evidence"][PR.SUSPECTED] == page_rows.NEAR_PICTURE
+    PR.write(tmp_path / "runs" / "u1", rows)
+    assert charged.read_pages(tmp_path, "u1") == 3 and charged.asked_pages(tmp_path, "u1", 0) == 2
+    # once selected: four pages read, one more a suspected copy; two charged, the asked figure is not exceeded
+    later = [*rows, PR.row("d1", "", 4, PR.READ, "suspected_copy", PR.TEXT, "update_select", None,
+                           **{PR.SUSPECTED: page_rows.TEXT_OVERLAP})]  # fmt: skip
+    PR.write(tmp_path / "runs" / "u1", later)
+    assert charged.read_pages(tmp_path, "u1") == 4 and charged.capped(tmp_path, "u1") is None
+    assert charged.charged_pages(tmp_path, "u1", 0) == 2 and charged.figures(tmp_path, "u1")["read_exceeds_asked"] == 0

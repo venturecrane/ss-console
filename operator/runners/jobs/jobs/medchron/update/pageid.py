@@ -26,14 +26,15 @@ exhibit as new exhibits, and composed the same visits two and three times
 
 A new page pixel-equal to a delivered page that was READ is ALREADY read;
 one pixel-equal to a page of a new document READ EARLIER (``reading_order``:
-the larger first) is a repeat. A delivered exhibit page a past update set
-aside unread (`unread`, read from that update's selection by
-``update/keepers``) is no keeper: a new page pixel-equal to it is read, its
-match recorded as a suspected copy (``Hit.keeper_read`` False), because the
-delivered chronology never read what that page says. A page of a new
-document is always a valid keeper: within one update a page is set aside
-only as a pixel-equal copy of a valid keeper, and pixel equality is
-transitive, so its copy finds that keeper too. A new document whose EVERY
+the larger first) is a repeat. A delivered exhibit page the delivered
+chronology never cites (`unread`, ``update/keepers``) is no keeper: a new
+page pixel-equal to it is read, its match recorded as a suspected copy
+(``Hit.keeper_read`` False), because nothing shows its facts reached the
+firm. Nor is any page of a new document that will not be read (`no_keeper`:
+an expert's report, a file naming another person). Any other page of a new
+document is a valid keeper: within one update a page is set aside only as a
+pixel-equal copy of a valid keeper, and pixel equality is transitive, so its
+copy finds that keeper too. A new document whose EVERY
 inked page is pixel-equal to a valid keeper in one other document (a
 delivered exhibit, or a LARGER new document) or in a delivered exhibit, at
 least EXTRACT_FRAC of them to that one document, is a re-filed copy or
@@ -227,12 +228,15 @@ def identify(
     new: list[tuple[str, list[Sig]]],
     firm: set[str] | None = None,
     unread: Unread | None = None,
+    no_keeper: set[str] | None = None,
 ) -> Identity:
     """Page identity across the delivered exhibits (exhibit number, sigs) and
     the new documents (id, sigs) in pull order. A firm-numbered file
     (`firm`) is never an extract: the firm holds it under its own number.
-    `unread`: the delivered pages that are no keeper (``Unread``)."""
-    pairs = {d: _pairs_of(d, sigs, delivered, new, unread or {}) for d, sigs in new}
+    `unread`: the delivered pages that are no keeper (``Unread``);
+    `no_keeper`: the new documents none of whose pages is one."""
+    gone = {d: set(range(1, len(s) + 1)) for d, s in new if d in (no_keeper or set())}
+    pairs = {d: _pairs_of(d, sigs, delivered, new, unread or {}, gone) for d, sigs in new}
     out = Identity()
     sizes = {d: len(s) for d, s in new}
     for d, sigs in new:
@@ -252,11 +256,16 @@ def _tiers(m: dict[int, tuple[int, bool]], never_read: set[int]) -> dict[int, tu
 
 
 def _pairs_of(
-    d: str, sigs: list[Sig], delivered: list[tuple[int, list[Sig]]], new: list[tuple[str, list[Sig]]], unread: Unread
+    d: str,
+    sigs: list[Sig],
+    delivered: list[tuple[int, list[Sig]]],
+    new: list[tuple[str, list[Sig]]],
+    unread: Unread,
+    gone: dict[str, set[int]],
 ) -> _Pairs:
     """{other: {my page: (its page, tier)}}; delivered exhibits keyed "exhibit:N"."""
     got = {f"{DELIVERED}{n}": _tiers(pair_pages(sigs, s), unread.get(n, set())) for n, s in delivered}
-    got |= {o: _tiers(pair_pages(sigs, s), set()) for o, s in new if o != d}
+    got |= {o: _tiers(pair_pages(sigs, s), gone.get(o, set())) for o, s in new if o != d}
     return {k: v for k, v in got.items() if v}
 
 

@@ -84,6 +84,7 @@ from ..medchron.update import (
     subsets as SUB,
 )
 from ..medchron.update import outcome as UO
+from ..medchron.update.billing_page import BILLING, is_billing
 from ..medchron.audit.page_text import duplicate_exhibits
 from ..medchron.update.locate import vendor_name
 from . import identity_redecide, prior_reading
@@ -280,14 +281,20 @@ class _Read:
 
 
 def _classify(
-    sr: StageRun, rows: list[dict[str, Any]], seen: S.Delivered, ident: PG.Loaded, firm: dict[str, str]
+    sr: StageRun,
+    rows: list[dict[str, Any]],
+    seen: S.Delivered,
+    ident: PG.Loaded,
+    firm: dict[str, str],
+    left_out: set[str] | None = None,
 ) -> dict[str, _Read]:
     """{id: _Read} for every candidate, its pages decided in READING order
     (``pageid.reading_order``: the most pages first). A page two new
     documents share is read in the larger and is set aside in the smaller
     when pixel-equal, and a smaller document every page of which is set aside
     so is re-filed whole there (``select.new_home``). `firm`: {id: the firm's
-    numbered file name}; such a file is never re-filed whole."""
+    numbered file name}; such a file is never re-filed whole. `left_out`:
+    the files withheld before this (``_reread``)."""
     out = sr.slug_dir / "out" / sr.unit.unit
     pdfs = {str(r["id"]): out / f".pending-{r['id']}.pdf" for r in rows}
     sizes = [
@@ -300,6 +307,7 @@ def _classify(
         got[rid] = _read_one(sr, by_id[rid], pdfs[rid], npages[rid], seen, earlier, firm.get(rid), PG.aside(found))
         if not got[rid].medlegal:
             _suspected_by_picture(got[rid], found)
+    _reread(got, ident, left_out or set())
     for rid in (d for d in order if not got[d].medlegal and d not in firm):
         c = got[rid]
         hits = {pg: h.other for pg, h in (ident.pages.get(rid) or {}).items() if c.decisions[pg][1] == S.OVERLAP}
@@ -316,6 +324,33 @@ def _suspected_by_picture(c: _Read, found: dict[int, PG.Page]) -> None:
             src = S.DELIVERED_SRC if PG.delivered_exhibit(h.other) is not None else S.EARLIER_SRC
             c.decisions[pg] = (S.READ, S.SUSPECTED)
             c.suspects[pg] = S.Cover(src, h.other, h.page, S.BY_PICTURE, exact=h.exact)
+
+
+def _reread(got: dict[str, _Read], ident: PG.Loaded, left_out: set[str]) -> None:
+    """A page set aside as a pixel-equal copy of a page of a new document that
+    ended unread, found only after the vision pass (bug review 2026-11-22, F2):
+    a copy of an expert's report page is that report's page, reviewed and not
+    itemized like it; a copy of a page of a file left out (`left_out`: withheld
+    as another person's) had no keeper, so it is decided on its own text, as a
+    suspected copy and not charged. One the vision pass skipped has no text, so
+    it is unread and the stage holds on it: a page is never left out silently."""
+    for rid, c in got.items():
+        for pg, h in (ident.pages.get(rid) or {}).items():
+            if c.medlegal or not h.aside or PG.delivered_exhibit(h.other) is not None:
+                continue
+            if h.other in got and got[h.other].medlegal:
+                c.decisions[pg] = (S.EXCLUDED, ML.REASON)
+                continue
+            if h.other not in left_out:
+                continue
+            t = (c.pages.get(pg) or "").strip()
+            if t in S.FAILED_MARKS:
+                c.decisions[pg] = (S.UNREAD, "its keeper was never read and it was not transcribed")
+            elif len(t) < S.MIN_CHARS or is_billing(t):
+                c.decisions[pg] = (S.EXCLUDED, S.BLANK if len(t) < S.MIN_CHARS else BILLING)
+            else:
+                c.decisions[pg] = (S.READ, S.SUSPECTED)
+                c.suspects[pg] = S.Cover(S.EARLIER_SRC, h.other, h.page, S.BY_PICTURE, exact=True)
 
 
 def _read_one(
@@ -416,7 +451,7 @@ def run(sr: StageRun) -> int:
     extracts = dict(ident.extracts)
     ordered = [x for x in rows if str(x["id"]) not in extracts]
     firm_of = {str(r["id"]): firm[r["sha256"]]["name"] for r in ordered if (r.get("sha256") or "") in firm}
-    read = _classify(sr, ordered, seen, ident, firm_of)
+    read = _classify(sr, ordered, seen, ident, firm_of, {i for ids in skipped.values() for i in ids})
     recs, units, k, whole = [], [], 0, {}
     for r in ordered:  # exhibit numbers follow pull order
         rid, f = str(r["id"]), firm.get(r.get("sha256") or "")

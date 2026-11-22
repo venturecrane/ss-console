@@ -32,8 +32,10 @@ or of an earlier new document's page, or a page of an exact re-filed copy;
 could not be drawn and anything undecided count as to be read. That count is
 what the page question before the first paid step is asked with
 (``asked_pages``, recorded in ``ASKED``, written whole). An exact picture
-match is never transcribed and no later step reads it, so pages read never
-exceed pages asked by construction (``read_exceeds_asked``, 0); the charge is
+match is never transcribed and no later step reads it, and a page read as a
+suspected copy is never charged (it is not counted when asked either), so
+pages charged never exceed pages asked by construction (``read_exceeds_asked``,
+0, named for its first form); the charge is
 still capped at the asked figure as a backstop, and a cap records
 ``charged_capped`` with both numbers (``capped``) in the run's notes
 (``cap_notes``); nothing stops. An asked record that is absent,
@@ -116,9 +118,11 @@ CHARGED_CAPPED = "charged_capped"
 
 def asked_pages(slug_dir: Path, unit: str, pages_read: int) -> int:
     """The figure the page question is asked with, and recorded (the largest
-    asked on any attempt): ``read_pages`` (an upper bound before selection),
-    or with no page record ``old_rule_pages``."""
-    n = read_pages(slug_dir, unit)
+    asked on any attempt): ``chargeable_pages`` (an upper bound on the charge
+    before selection: a candidate page a picture already marks a suspected
+    copy is read and never charged, so a job is not held for it), or with no
+    page record ``old_rule_pages``."""
+    n = chargeable_pages(slug_dir, unit)
     asked = n if n is not None else old_rule_pages(slug_dir, unit, pages_read)
     p = slug_dir / "runs" / unit / ASKED
     before = _asked(slug_dir, unit)
@@ -169,10 +173,10 @@ def charged_pages(slug_dir: Path, unit: str, pages_read: int) -> int:
 
 
 def capped(slug_dir: Path, unit: str) -> dict[str, Any] | None:
-    """``{"code": CHARGED_CAPPED, "read": n, "asked": m}`` when this update read
-    more pages than it was asked about (it is then charged the asked figure;
-    nothing stops), else None."""
-    n, asked = read_pages(slug_dir, unit), _asked(slug_dir, unit)
+    """``{"code": CHARGED_CAPPED, "read": n, "asked": m}`` when this update
+    would charge more pages than it was asked about (`n`: ``chargeable_pages``;
+    it is then charged the asked figure; nothing stops), else None."""
+    n, asked = chargeable_pages(slug_dir, unit), _asked(slug_dir, unit)
     if n is None or asked is None or n <= asked:
         return None
     return {"code": CHARGED_CAPPED, "read": n, "asked": asked}
@@ -220,7 +224,8 @@ def figures(slug_dir: Path, unit: str) -> dict[str, int | None]:
         "pages_suspected_copies": _suspected(slug_dir, unit),
         "pages_charged": charged_pages(slug_dir, unit, extracted),
         "charged_capped": 1 if capped(slug_dir, unit) else 0,
-        # The property the upper bound promises: 0. An exact picture match is never read, so read <= asked.
+        # The property the upper bound promises: 0. A page set aside is never read and a suspected
+        # copy is never charged, so the pages charged never exceed the pages asked about.
         "read_exceeds_asked": 1 if capped(slug_dir, unit) else 0,
         "charged_old_rule": old_rule_pages(slug_dir, unit, extracted),
         "extracted": extracted,
