@@ -289,7 +289,8 @@ def review_content(
         )
     elif part.kind == "duplicates":
         ask = (
-            f"PART: DUPLICATE CHECK, text only. Every added entry composed from Exhibit {part.exhibit}: {names}. "
+            f"PART: DUPLICATE CHECK, text only. {'Some' if part.peers else 'Every'} added "
+            f"{'entries' if part.peers else 'entry'} composed from Exhibit {part.exhibit}: {names}. "
             "Report only entries that repeat another entry's visit or content (class duplicate); the pages are "
             "checked in the other parts."
         )
