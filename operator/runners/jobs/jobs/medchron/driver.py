@@ -325,7 +325,7 @@ class Driver:
         if stage.name == "audit" and not self.job.update:  # the entries still to read (``stages/entry_audit_io``)
             return projection.entry_audit_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
         if stage.name == "audit":  # the claims still to verify (``projection``)
-            n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit)
+            n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit, self.cfg)
             return None if n is None else n * self.limits.usd_per_audit_claim
         if stage.name == "update_review":
             return projection.update_review_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)

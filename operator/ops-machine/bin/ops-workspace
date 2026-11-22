@@ -1,5 +1,5 @@
 #!/bin/bash
-# ops-workspace create|update|status|destroy <slug>: a client's ops workspace,
+# ops-workspace create|update|accounts|status|destroy <slug>: a client's ops workspace,
 # the Fly app ops-<slug> that holds that client's documents (matter files,
 # medical records, chronologies, anything made from them) so they are never on
 # a laptop. Run from a laptop with the Captain's Fly, Infisical and gh logins
@@ -21,6 +21,8 @@
 # create   app, volume, secrets, image, healthchecks check, sweep token. Idempotent.
 # update   rebuild the image and re-mint both tokens (the seat token is checked
 #          by the daily sweep and pages 30 days before it expires).
+# accounts put the Claude account tokens on the RUNNING workspace, no restart:
+#          staged for the next restart and written to the live ~/.claude-oauth.
 # status   machine state, image, secret names, selftest.
 # destroy  delete the app and its volume (every document on it), the check and
 #          the sweep secrets. Asks for the slug typed back. Decommission
@@ -63,23 +65,51 @@ need_vault() {
   [ -n "${CRANE_CONTEXT_KEY:-}" ] || { echo "CRANE_CONTEXT_KEY missing from /ss prod"; exit 1; }
 }
 
+# Every Claude account token in /ss prod (CLAUDE_OAUTH_TOKEN_<letter>), one
+# NAME=VALUE per line, for fly secrets import. Never printed to a terminal.
+claude_token_lines() {
+  local tv tval
+  for tv in $(compgen -v CLAUDE_OAUTH_TOKEN_ | grep -E '^CLAUDE_OAUTH_TOKEN_[A-Z]$'); do
+    # Strip the line break a terminal copy can leave in it: fly secrets import
+    # reads one NAME=VALUE per line, and Claude refuses a header with a break.
+    tval="${!tv:-}"; tval="${tval//[$'\r\n\t ']/}"
+    [ -n "$tval" ] && printf '%s=%s\n' "$tv" "$tval"
+  done
+  return 0
+}
+
+# Put the current account tokens on a RUNNING workspace without a restart
+# (2026-11-21: a third account arrived while chronologies ran on A&P for hours).
+# Staged as Fly secrets, so the next restart keeps them, and written to the live
+# ~/.claude-oauth over ssh stdin (never a command line), which the shim reads
+# before every session start and restart, so open sessions move onto a new
+# account when theirs runs out. Read back by name.
+push_accounts() {
+  local lines n
+  lines=$(claude_token_lines)
+  n=$(printf '%s\n' "$lines" | grep -c '^CLAUDE_OAUTH_TOKEN_' || true)
+  [ "$n" -gt 0 ] || { echo "no CLAUDE_OAUTH_TOKEN_<letter> in /ss prod"; exit 1; }
+  printf '%s\n' "$lines" | fly secrets import --stage -a "$app" >/dev/null
+  log "staged $n Claude account token(s) for the next restart"
+  printf '%s\n' "$lines" | while IFS='=' read -r k v; do printf 'export %s=%q\n' "$k" "$v"; done \
+    | fly ssh console -a "$app" -u ops -C "bash -c 'umask 077; cat > \$HOME/.claude-oauth.new && mv -f \$HOME/.claude-oauth.new \$HOME/.claude-oauth'" >/dev/null
+  local back
+  back=$(fly ssh console -a "$app" -u ops -C "bash -c 'OPS_CLAUDE_LIST_ACCOUNTS=1 /opt/ops/bin/claude'" 2>/dev/null | tail -1 | tr -d '\r')
+  log "live on $app now: accounts in order: ${back:-NONE}"
+  case " $back " in *" "[A-Z]" "*) ;; *) echo "FAIL the workspace shim lists no account after the write"; exit 1 ;; esac
+}
+
 mint_and_stage() {
   local k="ANTHROPIC_API_KEY__${suffix}" seat_tok sweep_tok expires
   expires=$(date -u -v+365d +%F 2>/dev/null || date -u -d '+365 days' +%F)
   seat_tok=$(fly tokens create deploy -a "$seat" --expiry 8760h --name "workspace $app" 2>/dev/null | tail -1)
   [ "${seat_tok:0:6}" = "FlyV1 " ] || { echo "could not mint a deploy token for $seat"; exit 1; }
-  # The Captain's two Claude account tokens (`claude setup-token`, one per
-  # account, kept in /ss prod as CLAUDE_OAUTH_TOKEN_A / _B): Claude runs on the
+  # The Captain's Claude account tokens (`claude setup-token`, one per
+  # account, kept in /ss prod as CLAUDE_OAUTH_TOKEN_<letter>): Claude runs on the
   # first one not at its usage limit (bin/claude, bin/ops-claude-failover).
   # Missing ones are skipped and the workspace stays on the stored /login.
-  local extra=() a hc
-  for a in A B; do
-    local tv="CLAUDE_OAUTH_TOKEN_$a"
-    # Strip the line break a terminal copy can leave in it: fly secrets import
-    # reads one NAME=VALUE per line, and Claude refuses a header with a break.
-    local tval="${!tv:-}"; tval="${tval//[$'\r\n\t ']/}"
-    if [ -n "$tval" ]; then extra+=("$tv=$tval"); else log "WARN $tv not in /ss prod; account $a not available here"; fi
-  done
+  local extra=() hc line
+  while IFS= read -r line; do extra+=("$line"); done < <(claude_token_lines)
   # The workspace's own healthchecks.io ping url, so the limit watcher can page
   # when every account is spent (its /fail emails, as a failed sweep does).
   hc=$(hc_ping_url) && [ -n "$hc" ] && extra+=("OPS_HC_URL=$hc")
@@ -142,6 +172,10 @@ case "$cmd" in
     need_vault "$@"
     mint_and_stage
     deploy
+    ;;
+  accounts)
+    need_vault "$@"
+    push_accounts
     ;;
   status)
     fly status -a "$app"

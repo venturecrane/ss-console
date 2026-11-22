@@ -18,7 +18,7 @@ def read_usd(extracted: Path, usd_per_scanned_page: float, meter: budget.Budget)
     return budget.scanned_pages(extracted) * usd_per_scanned_page + meter.projection(budget.extracted_chars(extracted))
 
 
-def claims_to_verify(slug_dir: Path, unit: str) -> int | None:
+def claims_to_verify(slug_dir: Path, unit: str, cfg: Any = None) -> int | None:
     """Claims in the built chronology STILL TO VERIFY, counted with the
     audit gate's OWN extractor, so the projection counts what the audit
     will actually call on rather than a remembered ratio from some other
@@ -43,6 +43,8 @@ def claims_to_verify(slug_dir: Path, unit: str) -> int | None:
     rows = claims_mod.read_rows(results) if results.is_file() else []
     verified = {r["key"] for r in rows if r.get("kind") == "real" and r.get("doc_sha") == sha}
     verified -= claims_mod.pending_reaudit(rows)  # a stale verdict the next round pays for again
+    if cfg is None or str(cfg.get("levers", "audit_mode", "image")) == "image":
+        verified -= claims_mod.text_verdict_keys(rows)  # a text verdict the picture audit reads again
     return sum(1 for c in claims if c["key"] not in verified)
 
 
