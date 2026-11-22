@@ -274,7 +274,14 @@ def test_a_scanned_attachment_the_identity_stage_finds_is_left_out_by_rule_and_t
     assert o.outcome == "delivered" and o.stage is None, o
     sd = data_root / "example-matter"
     held = json.loads((sd / "identity_holds.json").read_text())
+    # The scripted vision reads EVERY scan as another person's, and since
+    # 2026-11-22 a one-person build checks every file its unit holds, so the
+    # client folder's scanned intake form (f5) is withheld beside the
+    # attachment: both by the rule, for the same reason.
+    assert sorted(h["id"] for h in held)[0] == "f5" and len(held) == 2
+    held = [h for h in held if h["id"].startswith("msgatt-")]
     assert len(held) == 1 and FI.withheld_reason(sd, held[0]["id"]) == RULE_WORDS
+    assert FI.withheld_reason(sd, "f5") == RULE_WORDS
     unit_ids = [r["id"] for r in json.loads((sd / "units" / "alpha.json").read_text())]
     assert held[0]["id"] not in unit_ids
     lim = _limitations(sd)

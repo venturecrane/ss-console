@@ -36,6 +36,10 @@ from .entry_read import Images, Parsed, ReadFinding, Unit
 
 PROMPT = "entry-verify-system"
 VERIFY_PAGES = 8
+#: Recorded here without a verify. An ``another_person`` row is then settled
+#: by the pre-delivery review's check 1 on its cited page
+#: (``stages/review_evidence.reader_findings``, 2026-11-22): left out by rule
+#: when the page is another person's, else a NOTE.
 RECORD_CLASSES = ("date", "provider", "another_person")
 #: Reason codes a recorded finding carries (round 4).
 NOT_WRONG, NOT_SUPPORTED, VERIFY_FAILED, VERIFY_UNPARSED = (

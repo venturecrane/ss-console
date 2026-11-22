@@ -12,8 +12,18 @@ two things a medical record labels its patient with:
   ("guarantor", "insured", "subscriber", "parent", "mother", "father",
   "spouse", "emergency contact") is that person's, not the patient's, and is
   not read;
-* a labeled patient name ("Patient:", "Patient Name:") that does not carry
-  the client's surname.
+* a labeled patient name ("Patient:", "Patient Name:") that is not the
+  client: one without the client's surname, or (2026-11-22) one that carries
+  the surname under another first name (a household member treated by the
+  same providers reached a delivered chronology twice, 2026-11-19).
+
+The date of birth is read where a form prints it (2026-11-22): on the label's
+line after fill underscores, as a numeric or a word-month date, on the next
+line, or in a label column whose values are printed below it in the same
+order (``_column``, bounded: at most ``COLUMN_MAX`` labels, their values the
+lines right after them). A relative's word on a line keeps that line's date
+of birth unread unless a patient label is nearer before it; it never hides a
+patient name.
 
 A hit is never a silent skip and never a fold. Until 2026-10-24 it was a HOLD
 at the caller and the firm was asked whose the record was. Since then (the
@@ -37,9 +47,17 @@ import time
 from pathlib import Path
 from typing import Any
 
-DOB_LABEL = re.compile(
-    r"(?i)\b(?:D\.?O\.?B\.?|Date\s+of\s+Birth|Birth\s*Date)\s*[:#]?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b"
+#: A date-of-birth label; its value is read by ``_date_at`` after it.
+DOB_TAG = re.compile(r"(?i)(?<![A-Za-z])(?:D\.?O\.?B\b\.?|Date\s+of\s+Birth|Birth\s*Date)\s*[:#]?")
+_MONTHS = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}
+#: A date as a form prints a birth date: 08/02/2008, 02-Aug-2008, Aug 2, 2008.
+DATE_VALUE = re.compile(
+    r"(?i)(?P<m>\d{1,2})[/-](?P<d>\d{1,2})[/-](?P<y>\d{4}|\d{2})(?!\d)"
+    r"|(?P<d2>\d{1,2})[\s-]+(?P<mw>[A-Za-z]{3,9})\.?[\s,-]+(?P<y2>\d{4})(?!\d)"
+    r"|(?P<mw3>[A-Za-z]{3,9})\.?\s+(?P<d3>\d{1,2}),?\s+(?P<y3>\d{4})(?!\d)"
 )
+#: What a form prints between a label and its value: spaces, underscores, dots.
+_FILL = "\t _."
 # The label is case-blind, the name is not: two capitalised words ("Jane Doe",
 # "DOE, JANE"), so "Patient: denies pain" is not read as a name. And it is a
 # LABEL only at the start of a line or after a field delimiter (a bar, a
@@ -58,6 +76,13 @@ NOT_NAME = frozenset(
     "advised instructed declined education name information history status signature consent".split()
 )
 RELATIVE = re.compile(r"(?i)\b(?:guarantor|insured|subscriber|policy ?holder|parent|mother|father|spouse|emergency)\b")
+_PATIENT_WORD = re.compile(r"(?i)\bpatient\b")
+#: A line that is only a label ("Date of Birth:", "Patient Name: ____").
+LABEL_ONLY = re.compile(r"^\s*([A-Za-z][A-Za-z0-9 .#/'()&-]{0,40}?)\s*[:#][\s_.]*$")
+#: The most labels a label column is read for (``_column``).
+COLUMN_MAX = 12
+#: Words a printed name carries that are no given name.
+_NOT_GIVEN = frozenset("mr mrs ms miss dr jr sr ii iii iv".split())
 RELEASE_FILE = "identity_release.json"
 #: How a withheld document is disclosed (orphans.json, the coverage record, an
 #: update's skip list). What happened to the file, nothing about whose it is:
@@ -87,6 +112,70 @@ def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
         return None
 
 
+def _date(m: re.Match[str]) -> str | None:
+    """A ``DATE_VALUE`` match as MM/DD/YYYY; None for a word that is no month."""
+    if m.group("m"):
+        return _norm_dob(m.group("m"), m.group("d"), m.group("y"))
+    word, day, year = m.group("mw", "d2", "y2") if m.group("mw") else m.group("mw3", "d3", "y3")
+    mo = _MONTHS.get(word[:3].lower())
+    return _norm_dob(str(mo), day, year) if mo else None
+
+
+def _date_at(rest: str, whole: bool = False) -> str | None:
+    """The date `rest` starts with, past fill; with `whole`, only when nothing
+    but fill follows it either."""
+    s = rest.lstrip(_FILL)
+    m = DATE_VALUE.match(s)
+    if not m or (whole and s[m.end() :].strip(_FILL)):
+        return None
+    return _date(m)
+
+
+def _relatives(line: str, at: int) -> bool:
+    """Whether the date of birth labelled at `at` is a relative's: the line
+    names one, and no patient label stands nearer before the label."""
+    if not RELATIVE.search(line):
+        return False
+    rel = [m.start() for m in RELATIVE.finditer(line[:at])]
+    pat = [m.start() for m in _PATIENT_WORD.finditer(line[:at])]
+    return not (pat and (not rel or pat[-1] > rel[-1]))
+
+
+def _column(lines: list[str]) -> list[tuple[str, str]]:
+    """("dob" | "name", value) for each date-of-birth or patient label alone
+    on its line, read from the line holding its value: a run of such label
+    lines (at most ``COLUMN_MAX``) is followed by its values, one per line in
+    the same order (one label: the next line). Blank lines are not counted.
+    A run naming a relative, or right under a line that does, is not read."""
+    rows = [ln for ln in lines if ln.strip()]
+    out: list[tuple[str, str]] = []
+    i = 0
+    while i < len(rows):
+        if not LABEL_ONLY.match(rows[i]):
+            i += 1
+            continue
+        j = i
+        while j < len(rows) and LABEL_ONLY.match(rows[j]):
+            j += 1
+        labels, values = rows[i:j], rows[j : j + (j - i)]
+        before = rows[i - 1] if i else ""
+        kin = any(RELATIVE.search(lb) for lb in labels) or bool(
+            RELATIVE.search(before) and not _PATIENT_WORD.search(before)
+        )
+        if len(labels) <= COLUMN_MAX and len(values) == len(labels) and not kin:
+            for lb, val in zip(labels, values):
+                m = LABEL_ONLY.match(lb)
+                head = m.group(1).strip() if m else ""
+                if DOB_TAG.fullmatch(head):
+                    d = _date_at(val, whole=True)
+                    if d:
+                        out.append(("dob", d))
+                elif re.fullmatch(r"(?i)patient(?:\s+name)?", head):
+                    out.append(("name", val.strip()))
+        i = j
+    return out
+
+
 def full_name(name: str, after: str) -> bool:
     """True when the capitalised words after "Patient:" are a person's name:
     none is a form word ("Denies", "Reports"), and the name ends where a name
@@ -105,14 +194,43 @@ def _has(word: str, text: str) -> bool:
     return bool(re.search(rf"(?i)(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])", text))
 
 
+def _first(name: str, sur: set[str]) -> str | None:
+    """The given name a printed name leads with ("Doe, Jane A" and "Jane A
+    Doe" both: Jane): its first word that is no surname of the job and no
+    title."""
+    words = re.findall(r"[A-Za-z][A-Za-z'\-.]*", name.split(",", 1)[1] if "," in name else name)
+    for w in words:
+        if not any(_has(s, w) for s in sur) and w.lower().rstrip(".") not in _NOT_GIVEN:
+            return w.rstrip(".")
+    return None
+
+
+def _is_first(word: str, firsts: set[str]) -> bool:
+    """`word` is one of `firsts`: the same name, its initial, or the one
+    written short ("Chris" for "Christopher", three letters at least)."""
+    w = word.lower()
+    for f in (x.lower() for x in firsts if x):
+        if w == f or (len(w) == 1 and f.startswith(w)):
+            return True
+        if min(len(w), len(f)) >= 3 and (f.startswith(w) or w.startswith(f)):
+            return True
+    return False
+
+
 def _conflicts(name: str, sur: set[str], firsts: set[str], text: str) -> bool:
     """True when a "Patient:" name is someone else's. A name without the
     client's surname that carries the client's FIRST name, in a document that
     names the client's surname elsewhere, is the client written short (a
     billing summary's "Patient: Alpha" held a real update, 2026-10-13); it
-    does not conflict. Any other name without the surname does."""
-    if not sur or any(_has(s, name) for s in sur):
+    does not conflict. Any other name without the surname does. A name WITH
+    the surname conflicts when it leads with a given name that is no unit's
+    (2026-11-22: a household member who shares the client's surname); one
+    that leads with a unit's first name or its initial is that unit."""
+    if not sur:
         return False
+    if any(_has(s, name) for s in sur):
+        given = _first(name, sur)
+        return bool(firsts and given and not _is_first(given, firsts))
     first_only = any(_has(f, name) for f in firsts)
     return not (first_only and any(_has(s, text) for s in sur))
 
@@ -131,19 +249,35 @@ def findings(
     client's surname is looked for (default `text`)."""
     out: list[str] = []
     sur = {s.lower() for s in surnames if s}
-    for line in (text or "").splitlines():
-        if RELATIVE.search(line):
-            continue
-        for m in DOB_LABEL.finditer(line):
-            d = _norm_dob(*m.groups())
-            if d and dobs and d not in dobs:
+    ctx = text if context is None else context
+    lines = (text or "").splitlines()
+    for line in lines:
+        for m in DOB_TAG.finditer(line):
+            d = _date_at(line[m.end() :])
+            if d and dobs and d not in dobs and not _relatives(line, m.start()):
                 out.append(f"a date of birth {d} that is not the client's")
+        # A patient label is the patient's though its line names a relative too.
         for m in PATIENT_LABEL.finditer(line):
-            if full_name(m.group(1), line[m.end() :]) and _conflicts(
-                m.group(1), sur, firsts or set(), text if context is None else context
-            ):
-                out.append("a patient name without the client's surname")
+            if full_name(m.group(1), line[m.end() :]):
+                out += _name_finding(m.group(1), sur, firsts or set(), ctx)
+    for kind, value in _column(lines):
+        if kind == "dob" and dobs and value not in dobs:
+            out.append(f"a date of birth {value} that is not the client's")
+        elif kind == "name" and COLUMN_NAME.fullmatch(value) and full_name(value, ""):
+            out += _name_finding(value, sur, firsts or set(), ctx)
     return sorted(set(out))
+
+
+#: A value line under a "Patient Name:" label that is a name (``PATIENT_LABEL``'s name).
+COLUMN_NAME = re.compile(r"[A-Z][A-Za-z'\-]+(?:,\s*|\s+)[A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-.]*){0,2}")
+
+
+def _name_finding(name: str, sur: set[str], firsts: set[str], ctx: str) -> list[str]:
+    if not _conflicts(name, sur, firsts, ctx):
+        return []
+    if any(_has(s, name) for s in sur):
+        return ["a patient name with the client's surname and another first name"]
+    return ["a patient name without the client's surname"]
 
 
 def _decided(slug_dir: Path, key: str) -> set[str]:

@@ -7,6 +7,15 @@ vision has transcribed the scanned ones, for a different person
 (``gates/foreign_identity``). The fold hook checked the text layers it could
 read before vision; this is the check that sees the scans.
 
+Since 2026-11-22 it reads more than folded attachments (a household member's
+records reached two delivered chronologies on one-person matters, where this
+stage used to stop at "single-unit matter; nothing to check"): every file in
+an email folder, attached or filed there directly, and on a one-person
+full build every file the units hold (an update checks its new documents
+page by page in ``update_select``). The FILE is the unit of the decision: a
+page that names no one (a fax cover) goes with the file whose other pages
+name another person.
+
 An attachment that names someone else is LEFT OUT BY RULE (2026-10-24, the
 Captain): it used to hold the run until the firm said whose it was, and a
 chronology now reaches the firm only when it is delivered. The withhold is
@@ -30,19 +39,44 @@ from ..medchron.gates import cross_client, foreign_identity as FI
 from .base import StageRun, read_jsonl
 
 HOLDS_FILE = "identity_holds.json"
+#: Folder names that hold email: a folded attachment's own, and a matter's
+#: email folders (a PDF filed there carries no ``from_email``).
+EMAIL_FOLDERS = frozenset({"(EMAIL ATTACHMENT)", "EMAIL", "EMAILS", "EMAILS ALL"})
+
+
+def in_email(r: dict[str, Any]) -> bool:
+    """A manifest row that came by email: folded from a saved email, or filed
+    in an email folder."""
+    parts = {p.strip().upper() for p in str(r.get("folder") or "").split("/")}
+    return bool(r.get("from_email")) or bool(parts & EMAIL_FOLDERS)
+
+
+def _unit_ids(sr: StageRun) -> set[str]:
+    """Every file id the units hold (build_units wrote them)."""
+    out: set[str] = set()
+    for f in sorted((sr.slug_dir / "units").glob("*.json")):
+        rows = json.loads(f.read_text(encoding="utf-8")) if not f.name.startswith("_") else []
+        out |= {str(r.get("id") or "") for r in rows if isinstance(r, dict)} if isinstance(rows, list) else set()
+    return out
 
 
 def _foreign_folded(sr: StageRun) -> list[dict[str, Any]]:
-    """Every folded attachment, not yet decided, whose text names someone other
+    """Every file to check, not yet decided, whose text names someone other
     than the client: its id, its file name, the saved email it came from, and
-    what was found (SMD's detail)."""
+    what was found (SMD's detail). The files: every one that came by email
+    (``in_email``), and on a one-person matter every one the units hold."""
     surnames, dobs = FI.identities(sr.job.units)
     # Released is the client's; withheld is out of every unit (build_units)
     # and disclosed as left out (decisions.orphans). Neither holds again.
     decided = FI.released(sr.slug_dir) | FI.withheld(sr.slug_dir)
+    # An update checks its new documents page by page (``update_select``)
+    # and builds no units of its own: here it checks folded attachments only.
+    full = sr.job.update is None
+    held = _unit_ids(sr) if full and not sr.job.joint else set()
     out: list[dict[str, Any]] = []
     for r in read_jsonl(sr.slug_dir / "raw_manifest.jsonl"):
-        if not r.get("ok") or not r.get("from_email"):
+        email = in_email(r) if full else bool(r.get("from_email"))
+        if not r.get("ok") or not (email or str(r.get("id") or "") in held):
             continue
         rid = str(r.get("id") or "")
         if FI.matches(rid, decided):
@@ -103,12 +137,12 @@ def run(sr: StageRun) -> int:
         )
         removed = _leave_out(sr, ids)
         sr.log(
-            f"IDENTITY: {len(foreign)} folded email attachment(s) name a different person than the client; "
+            f"IDENTITY: {len(foreign)} file(s) name a different person than the client; "
             f"left out by rule ({removed} unit row(s) removed) and disclosed in the package: "
             f"{'; '.join(_named(h) for h in foreign[:5])}"
         )
     if not sr.job.joint:
-        sr.log(f"{sr.slug}: single-unit matter; nothing to check")
+        sr.log(f"{sr.slug}: single-unit matter; every file checked for another person, no other client to compare")
         return 0
     found, checked, missing = cross_client.flags(sr.slug_dir)
     for f in found:

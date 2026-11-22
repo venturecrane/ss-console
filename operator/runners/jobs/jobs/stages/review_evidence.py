@@ -30,6 +30,7 @@ from typing import Any
 from ..medchron.audit import claims as CL
 from ..medchron.audit.page_text import PageIndex, exhibit_paths
 from ..medchron.gates import foreign_identity as FI
+from ..proof import review
 from .base import StageRun
 from ..text_rules import EXHIBIT_PAGE_MENTION as _EXHIBIT_PAGE, US_DATE as _DATE
 
@@ -84,6 +85,16 @@ class Pages:
                     pass
             self._cache[key] = "\n".join(p for p in parts if p)
         return self._cache[key]
+
+    def file_text(self, exhibit: int, page: int) -> str:
+        """Every page's transcript of the file the exhibit page was built
+        from; '' when the page is not traced to a file."""
+        try:
+            at = self._index.resolve(exhibit, page) if self._index is not None else None
+            segs = self._index.segments(at[0]) if self._index is not None and at else {}
+        except Exception:  # noqa: BLE001 - an untraceable page has no file text; its own page is still read
+            return ""
+        return "\n".join(seg[0] for _n, seg in sorted(segs.items()))
 
     def close(self) -> None:
         if self._index is not None:
@@ -217,6 +228,63 @@ def whose(sr: StageRun, texts: list[str]) -> str:
             return "other"
     named = any(_count(x, text) for x in sur) or bool(u.dob and u.dob in text)
     return "client" if named else "unnamed"
+
+
+def whose_cited(sr: StageRun, pages: Pages, cited: list[tuple[int, int]]) -> str:
+    """``whose`` of the cited pages; when they name no one, the FILE decides
+    (2026-11-22): a page naming no one (a fax cover) inside a file whose other
+    pages are another person's is that person's, as the identity rule
+    withholds the whole file."""
+    kind = whose(sr, [pages.text(ex, pg) for ex, pg in cited])
+    if kind == "unnamed" and whose(sr, [pages.file_text(ex, pg) for ex, pg in cited]) == "other":
+        return "other"
+    return kind
+
+
+#: The check label of an entry reader's another-person finding as the review settles it.
+READER_CHECK = "1 another person's records (entry reader)"
+
+
+def reader_findings(sr: StageRun, md: str, have: list[review.Finding]) -> list[review.Finding]:
+    """The entry reader's ``another_person`` findings (``entry_read.json``,
+    recorded and acted on by nothing before 2026-11-22), each as the model
+    check 1 MUST-FIX the review settles on its cited page (``whose_cited``):
+    left out by rule when the page is another person's, else a NOTE. Only a
+    page exactly one entry cites, which ``entry_for`` finds again, becomes a
+    finding (one it cannot place would hold); one already settled is not
+    added twice."""
+    from .entry_audit_io import RECORD
+
+    rec = _read_record(sr.slug_dir / "runs" / sr.unit.unit / RECORD)
+    blocks, out = entry_blocks(md), []
+    seen = {(f.finding, f.cite) for f in have}
+    for ex, pg in sorted({(r["exhibit"], r["page"]) for r in rec}):
+        hit = [b for b in blocks if _cites(b[2], ex, pg)]
+        if len(hit) != 1:
+            continue
+        rows = hit[0][2].split("\n")
+        prov = rows[1].split("|")[0].strip() if len(rows) > 1 else ""
+        text = f"the page cited for the entry dated {rows[0].strip()} ({prov}) was read as possibly not the client's"
+        cite = f"Exhibit {ex} - p. {pg}"
+        if any(c == cite and t.endswith(text) for t, c in seen) or entry_for(md, f"{text} {cite}") != hit[0]:
+            continue
+        out.append(review.Finding(review.MUST, READER_CHECK, text, cite, "model"))
+    return out
+
+
+def _read_record(p: Path) -> list[dict[str, int]]:
+    """The (exhibit, page) of every recorded ``another_person`` finding."""
+    try:
+        rows = (json.loads(p.read_text(encoding="utf-8")) or {}).get("rows") or [] if p.is_file() else []
+    except (OSError, ValueError, AttributeError):
+        return []
+    out = []
+    for row in rows if isinstance(rows, list) else []:
+        for r in (row.get("recorded") or []) if isinstance(row, dict) else []:
+            ok = isinstance(r, dict) and r.get("class") == "another_person"
+            if ok and isinstance(r.get("exhibit"), int) and isinstance(r.get("page"), int):
+                out.append({"exhibit": r["exhibit"], "page": r["page"]})
+    return out
 
 
 def leave_out(

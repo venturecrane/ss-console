@@ -233,6 +233,7 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
     from . import review_evidence as EV
 
     md = before = doc.read_text(encoding="utf-8")
+    out.findings += EV.reader_findings(sr, md, out.findings)
     for k, f in enumerate(out.findings):
         if f.grade != review.MUST:
             continue
@@ -249,7 +250,7 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
             if block is None:
                 continue
             cited = EV.cited_pages(block[2], _text(f))
-            kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
+            kind = EV.whose_cited(sr, pages, cited)
             if kind != "other":
                 # The client's page, or a page naming no one: the entry is a
                 # record the map read, and suspicion alone never drops it.
