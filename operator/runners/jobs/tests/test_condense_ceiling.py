@@ -92,3 +92,16 @@ def test_a_queued_reply_that_hits_max_tokens_is_redone_in_halves(tmp_path):
     door = Door(ceiling=70_000, batch=True)
     out = run(ds, 60_000, door, tmp_path)
     assert len(door.asked) == 3 and "example-golf.pdf" in out and "example-hotel.pdf" in out
+
+
+def test_a_reply_that_keeps_running_out_stops_after_a_bounded_number_of_splits():
+    """Review 11-22: a reply that runs out for a reason other than size (a loop)
+    must not be split until the input is one character, doubling the calls each
+    level. After SPLIT_DEPTH_MAX halvings the stage ends instead."""
+    import pytest
+
+    ds = [digest("alpha", 50_000)]
+    door = Door(ceiling=10)  # every body "runs out"
+    with pytest.raises(RuntimeError, match="still reached its ceiling after"):
+        run(ds, 40_000, door)
+    assert len(door.asked) <= 1 + 2 + 4 + 8

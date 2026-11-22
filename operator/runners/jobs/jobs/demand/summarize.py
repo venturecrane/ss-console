@@ -239,6 +239,9 @@ CONDENSE_MAX_TOKENS = 96_000
 #: records, 2026-11-22). A group whose target is longer would be cut off at
 #: its tail, cites included.
 TARGET_MAX_CHARS = int(0.9 * CONDENSE_MAX_TOKENS * 2)
+#: Halvings of one group before a reply that still runs out ends the stage: at
+#: most 2 + 4 + 8 extra calls for a group.
+SPLIT_DEPTH_MAX = 3
 GROUP_CHARS = 300_000
 
 
@@ -334,15 +337,23 @@ def condense(
         body = "\n\n".join(g)
         return f"condense-{sha(body)[:8]}", f"TARGET LENGTH: about {int(len(body) * ratio):,} characters.\n\n{body}"
 
-    def whole(g: list[str], text: str, stop: str) -> str:
+    def whole(g: list[str], text: str, stop: str, depth: int = 0) -> str:
         if stop != "max_tokens":
             return text
-        a, b = halves(g)
         size = sum(map(len, g)) + 2 * (len(g) - 1)
+        if depth >= SPLIT_DEPTH_MAX:
+            # A reply that still runs out after this many halvings is not running
+            # out for size (a loop, a target ignored); splitting on would double
+            # the calls each level (review 11-22). The stage ends failed, resumable.
+            raise RuntimeError(
+                f"a condense group of {size:,} characters still reached its ceiling after "
+                f"{SPLIT_DEPTH_MAX} splits; nothing was kept cut off"
+            )
+        a, b = halves(g)
         log(f"  a condense group of {size:,} characters reached its ceiling; condensed in two halves")
-        return one(a) + "\n\n" + one(b)
+        return one(a, depth + 1) + "\n\n" + one(b, depth + 1)
 
-    def one(g: list[str]) -> str:
+    def one(g: list[str], depth: int = 0) -> str:
         cid, user = ask(g)
         r = doorway.call(
             "condense",
@@ -353,7 +364,7 @@ def condense(
             stream=True,
             custom_id=cid,
         )
-        return whole(g, r.text, str(getattr(r, "stop_reason", "") or ""))
+        return whole(g, r.text, str(getattr(r, "stop_reason", "") or ""), depth)
 
     if "condense" in getattr(doorway, "batch_stages", ()):
         got = _queued(doorway, model, system, [ask(g) for g in groups], batch_dir)
