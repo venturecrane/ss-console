@@ -20,7 +20,7 @@ this order:
   billed_no_record  no non-billing page in the file carries the date. The
                     composer keeps billing-only dates OUT of its entries
                     (prompts/map-system.md) and code carries each as a dated
-                    row saying no visit note exists (medchron/billed_rows.py),
+                    row stating the service billed (medchron/billed_rows.py),
                     which this check does not count as a record of the visit:
                     a records gap in the firm's file, not a chronology error.
   provider_unmatched  entries carry the date, none names the billing provider,

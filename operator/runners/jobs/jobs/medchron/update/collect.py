@@ -40,8 +40,8 @@ from . import body as B, demographics as D, repeats as R, within as W
 from ..billed_rows import is_billed_row
 
 #: A billed date carried as its own row (``medchron/billed_rows.py``) whose
-#: date the delivered chronology already carries: that row's note would say no
-#: visit note exists for a date the delivered chronology records a visit on.
+#: date the delivered chronology already carries: a date the delivered
+#: chronology records a visit on is not a date known only from a bill.
 BILLED_DELIVERED = "not added: a billed date the delivered chronology carries"
 
 CITED_EX = re.compile(r"\(Exhibit (\d+)(?: - p\. [0-9,\s\-]+)?\)")
