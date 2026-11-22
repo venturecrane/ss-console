@@ -43,14 +43,18 @@ from .base import read_json
 from .update_base import headings
 from .update_review_io import CHECKPOINT, _sha, already_in, compose_sha, page_counts
 
-#: What the rest of the loop re-sends, as a share of round one. NOT MEASURED
-#: (2026-11-22): round one's finish sends the findings' entries and the pages
-#: they name with the page either side (``review_parts.finish_parts``, at most
-#: FINISH_MAX_IMAGES pictures a call), and round two re-reads only the pages
-#: the open findings name, with one more finish: each a subset of round one.
-#: A replay sets them from the ledger: the ``update_review-r1-f*`` rows over
-#: the ``update_review-r1-p*`` rows (FINISH_SHARE), and the ``update_review-r2-*``
-#: rows over the same (RECHECK_SHARE).
+#: What the rest of the loop re-sends, as a share of round one's projection.
+#: Calibrated 2026-11-22 at $0 on four finished updates against their usage
+#: ledgers, at the seat's pricing and firm config. Projected over real, round
+#: one: 1.05 (152 requests, the count exact), 1.13 (53), 1.25 (9), 1.24 (6).
+#: Projected against real, the whole review: $74.57 / $71.74, $27.27 / $23.06,
+#: $4.19 / $3.27, $2.66 / $2.56, above real on all four.
+#: THE MARGIN IS ROUND ONE'S, NOT THE FINISH SHARE'S: the real finish was
+#: 0.28, 0.31, 0.36 and 0.65 of real round one (0.65 is the 6-request job),
+#: above 0.25 on every one; the real re-check was 0.10 to 0.23, below it.
+#: So a resume that projects the later rounds alone, round one's review paid,
+#: has less room: on the 6-request job it is under real ($0.89 / $1.13, from
+#: these ratios).
 FINISH_SHARE = 0.25
 RECHECK_SHARE = 0.25
 LATER_SHARE = FINISH_SHARE + RECHECK_SHARE
