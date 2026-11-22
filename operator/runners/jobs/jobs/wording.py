@@ -54,6 +54,9 @@ NOT_LEGIBLE = "not legible"
 #: form shows that no reader can settle.
 MARKED_AS_SHOWN = "marked as shown on the page"
 AS_WRITTEN = "as written on the page"
+#: map-system.md BILLING-ONLY SOURCES -> ``medchron/billed_rows.py``: the note
+#: under a date of service that only a bill shows, carried as its own entry.
+BILLED_NO_NOTE = "[NTD: No visit note for this date of service is in the records; the date is shown only on a bill.]"
 
 #: map-system.md -> merge-system.md: a fragment that runs on into the next chunk.
 CONTINUES = "[entry may continue in next chunk]"
@@ -69,6 +72,7 @@ FIRM: dict[str, str] = {
     "NOT_LEGIBLE": NOT_LEGIBLE,
     "MARKED_AS_SHOWN": MARKED_AS_SHOWN,
     "AS_WRITTEN": AS_WRITTEN,
+    "BILLED_NO_NOTE": BILLED_NO_NOTE,
 }
 INTERNAL: dict[str, str] = {"CONTINUES": CONTINUES}
 ALL: dict[str, str] = {**FIRM, **INTERNAL}
@@ -87,6 +91,7 @@ _MARKERS: dict[str, tuple[str, ...]] = {
     "NOT_LEGIBLE": ("not legible",),
     "MARKED_AS_SHOWN": ("marked as shown on the page",),
     "AS_WRITTEN": ("as written on the page",),
+    "BILLED_NO_NOTE": ("no visit note for this date", "shown only on a bill"),
 }
 
 TOKEN = re.compile(r"\{\{WORDING:([A-Z_]+)\}\}")

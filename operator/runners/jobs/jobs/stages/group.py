@@ -159,6 +159,7 @@ def index_rows(run_dir, id_to_name: dict[str, str] | None = None) -> tuple[dict[
     idx_prov: dict[str, list[str]] = defaultdict(list)
     cite_dates: dict[str, list[str]] = defaultdict(list)
     cite_prov: dict[str, list[str]] = defaultdict(list)
+    bodies: list[str] = []
     for p in sorted(run_dir.iterdir()):
         if not MAP_FILE.match(p.name):
             continue
@@ -171,7 +172,12 @@ def index_rows(run_dir, id_to_name: dict[str, str] | None = None) -> tuple[dict[
                     k = ids[fid] if fid else name
                     idx_dates[k].append(parts[0])
                     idx_prov[k].append(parts[1])
-        body = assemble.section(txt, "ENTRIES")
+        bodies.append(assemble.section(txt, "ENTRIES"))
+    billed = run_dir / assemble.BILLED_ROWS
+    if billed.is_file():
+        # a billed date carried as its own row names its bill's provider and date
+        bodies.append(billed.read_text(encoding="utf-8"))
+    for body in bodies:
         for chunk in assemble.ENTRY_SPLIT.split(body):
             dm = assemble.DATE_HEAD.match(chunk.strip())
             if dm is None:

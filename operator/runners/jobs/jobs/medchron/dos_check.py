@@ -18,9 +18,11 @@ this order:
   explained         a person recorded why (`billed_dates_explained.json`,
                     written by `jobs explain-date`).
   billed_no_record  no non-billing page in the file carries the date. The
-                    composer is told to keep billing-only dates OUT of entries
-                    (prompts/map-system.md), so this is a records gap in the
-                    firm's file, not a chronology error.
+                    composer keeps billing-only dates OUT of its entries
+                    (prompts/map-system.md) and code carries each as a dated
+                    row saying no visit note exists (medchron/billed_rows.py),
+                    which this check does not count as a record of the visit:
+                    a records gap in the firm's file, not a chronology error.
   provider_unmatched  entries carry the date, none names the billing provider,
                     and the medical records DO name it: two providers seen one
                     day and the chronology may hold only one. (A billing name
@@ -52,6 +54,7 @@ from typing import Any
 from ..stages.base import read_json, read_jsonl
 from ..stages.billing_chart import ADJ_LABEL, dt, quarantined
 from ..stages.build_doc import parse_entries
+from .billed_rows import is_billed_row
 
 DOS_TYPES = {"MEDICAL_BILL", "LEDGER"}
 NOT_A_VISIT = re.compile(r"payment|paid|pmt|refund|credit|balance|statement|posted|transfer|interest", re.I)
@@ -220,7 +223,10 @@ def check(
     billed, quality = billed_dates(slug_dir, patient)
     by_date: dict[str, list[str]] = {}
     for e in parse_entries(entries_text):
-        by_date.setdefault(e["iso"], []).append(e["provider"])
+        # a billed date carried as its own row (billed_rows.py) records no
+        # visit: its date stays billed with no record, on the worksheet too
+        if not is_billed_row(e["text"]):
+            by_date.setdefault(e["iso"], []).append(e["provider"])
     entry_isos = sorted(by_date)
     match = provider_match or {}
     explained = {str(r.get("date")) for r in read_json(run_dir / EXPLAINED_FILE, []) or [] if isinstance(r, dict)}
@@ -229,7 +235,7 @@ def check(
     missed: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     #: each billed date no medical record on file carries: it goes on the
-    #: billing worksheet, never into the chronology (map-system.md, house rule)
+    #: billing worksheet (the chronology carries it only as a billed row)
     no_record: list[dict[str, Any]] = []
     for iso, prov in sorted(billed):
         if iso in by_date and (

@@ -9,7 +9,9 @@ which is the silent-omission class a chronology must not have.
 
 Outputs under runs/<unit>/: entries.md (standalone entries, pre-merge),
 clusters.md (same date+provider fragments for the merge), exhibit_map.json
-(file name -> exhibit number), billing_dates.md, conflicts.md, files_seen.md.
+(file name -> exhibit number), billing_dates.md, conflicts.md, files_seen.md,
+billed_rows.md (each billed date of service no entry is dated on, written as
+its own dated row by ``medchron/billed_rows.py`` and assembled with the rest).
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from . import fileref
+from ..medchron import billed_rows as BR
 from .base import StageRun, read_json
 from .compose import read_usage
 from ..text_rules import DATE_HEAD, ENTRY_START as ENTRY_SPLIT
@@ -93,6 +96,44 @@ class Resolver:
         return None
 
 
+def _seen(txt: str) -> dict[str, set[str]]:
+    """name -> the fileIds of the `=== FILE:` headers one map's chunk carried."""
+    seen: dict[str, set[str]] = defaultdict(set)
+    for name, fid in FILE_HEADER.findall(txt):
+        seen[name.strip()].add(fid)
+    return seen
+
+
+#: The billed dates carried as rows (``medchron/billed_rows.py``), in the
+#: writer's entry format, read by ``group.index_rows`` like a map's ENTRIES.
+BILLED_ROWS = "billed_rows.md"
+
+
+def billed_entries(d: Path, maps: list[str], entries: list[dict[str, Any]], heading: str) -> list[dict[str, Any]]:
+    """Each billed date of service no entry is dated on, as an entry fragment
+    (``medchron/billed_rows.py``): the writer lists such a date in BILLING-DATES
+    and makes no entry, so without this it reaches no chronology."""
+    billed: list[dict[str, Any]] = []
+    for fn in maps:
+        txt = (d / fn).read_text(encoding="utf-8")
+        seen = _seen(txt)
+        billed += [{**b, "src": fn, "seen": seen} for b in BR.parse(section(txt, "BILLING-DATES"))]
+    out = []
+    for r in BR.carry(billed, {e["date"] for e in entries}, heading):
+        first = r["rows"][0]
+        out.append(
+            {
+                "date": r["iso"],
+                "provider": r["provider"],
+                "key": norm_provider(r["provider"]),
+                "text": r["text"],
+                "src": first["src"],
+                "seen": first["seen"],
+            }
+        )
+    return out
+
+
 def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     entries: list[dict[str, Any]] = []
     buckets: dict[str, list[str]] = {"billing_dates.md": [], "conflicts.md": [], "files_seen.md": []}
@@ -103,9 +144,7 @@ def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str
     )
     for fn in maps:
         txt = (d / fn).read_text(encoding="utf-8")
-        seen: dict[str, set[str]] = defaultdict(set)
-        for name, fid in FILE_HEADER.findall(txt):
-            seen[name.strip()].add(fid)
+        seen = _seen(txt)
         body = section(txt, "ENTRIES")
         if body and "none in this chunk" not in body.lower():
             for chunk in ENTRY_SPLIT.split(body):
@@ -205,6 +244,9 @@ def run(sr: StageRun) -> int:
         sr.log(f"REFUSING TO ASSEMBLE: chunk(s) {refused} were refused and carry no entries")
         return 1
     entries, buckets = parse_maps(d, maps)
+    billed = billed_entries(d, maps, entries, BR.heading_of(sr.cfg.get("format", "subsections")))
+    entries += billed
+    (d / BILLED_ROWS).write_text("".join(e["text"] + "\n\n" for e in billed), encoding="utf-8")
     unit_files = read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
     real_names = [f["name"] + (f.get("ext") or "") for f in unit_files]
     resolve = Resolver(real_names, {f["id"]: n for f, n in zip(unit_files, real_names)})
@@ -228,6 +270,7 @@ def run(sr: StageRun) -> int:
         (d / fname).write_text("\n\n".join(bucket), encoding="utf-8")
     sr.log(f"{sr.unit.unit}: {len(maps)} map files, {len(entries)} entry fragments")
     sr.log(f"  {len(singles)} standalone, {len(clusters)} clusters to merge")
+    sr.log(f"  {len(billed)} billed date(s) no entry carries, written as dated rows ({BILLED_ROWS})")
     sr.log(f"  {len(exhibit)} source files -> exhibit numbers")
     if resolve.unresolved:
         sr.log(f"  UNRESOLVED cited file name(s): {len(resolve.unresolved)}")
