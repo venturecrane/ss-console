@@ -87,6 +87,15 @@ def test_an_uncited_line_goes_to_the_first_part_and_a_sentence_takes_its_paragra
     assert fam in us[0].lines
 
 
+def test_a_sentence_whose_citation_sits_on_the_next_line_goes_to_the_part_showing_that_page() -> None:
+    extra = "The wound was healing well on the last day.\n(Exhibit 3 - p. 60)"
+    us = parts(long_entry(60, 12, extra=extra))
+    labels = EL.numbered(us[0].text)[1]
+    wound = next(lb for lb, t in labels.items() if t.startswith("The wound was healing"))
+    assert EL.label_pages(us[0].text)[wound] == {(3, 60)}
+    assert wound in us[-1].lines and wound not in us[0].lines  # before the fix: part 1, which never shows p. 60
+
+
 def test_label_pages_names_exactly_the_labels_numbered_shows() -> None:
     text = long_entry(3, 2, extra="Heading Only\n\nA closing line without a citation.")
     assert set(EL.label_pages(text)) == set(EL.numbered(text)[1])

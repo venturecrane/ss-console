@@ -113,11 +113,26 @@ def cites_of(text: str) -> set[tuple[int, int]]:
     return {(int(m.group(1)), p) for m in CL.CITE.finditer(text) for p in CL.parse_pages(m.group(2)) or [1]}
 
 
+def _blocks(text: str) -> dict[str, str]:
+    """line -> the block of lines it sits in, between blank lines."""
+    out: dict[str, str] = {}
+    for block in re.split(r"\n\s*\n", text):
+        for ln in block.split("\n"):
+            out.setdefault(ln, block)
+    return out
+
+
 def label_pages(text: str, record_only: bool = False) -> dict[str, set[tuple[int, int]]]:
-    """label -> the pages that line rests on: its own citations, else those of
-    the paragraph it sits in (a paragraph's citation often closes only its
-    last sentence); empty for a line nothing cites."""
-    return {lb: cites_of(s) or cites_of(para) for lb, s, para in _walk(text, record_only) if lb}
+    """label -> the pages that line rests on: its own citations, else its
+    text line's (a citation often closes only the last sentence), else its
+    block's between blank lines (a citation can sit on the next line, as live
+    on 2026-10-07: ``audit/claims._walk``); empty for a line nothing cites."""
+    blocks = _blocks(text)
+    return {
+        lb: cites_of(s) or cites_of(para) or cites_of(blocks.get(para, ""))
+        for lb, s, para in _walk(text, record_only)
+        if lb
+    }
 
 
 def count_sentences(body: str) -> int:
