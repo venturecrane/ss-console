@@ -194,7 +194,5 @@ def test_the_gates_behind_the_paid_merge_carry_standalone_probes() -> None:
     """merge routing, the coverage verdict and the audit claim count are the
     three questions a dead tree could not answer without paying; each has a
     $0 half a rehearsal runs from whatever exists. dos_check (a billed visit
-    the chronology lacks) is the fourth; the review's page looks (the pages
-    the entry reader flagged, ``whose_page``) the fifth."""
-    want = {"merge", "coverage_gate", "audit", "dos_check", "review"}
-    assert {s.name for s in dag.STAGES if s.rehearse is not None} == want
+    the chronology lacks) is the fourth."""
+    assert {s.name for s in dag.STAGES if s.rehearse is not None} == {"merge", "coverage_gate", "audit", "dos_check"}

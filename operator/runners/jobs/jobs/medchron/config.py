@@ -166,6 +166,9 @@ DOS_CHECK_MODES = {"report", "hold"}
 # family from 5.1 on ("claude-fable-5-"), so a new point release is covered
 # without an edit; bare "claude-fable-5" (5.0) accepts a forced call and does
 # not match. The 5.1-only list missed Fable 5.2 (released 2026-11-10).
+#: The model that looks at a flagged page's picture (stages/whose_page.py) when
+#: models.tiers.identity is absent: the one the 2026-11-23 proof ran on.
+IDENTITY_MODEL = "claude-opus-5-5"
 NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-", "claude-mythos-5-")
 PRE_INCIDENT_ITEMIZE_ALL = "itemize_all"
 PRE_INCIDENT_POLICIES = {"include", "summarize_only", PRE_INCIDENT_ITEMIZE_ALL}

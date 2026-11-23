@@ -24,7 +24,6 @@ import json
 
 import pytest
 
-from jobs.medchron import dag
 from jobs.medchron.gates import foreign_identity as FI
 from jobs.proof import review as proof_review
 from jobs.stages import review_evidence, review_policy, whose_page
@@ -297,20 +296,6 @@ def test_after_the_reader_leaves_entry_a_out_the_review_never_lands_on_entry_b(j
 
 
 # ---- rehearse and the limits, at $0 --------------------------------------------------
-def test_the_review_stage_rehearses_its_looks_at_no_cost(job_dir, firm_config_path, data_root):
-    sr, _log = _package(job_dir, firm_config_path, data_root)
-    _pages(sr, PAGE)
-    _reader(sr)
-    d = FakeDoorway()
-    sr._doorway = d  # type: ignore[assignment]
-    stage = next(s for s in dag.STAGES if s.name == "review")
-    assert stage.rehearse is whose_page.rehearse
-    lines = stage.rehearse(sr)
-    assert d.calls == [] and "1 page(s) the entry reader flagged" in lines[0] and "1 not yet looked at" in lines[0]
-    whose_page.Looker(sr, ask=lambda *_a: _look("client")).subject(1, 3)
-    assert "0 not yet looked at" in stage.rehearse(sr)[0], "a saved verdict is not projected again"
-
-
 def test_the_limits_see_the_looks_the_review_will_make(job_dir, firm_config_path, data_root):
     from jobs.budget import Pricing
     from litigation_observe_shapes import PRICING

@@ -6,7 +6,7 @@ delivered in two chronologies. A $0 replay of the real saved jobs showed the
 text rules (``review_evidence``'s old ``whose``: labelled dates of birth and
 "Patient:" names) caught none of the nine: the value sat on the line after
 its label, the page was handwritten, or it had no label at all. A paid proof
-on the page pictures (claude-opus-5-5, one page per request, this prompt)
+on the page pictures (Opus 5.5, one page per request, this prompt)
 caught 15 of 15 other-person pages on two runs and read 0 of 77 client pages
 as another person's, at about $0.0134 a look.
 
@@ -29,11 +29,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..medchron.prompts import raw
+from ..medchron.config import IDENTITY_MODEL
 from .base import StageRun, read_json
 
 PROMPT = "whose-page-system"
 #: The optional ``models.tiers.identity`` row, else this model (the proof's).
-TIER, DEFAULT_MODEL = "identity", "claude-opus-5-5"
+TIER, DEFAULT_MODEL = "identity", IDENTITY_MODEL
 MAX_TOKENS = 400
 STAGE = "review"  # the ledger prices the looks with the review that asks for them
 CACHE = "whose_page.json"
@@ -41,7 +42,7 @@ SUBJECTS = ("client", "other", "both", "none", "unreadable")
 BASES = ("dob", "name", "dob_and_name", "account", "none")
 UNREADABLE = "unreadable"
 #: One look, priced for the limits: a page picture and the short system
-#: prompt in, a one-line answer out. At claude-opus-5-5's rates ($4/$20 per
+#: prompt in, a one-line answer out. At Opus 5.5's rates ($4/$20 per
 #: million) this is about $0.0132, against $0.0134 measured on the proof.
 LOOK_IN_TOKENS, LOOK_OUT_TOKENS = 2_800, 100
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
@@ -184,13 +185,3 @@ def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: Any) -> float | 
         return None
     per = (LOOK_IN_TOKENS * rate.input_per_million_cents + LOOK_OUT_TOKENS * rate.output_per_million_cents) / 1e8
     return to_look(slug_dir, unit, cfg) * per
-
-
-def rehearse(sr: StageRun) -> list[str]:
-    """The $0 half for `jobs rehearse`: how many pages the review will look at."""
-    n = to_look(sr.slug_dir, sr.unit.unit, sr.cfg)
-    flagged = len(reader_pages(sr.slug_dir, sr.unit.unit))
-    return [
-        f"whose page: {flagged} page(s) the entry reader flagged as another person's, {n} not yet looked at on "
-        f"{model(sr.cfg)} (one look each, plus one per page the review's check 1 names)"
-    ]

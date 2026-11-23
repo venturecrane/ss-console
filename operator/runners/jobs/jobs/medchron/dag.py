@@ -59,7 +59,6 @@ from ..stages import (
     msg as _msg,
     repair as _repair,
     review as _review,
-    whose_page as _whose_page,
     scope as _scope,
     summarize as _summarize,
     units as _units,
@@ -534,7 +533,6 @@ STAGES: tuple[Stage, ...] = (
         paid=True,
         requires=("manifest",),
         runner=_review.run,
-        rehearse=_whose_page.rehearse,  # the pages the review will look at, at $0
         exit_map=_review.EXITS,
     ),
     # ss#2614: the deliverable set onto the matter. The only stage that writes
