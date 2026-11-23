@@ -92,7 +92,7 @@ def duplicate_answer(pending: Any, instructed_by: str, scope: str, text: str) ->
 class RuleProposals(ProposalLifecycle):
     """propose / decline / lapse_notified / pending_rules (ss-console#2529, #2546)."""
 
-    def propose(self, request: dict[str, Any]) -> dict[str, Any]:
+    def propose(self, request: dict[str, Any], *, by_smd: bool = False) -> dict[str, Any]:
         """Record one spoken rule as PENDING and return the readback to send.
 
         Nothing is installed here and nothing is in effect. What the caller gets
@@ -171,8 +171,11 @@ class RuleProposals(ProposalLifecycle):
         self.ledger.append(
             {
                 "action_type": RULE_PROPOSED_ACTION_TYPE,
-                "actor": "operator",
-                "actor_role": "agent",
+                # SMD recording a client's written rule (rule_record_verbs.py) is
+                # never a read-back; the feed reads the actor to say so. Not a
+                # wire field: the verb table calls this with the request only.
+                "actor": "smd" if by_smd else "operator",
+                "actor_role": "captain" if by_smd else "agent",
                 "metadata": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
             }
         )

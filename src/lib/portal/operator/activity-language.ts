@@ -113,6 +113,7 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'OPS_REQUEST_LAPSED',
       'OPS_REQUEST_CLOSED_BY_SMD',
       'RULE_CLOSED_BY_SMD',
+      'RULE_RECORDED_BY_SMD',
       'MEDCHRON_JOB_SUBMITTED',
       'MEDCHRON_JOB_RUNNING',
       'MEDCHRON_JOB_HELD',
@@ -360,7 +361,10 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   // Deliberately no timing promise on the middle one (Pattern A): "committed"
   // is a fact about the record, "applied" is the one that says the next
   // document of that kind is written to it.
-  RULE_PROPOSED: () => 'Stated a rule back for confirmation',
+  // A rule SMD recorded from an attorney's email (actor 'smd', rule_record_verbs.py)
+  // was never read back to anyone and never confirmed by the firm: these two rows
+  // render nothing, and RULE_RECORDED_BY_SMD says what happened, once.
+  RULE_PROPOSED: (e) => (e.actor === 'smd' ? '' : 'Stated a rule back for confirmation'),
   // ss#2546. Three more lines, for the three things that used to happen in
   // silence when the person who asked was not an administrator. Each is written
   // from the reader's side: what happened to the request they made, never which
@@ -368,7 +372,7 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   RULE_REQUEST_NOTIFIED: () => 'Asked an administrator to apply a rule',
   RULE_DECLINED: () => 'An administrator declined a rule',
   RULE_LAPSED: () => 'A rule request lapsed unanswered',
-  ESTABLISHMENT_SUBMITTED: () => 'Committed a rule you confirmed',
+  ESTABLISHMENT_SUBMITTED: (e) => (e.actor === 'smd' ? '' : 'Committed a rule you confirmed'),
   ESTABLISHMENT_RESULT: () => 'Applied a rule to how work is written',
   // ss#2536. Two lines for the two halves of an act, and the first one has to
   // read as a QUESTION: nothing happened, somebody was asked. The second says
@@ -447,6 +451,8 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   OPS_REQUEST_CLOSED_BY_SMD: () => 'SMD closed a setup request',
   // SMD records rules by hand on a seat with the rules-by-hand stopgap.
   RULE_CLOSED_BY_SMD: () => 'SMD closed a stated rule',
+  // SMD recorded a rule the firm asked for in writing.
+  RULE_RECORDED_BY_SMD: () => "SMD recorded a firm rule from an attorney's email",
   ESCALATION_FIRED: (e) => e.reason ?? 'Flagged something for your attention',
   ESCALATION_ACKNOWLEDGED: () => 'An escalation was acknowledged',
   AGENT_STOPPED: () => 'Your operator was paused',
@@ -503,7 +509,18 @@ export function mappedActionsForCategories(categoryKeys: readonly string[]): str
 /** Client-language summary for one entry, or null when unmapped. */
 export function clientSummaryFor(entry: AuditEntry): string | null {
   const build = CLIENT_LANGUAGE[entry.action]
-  return build ? build(entry) : null
+  return build ? build(entry) || null : null
+}
+
+/**
+ * True for a row of a mapped action that is withheld for THIS row: its builder
+ * returns ''. Today that is a rule SMD recorded from an attorney's email, whose
+ * RULE_PROPOSED and ESTABLISHMENT_SUBMITTED rows would otherwise repeat the
+ * RULE_RECORDED_BY_SMD line. The feed drops these rows (AuditLogTable.astro).
+ */
+export function isWithheldEntry(entry: AuditEntry): boolean {
+  const build = CLIENT_LANGUAGE[entry.action]
+  return build !== undefined && build(entry) === ''
 }
 
 /** True when the entry has authored client language. */

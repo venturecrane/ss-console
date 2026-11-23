@@ -5,6 +5,7 @@ import {
   SUPPRESSED_ACTIONS,
   mappedActionsForCategories,
   clientSummaryFor,
+  isWithheldEntry,
 } from '../src/lib/portal/operator/activity-language'
 import { AUDIT_ACTION_TYPES } from '../src/lib/portal/operator/audit'
 import type { AuditEntry } from '../src/lib/portal/operator/audit'
@@ -71,6 +72,7 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         // SMD closed a request the requester was already answered on.
         'OPS_REQUEST_CLOSED_BY_SMD',
         'RULE_CLOSED_BY_SMD',
+        'RULE_RECORDED_BY_SMD',
         // ADR 0089. A draft sent as a staff member on their approval: every
         // step renders, because the firm must be able to see that a message
         // went out under a person's name and that the person said send.
@@ -334,6 +336,29 @@ describe('clientSummaryFor', () => {
       expect(summary).not.toMatch(/[A-Z]{2,}_[A-Z]/)
       expect(summary.toLowerCase()).not.toContain('invariant')
     }
+  })
+
+  it('a rule SMD recorded from an attorney email shows once, never as a read-back or a firm confirmation', () => {
+    // rule_record_verbs.py writes RULE_PROPOSED and ESTABLISHMENT_SUBMITTED with
+    // actor 'smd': nobody was read the rule back and nobody at the firm said yes.
+    // Those two rows are withheld; RULE_RECORDED_BY_SMD says it once.
+    const smd = { actor: 'smd', actorRole: 'captain' as const }
+    for (const action of ['RULE_PROPOSED', 'ESTABLISHMENT_SUBMITTED']) {
+      expect(clientSummaryFor(entry(action, smd)), action).toBeNull()
+      expect(isWithheldEntry(entry(action, smd)), action).toBe(true)
+    }
+    const line = clientSummaryFor(entry('RULE_RECORDED_BY_SMD', smd))
+    expect(line).toBe("SMD recorded a firm rule from an attorney's email")
+    expect(isWithheldEntry(entry('RULE_RECORDED_BY_SMD', smd))).toBe(false)
+    // A law firm reads "client" as its own client, and "you" as the viewer.
+    expect(line).not.toMatch(/\b(you|your|client|confirm|confirmed|confirmation)\b/i)
+    // The agent's own rows keep their lines and are never withheld.
+    expect(clientSummaryFor(entry('RULE_PROPOSED'))).toBe('Stated a rule back for confirmation')
+    expect(clientSummaryFor(entry('ESTABLISHMENT_SUBMITTED'))).toBe(
+      'Committed a rule you confirmed'
+    )
+    expect(isWithheldEntry(entry('RULE_PROPOSED'))).toBe(false)
+    expect(isWithheldEntry(entry('INVARIANT_VIOLATION'))).toBe(false)
   })
 
   it('interpolates real row data only where present', () => {
