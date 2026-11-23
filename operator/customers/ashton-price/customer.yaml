@@ -1915,3 +1915,6 @@ matter_file_delivery:
 logic_in_code:
   library_setup: enforce
   wording_rules: enforce
+  # 2026-11-23, Captain: an attorney stating a rule gets one fixed sentence
+  # and SMD records it (rule_record_by_smd); no read-back loop with the firm.
+  rules_by_hand: enforce
