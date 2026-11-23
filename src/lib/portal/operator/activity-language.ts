@@ -361,7 +361,13 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   // Deliberately no timing promise on the middle one (Pattern A): "committed"
   // is a fact about the record, "applied" is the one that says the next
   // document of that kind is written to it.
-  RULE_PROPOSED: () => 'Stated a rule back for confirmation',
+  // A rule SMD recorded from a client's email (actor 'smd', rule_record_verbs.py)
+  // was never read back to anyone and never confirmed by the firm: these two rows
+  // say what happened instead.
+  RULE_PROPOSED: (e) =>
+    e.actor === 'smd'
+      ? "SMD wrote down a firm rule from a client's email"
+      : 'Stated a rule back for confirmation',
   // ss#2546. Three more lines, for the three things that used to happen in
   // silence when the person who asked was not an administrator. Each is written
   // from the reader's side: what happened to the request they made, never which
@@ -369,7 +375,10 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   RULE_REQUEST_NOTIFIED: () => 'Asked an administrator to apply a rule',
   RULE_DECLINED: () => 'An administrator declined a rule',
   RULE_LAPSED: () => 'A rule request lapsed unanswered',
-  ESTABLISHMENT_SUBMITTED: () => 'Committed a rule you confirmed',
+  ESTABLISHMENT_SUBMITTED: (e) =>
+    e.actor === 'smd'
+      ? "SMD committed a firm rule from a client's email"
+      : 'Committed a rule you confirmed',
   ESTABLISHMENT_RESULT: () => 'Applied a rule to how work is written',
   // ss#2536. Two lines for the two halves of an act, and the first one has to
   // read as a QUESTION: nothing happened, somebody was asked. The second says
@@ -449,7 +458,7 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   // SMD records rules by hand on a seat with the rules-by-hand stopgap.
   RULE_CLOSED_BY_SMD: () => 'SMD closed a stated rule',
   // SMD recorded a rule the firm asked for in writing.
-  RULE_RECORDED_BY_SMD: () => 'SMD recorded a firm rule you asked for',
+  RULE_RECORDED_BY_SMD: () => "SMD recorded a firm rule from a client's email",
   ESCALATION_FIRED: (e) => e.reason ?? 'Flagged something for your attention',
   ESCALATION_ACKNOWLEDGED: () => 'An escalation was acknowledged',
   AGENT_STOPPED: () => 'Your operator was paused',

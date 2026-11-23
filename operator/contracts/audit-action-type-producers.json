@@ -645,7 +645,7 @@
     "RULE_RECORDED_BY_SMD": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/rule_record_verbs.py",
-      "reason": "2026-11-23. Appended when SMD, as root, records a firm rule a client asked for in writing through rule_record_by_smd: the client's own email, checked in the mailbox, stands in for the read-back, and the rule commits through the same propose and submit path a confirmed yes takes. Ids and digests only: proposal and run ids, recorder, instructed_by, the email ids, quote and text digests, subject, has_reason; never the quote, rule or reason."
+      "reason": "2026-11-23. Appended when SMD, as root, records a firm rule a client asked for in writing through rule_record_by_smd: the rule's text must be the client's own words in an email checked in the mailbox, which stands in for the read-back, and the rule commits through the same propose and submit path a confirmed yes takes. Ids and digests only: proposal and run ids, recorder, instructed_by, the email ids, text digest, subject, has_reason; never the rule or reason."
     },
     "RULE_CLOSED_BY_SMD": {
       "side": "ss-console",

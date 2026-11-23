@@ -12,19 +12,21 @@ responses, each ending "This should be a firm rule", and the Operator refused
 them on reach. SMD has to be able to record a client's written instruction from
 its own side, reliably, without asking the attorney to confirm it again.
 
-THE CONTROL THAT REPLACES THE READ-BACK. The rule cites the client's own words,
+THE CONTROL THAT REPLACES THE READ-BACK. The rule IS the client's own words,
 and the broker checks them against the mailbox itself, not against anything the
 caller says:
 
 * the sender is on this seat's roster (``scope.inbound_allow_from``);
 * the named email is a received message in this mailbox's Inbox, sent by that
   sender (``msgraph_lookup.received_by_graph_id``: not a draft, not this
-  mailbox's own, no foreign replyTo);
+  mailbox's own, no foreign replyTo), and not a forward (an ``FW:``/``Fwd:``
+  subject is refused);
 * the audit log records it arriving (an ``INBOUND_RECEIVED`` row for its id);
-* the quote, at least :data:`MIN_QUOTE_CHARS` characters, appears in that
-  email's own text (Graph's ``uniqueBody``, the part not quoted from earlier
-  mail; ``body`` only when Graph gives none), compared with whitespace, case and
-  curly quotes folded;
+* the rule's text appears verbatim in what the sender wrote: Graph's
+  ``uniqueBody`` (``body`` only when Graph gives none), cut at the first
+  forwarded-message header, compared with whitespace, case and curly quotes
+  folded. It must say something beyond the stock line "this should be a firm
+  rule" (:data:`MIN_RULE_CHARS` characters of its own);
 * a live record repeats the dry run's digest (``confirm``), so what is recorded
   is what SMD read.
 
@@ -34,18 +36,24 @@ administrator is asked and no install letter is owed), committed through
 ``EstablishmentStore.submit`` exactly as a confirmed yes commits it (consume,
 ESTABLISHMENT_SUBMITTED, the run the root intake installs), and its run is
 watched (``own_rule_verbs.install_watch``) so the seat's install check stamps
-``installed_at`` or records the failure as owed to SMD. ``applied_by`` on the
-installed rule is the SMD address that recorded it, so the spec file says who
-put it in force.
+``installed_at`` or records the failure as owed to SMD. Both rows carry the
+actor ``smd`` (``by_smd``, never a wire field), so the firm's activity feed does
+not call this a read-back or a rule the firm confirmed. ``applied_by`` on the
+installed rule is the SMD address that recorded it; the root intake requires
+only that it is a non-empty string (``_verify_adjustment``), never a roster
+member, and ``test_the_root_intake_installs_what_smd_submits`` runs the real
+intake on the submission to prove it.
 
-DUPLICATES. The same sentence already committed for this attorney under the
-same subject is a no-op answering the existing id. An open, unconfirmed row of
-the same sentence is ended quietly (``rule_close_by_smd``) and replaced, so a
-later "yes" cannot commit it twice.
+DUPLICATES. The same sentence committed for this attorney under the same
+subject and observed installed is a no-op answering the existing id. One
+committed and not yet installed, or whose install failed, is refused naming its
+run. An open, unconfirmed proposal of the same sentence under the same subject,
+not waiting on an administrator, is the row committed; any other open twin is
+refused naming it (end it with ``rule_close`` first).
 
 THE AUDIT ROW, ``RULE_RECORDED_BY_SMD``: ids and digests only (proposal, run,
-recorder, who stated it, the email's ids, the quote's and the rule's digests,
-the subject, ``has_reason``). Never the quote, the rule or the reason.
+recorder, who stated it, the email's ids, the rule's digest, the subject,
+``has_reason``). Never the rule or the reason.
 """
 
 from __future__ import annotations
@@ -77,9 +85,11 @@ VERBS: tuple[str, ...] = (VERB_RECORD, VERB_PROBE)
 
 #: Appended once per rule SMD records on a client's written instruction.
 RULE_RECORDED_BY_SMD_ACTION_TYPE = "RULE_RECORDED_BY_SMD"
-#: A quote shorter than this could be found in almost any email.
-MIN_QUOTE_CHARS = 20
-MAX_QUOTE_CHARS = 2000
+#: What a rule must say beyond the stock line, folded, so it is a rule.
+MIN_RULE_CHARS = 20
+_STOCK = ("this should be a firm rule", "should be a firm rule")
+_FORWARD_SUBJECT = re.compile(r"^\s*(fw|fwd)\s*:", re.IGNORECASE)
+_FORWARD_HEADER = re.compile(r"^\s*(-{2,}.*forwarded|from:\s)", re.IGNORECASE | re.MULTILINE)
 SCOPE = "firm_adjust"
 _GRAPH_ID = re.compile(r"^[A-Za-z0-9=_-]{16,512}$")
 _SOURCE_SELECT = "id,subject,body,uniqueBody"
@@ -91,7 +101,7 @@ class RecordRefused(ValueError):
 
 
 def _fold(text: str) -> str:
-    """Whitespace, case and curly quotes folded: how a quote is compared."""
+    """Whitespace, case and curly quotes folded: how the rule is found in the email."""
     return " ".join(text.translate(_CURLY).split()).casefold()
 
 
@@ -129,7 +139,26 @@ def _arrived(audit_db: str, graph_message_id: str) -> bool:
     return False
 
 
-def _evidence(broker: BrokerContext, sender: str, gid: str, quote: str) -> dict[str, str]:
+def _own_words(body: str) -> str:
+    """What the sender wrote: the text before the first forwarded-message header."""
+    found = _FORWARD_HEADER.search(body)
+    return body[: found.start()] if found else body
+
+
+def _rule_of(raw: Any) -> str:
+    """The rule's text, which must be the client's words and say something."""
+    text = normalize_rule_text(raw)
+    rest = _fold(text)
+    for stock in _STOCK:
+        rest = rest.replace(stock, "")
+    if len(re.sub(r"[^a-z0-9]+", "", rest)) < MIN_RULE_CHARS:
+        raise RecordRefused(
+            f"the rule must say at least {MIN_RULE_CHARS} characters beyond 'this should be a firm rule'"
+        )
+    return text
+
+
+def _evidence(broker: BrokerContext, sender: str, gid: str, text: str) -> dict[str, str]:
     """Every check on the client's email, fresh from the mailbox. Raises ``RecordRefused``."""
     if not authored_policy(broker.customer_path).allows_reply_to(sender):
         raise RecordRefused(f"{sender} is not on this seat's roster (scope.inbound_allow_from)")
@@ -151,24 +180,18 @@ def _evidence(broker: BrokerContext, sender: str, gid: str, quote: str) -> dict[
     source = msgraph_lookup._read(ops, ops._mail_path("messages", gid) + f"?$select={_SOURCE_SELECT}")
     if not isinstance(source, dict) or str(source.get("id") or "") != gid:
         raise RecordRefused("the mailbox answered for a different message than the one named; refusing")
-    own = _plain(source.get("uniqueBody")) or _plain(source.get("body"))
-    if _fold(quote) not in _fold(own):
-        raise RecordRefused("the quote does not appear in that email's own text; copy it from the email exactly")
+    subject = str(source.get("subject") or "")
+    if _FORWARD_SUBJECT.match(subject):
+        raise RecordRefused("that email is a forward; a rule is recorded from the email its author sent")
+    own = _own_words(_plain(source.get("uniqueBody")) or _plain(source.get("body")))
+    if _fold(text) not in _fold(own):
+        raise RecordRefused("the rule's text does not appear in what the sender wrote; copy it from the email exactly")
     return {
         "graph_message_id": gid,
         "internet_message_id": found["internet_message_id"],
         "received_at": found["received_at"],
-        "subject": str(source.get("subject") or ""),
+        "subject": subject,
     }
-
-
-def _quote_of(raw: Any) -> str:
-    if not isinstance(raw, str):
-        raise RecordRefused("quote must be the client's words, copied from the email")
-    quote = " ".join(raw.split())
-    if len(quote) < MIN_QUOTE_CHARS or len(quote) > MAX_QUOTE_CHARS:
-        raise RecordRefused(f"quote must be {MIN_QUOTE_CHARS} to {MAX_QUOTE_CHARS} characters of the client's words")
-    return quote
 
 
 def preview(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
@@ -184,16 +207,14 @@ def preview(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(subject_raw, dict):
         raise RecordRefused("subject must be {output_class, property, doc_kinds[, attorney]}")
     subject = firm_subject(subject_raw)
-    text = normalize_rule_text(request.get("text"))
-    quote = _quote_of(request.get("quote"))
-    email = _evidence(broker, sender, str(request.get("message_id") or "").strip(), quote)
+    text = _rule_of(request.get("text"))
+    email = _evidence(broker, sender, str(request.get("message_id") or "").strip(), text)
     digest = hashlib.sha256(
         json.dumps(
             {
                 "sender": sender,
                 "message_id": email["graph_message_id"],
                 "text": text,
-                "quote": quote,
                 "subject": subject,
                 "recorded_by": recorded_by,
                 "reason": reason,
@@ -208,44 +229,89 @@ def preview(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
         "reason": reason,
         "subject": subject,
         "text": text,
-        "quote": quote,
         "email": email,
         "digest": digest,
     }
 
 
+def _canon(subject: dict[str, Any]) -> dict[str, Any]:
+    """A subject as two are compared: its document kinds in sorted order."""
+    kinds = subject.get("doc_kinds")
+    return {**subject, **({"doc_kinds": sorted(kinds)} if kinds else {})}
+
+
+def _install_state(broker: BrokerContext, row: dict[str, Any]) -> str:
+    """``installed``, ``pending`` or ``failed`` for a committed row."""
+    pending = broker.establishment.pending
+    run_id = str(row.get("consumed_run_id") or "")
+    if row.get("installed_at") is None and run_id and _settle(broker, row["proposal_id"], run_id):
+        return "failed"
+    if (pending.get(row["proposal_id"]) or row).get("installed_at") is not None:
+        return "installed"
+    conn = own_rule_verbs._connect(pending)
+    try:
+        done = conn.execute("SELECT done_at FROM own_rule_install_watch WHERE run_id=?", (run_id,)).fetchone()
+    finally:
+        conn.close()
+    # A settled watch on a row never stamped installed is an install that failed.
+    return "failed" if done is not None and done[0] is not None else "pending"
+
+
 def _existing(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any] | None:
-    """The committed rule this would duplicate, or None. A committed rule of
-    the same words under ANOTHER subject is a refusal, not a second rule."""
+    """The INSTALLED rule this would duplicate, or None. The same words
+    committed under another subject, or committed and not installed, refuse."""
     pending = broker.establishment.pending if broker.establishment else None
     if pending is None:
         raise RecordRefused("this broker has no rule store configured; nothing was recorded")
     done = pending.find_committed_duplicate(instructed_by=p["sender"], scope=SCOPE, text=p["text"])
     if done is None:
         return None
-    if done["subject"] != p["subject"]:
+    if _canon(done["subject"]) != _canon(p["subject"]):
         raise RecordRefused(
             f"these words are already committed as rule {done['proposal_id']} for {json.dumps(done['subject'])}; "
             "nothing was recorded"
         )
-    return done
+    state = _install_state(broker, done)
+    run = done.get("consumed_run_id")
+    if state == "pending":
+        raise RecordRefused(
+            f"rule {done['proposal_id']} with these words was committed on run {run} and is not yet "
+            "installed; probe it before recording again. Nothing was recorded"
+        )
+    if state == "failed":
+        raise RecordRefused(
+            f"rule {done['proposal_id']} with these words failed to install on run {run} (owed to SMD in "
+            "the triage list); fix the cause. Nothing was recorded"
+        )
+    return pending.get(done["proposal_id"]) or done
 
 
-def _close_open_twin(broker: BrokerContext, p: dict[str, Any]) -> str | None:
-    """End an open, unconfirmed row of the same words quietly, so a later yes
-    cannot commit the rule a second time. Returns the ended id, or None."""
-    store = broker.establishment
-    twin = store.pending.find_open_duplicate(instructed_by=p["sender"], scope=SCOPE, text=p["text"])
-    if twin is None:
-        return None
-    store._ops.rule_close_by_smd(
+def _proposal_for(broker: BrokerContext, p: dict[str, Any], source_ref: str) -> tuple[str, bool]:
+    """The row to commit: a fresh proposal, or the open twin of the same words
+    and subject that waits on nobody. ``(proposal_id, was_open_twin)``."""
+    proposed = broker.establishment.propose(
         {
-            "proposal_id": twin["proposal_id"],
-            "closed_by": p["recorded_by"],
-            "reason": "replaced by the same rule, recorded by SMD on the client's written instruction",
-        }
+            "scope": SCOPE,
+            "subject": p["subject"],
+            "text": p["text"],
+            "instructed_by": p["sender"],
+            "source_ref": source_ref,
+            "for_admin": False,
+        },
+        by_smd=True,
     )
-    return str(twin["proposal_id"])
+    if proposed.get("already_recorded"):
+        raise RecordRefused(f"rule {proposed['proposal_id']} changed while recording; nothing was recorded")
+    twin = proposed.get("duplicate_of")
+    if twin is None:
+        return proposed["proposal_id"], False
+    if _canon(proposed["subject"]) != _canon(p["subject"]) or proposed["for_admin"]:
+        waits = ", waiting on an administrator" if proposed["for_admin"] else ""
+        raise RecordRefused(
+            f"an open proposal {twin} of these words exists for {json.dumps(proposed['subject'])}{waits}; "
+            f"end it with `python -m workspace_broker.rule_close {twin}` and record again. Nothing was recorded"
+        )
+    return str(twin), True
 
 
 def _record(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any]:
@@ -265,22 +331,10 @@ def _record(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any]:
                 "run_id": done.get("consumed_run_id"),
                 "installed_at": done.get("installed_at"),
             }
-        replaced = _close_open_twin(broker, p)
-        proposed = store.propose(
-            {
-                "scope": SCOPE,
-                "subject": p["subject"],
-                "text": p["text"],
-                "instructed_by": p["sender"],
-                "source_ref": source_ref,
-                "for_admin": False,
-            }
-        )
-        if proposed.get("duplicate_of") or proposed.get("already_recorded"):
-            raise RecordRefused(f"rule {proposed['proposal_id']} changed while recording; nothing was recorded")
-        proposal_id = proposed["proposal_id"]
+        proposal_id, was_twin = _proposal_for(broker, p, source_ref)
         submitted = store.submit(
-            {"scope": SCOPE, "proposal_id": proposal_id, "instructed_by": p["recorded_by"], "source_ref": source_ref}
+            {"scope": SCOPE, "proposal_id": proposal_id, "instructed_by": p["recorded_by"], "source_ref": source_ref},
+            by_smd=True,
         )
         run_id = submitted["run_id"]
         own_rule_verbs.install_watch(broker, {"proposal_id": proposal_id, "run_id": run_id})
@@ -297,9 +351,8 @@ def _record(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any]:
                         "instructed_by": p["sender"],
                         "source_message_id": email["graph_message_id"],
                         "source_internet_message_id": email["internet_message_id"],
-                        "quote_sha256": hashlib.sha256(p["quote"].encode("utf-8")).hexdigest(),
                         "text_sha256": hashlib.sha256(p["text"].encode("utf-8")).hexdigest(),
-                        "replaced": replaced,
+                        "open_twin_committed": was_twin,
                         "has_reason": True,
                         **p["subject"],
                     },
@@ -314,7 +367,7 @@ def _record(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any]:
         "already_recorded": False,
         "proposal_id": proposal_id,
         "run_id": run_id,
-        "replaced": replaced,
+        "open_twin_committed": was_twin,
         "digest": p["digest"],
     }
 
@@ -343,7 +396,7 @@ def record_verb(
                 "dry_run": True,
                 "already_recorded": done is not None,
                 "existing_proposal_id": done["proposal_id"] if done else None,
-                **{k: p[k] for k in ("sender", "recorded_by", "reason", "subject", "text", "quote", "email", "digest")},
+                **{k: p[k] for k in ("sender", "recorded_by", "reason", "subject", "text", "email", "digest")},
             }
         if str(request.get("confirm") or "").strip() != p["digest"]:
             return _refusal(
@@ -412,7 +465,7 @@ def probe_verb(
 
 
 __all__ = [
-    "MIN_QUOTE_CHARS",
+    "MIN_RULE_CHARS",
     "RULE_RECORDED_BY_SMD_ACTION_TYPE",
     "VERBS",
     "RecordRefused",

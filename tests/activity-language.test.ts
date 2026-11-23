@@ -337,6 +337,26 @@ describe('clientSummaryFor', () => {
     }
   })
 
+  it('a rule SMD recorded from a client email is never called a read-back or a firm confirmation', () => {
+    // rule_record_verbs.py writes RULE_PROPOSED and ESTABLISHMENT_SUBMITTED with
+    // actor 'smd': nobody was read the rule back and nobody at the firm said yes.
+    const smd = { actor: 'smd', actorRole: 'captain' as const }
+    const rows = ['RULE_PROPOSED', 'ESTABLISHMENT_SUBMITTED', 'RULE_RECORDED_BY_SMD'].map((a) =>
+      clientSummaryFor(entry(a, smd))
+    )
+    expect(rows).toEqual([
+      "SMD wrote down a firm rule from a client's email",
+      "SMD committed a firm rule from a client's email",
+      "SMD recorded a firm rule from a client's email",
+    ])
+    for (const line of rows) {
+      expect(line).not.toMatch(/\b(you|your|confirm|confirmed|confirmation)\b/i)
+    }
+    // The agent's own rows keep their lines.
+    expect(clientSummaryFor(entry('RULE_PROPOSED'))).toBe('Stated a rule back for confirmation')
+    expect(clientSummaryFor(entry('ESTABLISHMENT_SUBMITTED'))).toBe('Committed a rule you confirmed')
+  })
+
   it('interpolates real row data only where present', () => {
     expect(clientSummaryFor(entry('SKILL_ENABLED', { skill: 'inbox-triage' }))).toBe(
       'A skill was turned on: inbox-triage'

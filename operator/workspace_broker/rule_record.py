@@ -1,7 +1,7 @@
 """Record a firm rule a client asked for in writing, as SMD (2026-11-23).
 
     python -m workspace_broker.rule_record --sender <attorney> --message-id <graph id> \\
-      --text "<the rule>" --quote "<his words, from that email>" --doc-kinds discovery_response \\
+      --text "<the rule, verbatim from that email>" --doc-kinds discovery_response \\
       [--output-class work_product] [--property voice] [--attorney "<name>"] \\
       --by <smd address> --reason "<why>" --dry-run
     ... the same, with --confirm <digest> in place of --dry-run
@@ -9,22 +9,21 @@
 
 Run the way ``ops_close`` is run (its docstring names the seat's interpreter):
 root only, on the seat; the broker refuses ``rule_record_by_smd`` and
-``rule_record_probe`` from any other uid. ``--text`` and ``--quote`` may be
-given as ``--text-file`` / ``--quote-file`` instead, which keeps an apostrophe
-out of the shell's way.
+``rule_record_probe`` from any other uid. ``--text`` may be given as
+``--text-file`` instead, which keeps an apostrophe out of the shell's way.
 
-The broker checks the email in the mailbox itself (rostered sender, a received
-message from that sender in the Inbox, recorded arriving, the quote in its own
-text) and records the rule through the path a confirmed "yes" takes. The dry
-run prints what will be recorded and a digest; the live run repeats it with
-``--confirm``. Before either, this command reads the installed wording store
-and stops if the same words already stand there for those document kinds.
+The rule's text must be the client's own words. The broker checks the email in
+the mailbox itself (rostered sender, a received message from that sender in the
+Inbox and not a forward, recorded arriving, the rule's text in what he wrote)
+and records the rule through the path a confirmed "yes" takes. The dry run
+prints what will be recorded and a digest; the live run repeats it with
+``--confirm``. Duplicates are the broker's to decide.
 
 ``--probe`` prints the rule's state, its install run, ``installed_at``, and
 whether ``classes/work_product/wording.json`` (the store the drafting and
 demand lanes read) carries it under a manifest that vouches for the file.
 
-Exit status: 0 recorded (or a clean dry run, or already in force), 2 refused,
+Exit status: 0 recorded (or a clean dry run, or already recorded), 2 refused,
 3 the broker could not be reached.
 """
 
@@ -43,10 +42,6 @@ from . import ops_close, seat_layout
 VERB = "rule_record_by_smd"
 PROBE = "rule_record_probe"
 WORDING_REL = "classes/work_product/wording.json"
-
-
-def _fold(text: str) -> str:
-    return " ".join(str(text or "").split()).casefold()
 
 
 def wording_rules(spec_dir: str | Path) -> tuple[list[dict[str, Any]] | None, str]:
@@ -71,14 +66,6 @@ def wording_rules(spec_dir: str | Path) -> tuple[list[dict[str, Any]] | None, st
     return (rules if isinstance(rules, list) else []), "ok"
 
 
-def standing(rules: list[dict[str, Any]], text: str, kinds: list[str]) -> dict[str, Any] | None:
-    """An installed rule with these words covering every one of these kinds."""
-    for rule in rules:
-        if _fold(rule.get("text")) == _fold(text) and set(kinds) <= set(rule.get("doc_kinds") or ()):
-            return rule
-    return None
-
-
 def _read_arg(value: str | None, path: str | None, name: str) -> str:
     if path:
         return Path(path).read_text("utf-8")
@@ -90,13 +77,11 @@ def _read_arg(value: str | None, path: str | None, name: str) -> str:
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="workspace_broker.rule_record", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("--probe", metavar="PROPOSAL_ID", help="print where a recorded rule stands, and exit")
-    ap.add_argument("--specs", default=seat_layout.SPECS, help="the seat's spec store (for the wording check)")
+    ap.add_argument("--specs", default=seat_layout.SPECS, help="the seat's spec store (read by --probe)")
     ap.add_argument("--sender", help="the attorney who asked, as the email's sender")
     ap.add_argument("--message-id", help="the email's Graph id (requests index vendor_message_id)")
-    ap.add_argument("--text")
+    ap.add_argument("--text", help="the rule, verbatim from the email")
     ap.add_argument("--text-file")
-    ap.add_argument("--quote")
-    ap.add_argument("--quote-file")
     ap.add_argument("--output-class", default="work_product")
     ap.add_argument("--property", default="voice", choices=("voice", "format"))
     ap.add_argument("--doc-kinds", help="comma-separated document kinds, e.g. discovery_response")
@@ -141,13 +126,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     text = _read_arg(a.text, a.text_file, "text")
     kinds = [k.strip() for k in a.doc_kinds.split(",") if k.strip()]
-    rules, why = wording_rules(a.specs)
-    if rules is None:
-        print(f"REFUSED: {why}; fix the store before recording", file=sys.stderr)
-        return 2
-    if (same := standing(rules, text, kinds)) is not None:
-        print(f"already in force: rule {same.get('rule_id')} carries these words for {same.get('doc_kinds')}")
-        return 0
     subject: dict[str, Any] = {"output_class": a.output_class, "property": a.property, "doc_kinds": kinds}
     if a.attorney:
         subject["attorney"] = a.attorney
@@ -156,7 +134,6 @@ def main(argv: list[str] | None = None) -> int:
         "sender": a.sender,
         "message_id": a.message_id,
         "text": text,
-        "quote": _read_arg(a.quote, a.quote_file, "quote"),
         "subject": subject,
         "recorded_by": a.recorded_by,
         "reason": a.reason,

@@ -7,12 +7,18 @@ records it from the seat. The attorney is not asked to confirm it again: his own
 email is the confirmation. The rule goes in through the same path a confirmed
 "yes" takes, and nobody is written to about it. He judges the next document.
 
+**The rule is his words.** The text you record must appear verbatim in the email
+(spacing, case and curly quotes do not matter), and must say at least 20
+characters beyond "this should be a firm rule". You may drop that closing line
+and anything around the rule; you may not reword it.
+
 **What the broker checks, against the mailbox itself:** the sender is on the
 seat's roster (`scope.inbound_allow_from`); the email is a received message in
-the Operator's Inbox from that sender; the audit log recorded it arriving; and
-the quote you give appears in that email's own text (the part he wrote, not mail
-quoted below it), compared ignoring spacing, case and curly quotes. Any miss is
-a refusal and nothing is written.
+the Operator's Inbox from that sender, and not a forward (an `FW:` or `Fwd:`
+subject is refused); the audit log recorded it arriving; and the rule's text is
+in what he wrote: the part of the email that is his (not mail quoted below it),
+cut at the first forwarded-message header (a `---- Forwarded` line or a `From:`
+line). Any miss is a refusal and nothing is written.
 
 **Find the email's Graph id** (the request index lists the seat's recent mail):
 
@@ -20,21 +26,19 @@ a refusal and nothing is written.
 /opt/jobs/.venv/bin/python -m jobs.note_by_smd --recent --match "<surname or subject word>"
 ```
 
-**Write each rule and its quote to files** (keeps apostrophes out of the shell):
-`rule.txt` holds the rule as it should read in the firm's spec, one sentence;
-`quote.txt` holds at least 20 characters copied exactly from his email that state
-it.
+**Write each rule to a file** (keeps apostrophes out of the shell): `rule.txt`
+holds the rule exactly as he wrote it, one sentence or a few.
 
 **Dry run, then record, as root on the seat:**
 
 ```bash
 PYTHONPATH=/opt/workspace-broker /opt/workspace-broker/.venv/bin/python \
   -m workspace_broker.rule_record --sender <attorney address> --message-id <graph id> \
-  --text-file rule.txt --quote-file quote.txt --doc-kinds discovery_response \
+  --text-file rule.txt --doc-kinds discovery_response \
   --by scott@smd.services --reason "<why SMD records it>" --dry-run
 PYTHONPATH=/opt/workspace-broker /opt/workspace-broker/.venv/bin/python \
   -m workspace_broker.rule_record --sender <attorney address> --message-id <graph id> \
-  --text-file rule.txt --quote-file quote.txt --doc-kinds discovery_response \
+  --text-file rule.txt --doc-kinds discovery_response \
   --by scott@smd.services --reason "<why SMD records it>" --confirm <digest>
 ```
 
@@ -57,23 +61,29 @@ PYTHONPATH=/opt/workspace-broker /opt/workspace-broker/.venv/bin/python \
 from the next document. `install_failed` names a failed install; it is also
 recorded as owed to SMD, so the hourly triage lists it.
 
-**Once only.** The same words already committed for that attorney under the same
-subject answer with the existing rule and write nothing; the same words already
-in the wording store stop the command before it reaches the broker. An open,
-unconfirmed proposal of the same words is ended quietly and replaced, so a later
-"yes" cannot commit it twice. The same words under a different subject are
-refused: decide which is right first.
+**Once only.** The same words for that attorney under the same subject (document
+kinds in any order), already installed, answer with the existing rule and write
+nothing. The same words committed and not yet installed, or whose install
+failed, are refused naming the run: probe it, or fix the failure. The same
+words under a different subject are refused: decide which is right first. An
+open, unconfirmed proposal of the same words under the same subject is the row
+that gets committed; one under another subject, or waiting on an administrator,
+is refused untouched, and you end it with `workspace_broker.rule_close` first.
 
 **The record.** One `RULE_RECORDED_BY_SMD` audit row: the rule and run ids, who
-recorded it, who asked, the email's ids, and digests of the quote and the rule;
-never their words or the reason. The installed rule names the attorney as who
-asked and the SMD address as who applied it.
+recorded it, who asked, the email's ids, and the rule's digest; never its words
+or the reason. The proposal and commit rows name SMD as the actor, so the firm's
+activity feed says SMD recorded a firm rule from a client's email, never that
+the rule was read back or confirmed. The installed rule names the attorney as
+who asked and the SMD address as who applied it (the intake requires no roster
+match for that field).
 
-Exit status 0 is recorded (or a clean dry run, or already in force), 2 is
+Exit status 0 is recorded (or a clean dry run, or already recorded), 2 is
 refused, 3 is the broker unreachable. Only root can run it: the agent and the
 gateway are refused by the broker. Graph seats only (the email is read from the
 mailbox).
 
 Code: `operator/workspace_broker/rule_record_verbs.py` (the two verbs) and
 `operator/workspace_broker/rule_record.py` (the command). Tests:
-`operator/workspace_broker/tests/test_rule_record_by_smd.py`.
+`operator/workspace_broker/tests/test_rule_record_by_smd.py` and
+`tests/activity-language.test.ts`.

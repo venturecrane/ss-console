@@ -299,8 +299,8 @@ class EstablishmentStore:
     # the broker's dispatch and the seat's plugin see one object.
     # ------------------------------------------------------------------
 
-    def propose(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self._rules.propose(request)
+    def propose(self, request: dict[str, Any], *, by_smd: bool = False) -> dict[str, Any]:
+        return self._rules.propose(request, by_smd=by_smd)
 
     def decline(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._rules.decline(request)
@@ -343,7 +343,7 @@ class EstablishmentStore:
     # establish_submit
     # ------------------------------------------------------------------
 
-    def submit(self, request: dict[str, Any]) -> dict[str, Any]:
+    def submit(self, request: dict[str, Any], *, by_smd: bool = False) -> dict[str, Any]:
         """Validate a submission, append its audit row, and materialize the run.
 
         The audit row is appended BEFORE the run dir is renamed into place: a
@@ -364,7 +364,7 @@ class EstablishmentStore:
         if scope not in ("firm", "person", "firm_adjust"):
             raise EstablishmentValidationError(f"scope must be 'firm', 'person', or 'firm_adjust'; got {scope!r}")
         if scope == "firm_adjust":
-            return self._submit_firm_adjust(request, secrets.token_hex(16))
+            return self._submit_firm_adjust(request, secrets.token_hex(16), by_smd)
         if scope == "person":
             return self._submit_person(request, secrets.token_hex(16))
         staging_id, staging_path = self._require_staging(request.get("staging_id"))
@@ -545,7 +545,7 @@ class EstablishmentStore:
         self._materialize_run(run_id, submission, selected, move=True)
         return {"ok": True, "run_id": run_id, "phase": "install", "status": "queued"}
 
-    def _submit_firm_adjust(self, request: dict[str, Any], run_id: str) -> dict[str, Any]:
+    def _submit_firm_adjust(self, request: dict[str, Any], run_id: str, by_smd: bool = False) -> dict[str, Any]:
         """Commit one confirmed sentence as a standing adjustment.
 
         A PROPOSAL ID IS NOT OPTIONAL HERE. The whole control on this path is
@@ -598,8 +598,8 @@ class EstablishmentStore:
         self._ledger.append(
             {
                 "action_type": ESTABLISHMENT_SUBMITTED_ACTION_TYPE,
-                "actor": "operator",
-                "actor_role": "agent",
+                "actor": "smd" if by_smd else "operator",
+                "actor_role": "captain" if by_smd else "agent",
                 "metadata": json.dumps(
                     {
                         "phase": "install",
