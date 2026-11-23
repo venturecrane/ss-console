@@ -283,7 +283,8 @@ def test_a_garbled_text_layer_page_goes_to_vision_and_a_clean_one_does_not(tmp_p
 
     assert extract.garbled(GARBLED) and not extract.garbled(CLEAN)
     doc = pymupdf.open()
-    for text in (CLEAN, GARBLED):
+    # Each body is long enough (two paragraphs) that its length alone does not send it.
+    for text in (CLEAN + " " + CLEAN, GARBLED + " " + GARBLED):
         page = doc.new_page()
         pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 40, 40), 0)
         pix.clear_with(220)
@@ -483,4 +484,65 @@ def test_a_blank_or_ruled_blank_page_does_not_go_to_vision(tmp_path, draw):
     from jobs.stages import extract
 
     pdf = _vector_pdf(tmp_path, "blank.pdf", draw)
+    assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == []
+
+
+#: A printed visit summary's header and footer: over THIN_CHARS, with runs of
+#: words, so thin() lets it through (invented values).
+HEADER_ONLY = (
+    "Example Health Clinic  1234 Sample Road Suite 100 Springfield  Phone 555-0100\n"
+    "Patient: Jane Example  DOB 01/02/1980  MRN 000123  Visit date 03/04/2026\n"
+    "After Visit Summary  Example Health Clinic  Springfield  Attending Provider Sam Sample MD\n"
+    "Department of Family Medicine  Example Health Clinic  Springfield Campus  Visit type office follow up\n"
+)
+
+
+def _image_page_pdf(tmp_path, text):
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 40, 40), 0)
+    pix.clear_with(200)
+    page.insert_image(pymupdf.Rect(72, 160, 540, 720), pixmap=pix)  # the pictured body
+    page.insert_textbox(pymupdf.Rect(72, 40, 540, 150), text, fontsize=8)
+    pdf = tmp_path / "avs.pdf"
+    doc.save(str(pdf))
+    return pdf
+
+
+def test_an_image_page_whose_text_is_only_a_header_goes_to_vision(tmp_path):
+    """2026-11-22: visit summaries whose header and footer held 213 to 241
+    characters over a pictured body passed the thin gate as text, so the body
+    was never read and the update copy check compared headers only."""
+    from jobs.stages import extract
+
+    pdf = _image_page_pdf(tmp_path, HEADER_ONLY)
+    text = extract.pdf_text(pdf)[0][1]
+    assert not extract.thin(text), "the header alone keeps it out of the thin gate"
+    assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == [1]
+
+
+def test_an_image_page_with_a_typed_body_keeps_its_text_layer(tmp_path):
+    from jobs.stages import extract
+
+    pdf = _image_page_pdf(tmp_path, HEADER_ONLY + CLEAN + " " + CLEAN)
+    assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == []
+
+
+def test_a_short_typed_page_under_a_small_logo_keeps_its_text_layer(tmp_path):
+    """A letterhead logo is a picture too: the header-only rule applies only
+    when pictures cover a quarter of the page, so a short typed last page is
+    not paid for and replaced by a model reading."""
+    import pymupdf
+    from jobs.stages import extract
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 20, 20), 0)
+    pix.clear_with(120)
+    page.insert_image(pymupdf.Rect(72, 30, 152, 70), pixmap=pix)  # the logo
+    page.insert_textbox(pymupdf.Rect(72, 90, 540, 300), HEADER_ONLY, fontsize=8)
+    pdf = tmp_path / "letter.pdf"
+    doc.save(str(pdf))
     assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == []
