@@ -34,7 +34,6 @@ from __future__ import annotations
 import json
 import re
 import time
-from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -80,26 +79,25 @@ WITHHELD_REASONS = frozenset({WITHHELD_REASON, *RULE_REASONS.values()})
 
 
 def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
-    """MM/DD/YYYY, or None for a date no calendar has (02/31, 13/01, 00/00).
-    Only a two-digit year is expanded: "0000" is year 0, never 2000."""
+    """MM/DD/YYYY. Only a two-digit year is expanded: "0000" is year 0, never
+    2000 (2026-11-22)."""
     y = int(yr)
     if len(yr) <= 2:
         y += 1900 if y > 30 else 2000
     try:
-        d = date(y, int(mo), int(dy))
+        return f"{int(mo):02d}/{int(dy):02d}/{y:04d}"
     except ValueError:
         return None
-    return f"{d.month:02d}/{d.day:02d}/{d.year:04d}"
 
 
 def placeholder_dob(mo: str, dy: str, yr: str) -> bool:
     """True when a labelled date of birth is a registration placeholder, not
     anyone's birthday (2026-11-22: a hospital's 01/01/1900 and 00/00/0000 on
     144 of a client's own pages read as "a date of birth that is not the
-    client's"): an impossible date (a 00 month or day, all zeros, 02/31), or
-    a year at or before 1900."""
+    client's"): a year at or before 1900 (0000 included), or a 00 month or
+    day. Any other date, an impossible one too (06/31/2014), still counts."""
     d = _norm_dob(mo, dy, yr)
-    return d is None or int(d[-4:]) <= 1900
+    return d is None or int(d[-4:]) <= 1900 or d.startswith("00/") or d[3:5] == "00"
 
 
 def full_name(name: str, after: str) -> bool:

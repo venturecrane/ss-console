@@ -73,7 +73,7 @@ from ..medchron import prompts
 from ..medchron.audit.claims import CITE
 from ..medchron.audit.claims import parse_pages as _pages
 from ..proof import checks, review
-from . import review_notes, review_policy, review_settle, update_review_settle
+from . import review_notes, review_policy, review_settle, update_review_settle, whose_page
 from .base import StageRun
 
 HOLD_CHECKS = (1, 2, 3, 4)
@@ -643,7 +643,7 @@ def run(
             status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)
     if status == "missing":
         found, chron, names = _code(sr, rd, rows, today)
-        model = _model(sr)
+        model = whose_page.first(sr, _model(sr))  # the reader-flagged pages first: a failed look costs no review
         try:
             found += _model_findings(sr, rd, model, chron, names, found)
         except review.ReviewIncomplete as exc:

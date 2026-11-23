@@ -134,6 +134,36 @@ class Looker:
         self.path.write_text(json.dumps(self.cache, indent=1, sort_keys=True), encoding="utf-8")
         return subject
 
+    def settled(self, exhibit: int, page: int) -> str:
+        """``subject`` after the paid review call: a look the doorway gave up
+        on (the network, past its retries) is unreadable, not saved, and the
+        entry is kept, so a resume never pays for the review again
+        (2026-11-23). A cost or stop hold still raises."""
+        from ..deadline import is_transient
+
+        try:
+            return self.subject(exhibit, page)
+        except Exception as exc:  # only a network failure is caught; every other error is re-raised
+            if not is_transient(exc):
+                raise
+            self.sr.log(
+                f"review: the look at Exhibit {exhibit} p. {page} failed ({type(exc).__name__}); kept, unreadable"
+            )
+            return UNREADABLE
+
+
+def first(sr: StageRun, model_id: str) -> str:
+    """The entry reader's flagged pages, looked at BEFORE the review's paid
+    call (they need nothing from it), so a look that fails ends the stage
+    before that call is made and a resume pays for neither twice. A full
+    build only (an update has its own review). Returns `model_id`: it is
+    called where the review names its model (``review.run``)."""
+    if not sr.job.update:
+        looker = Looker(sr)
+        for ex, pg in sorted(reader_pages(sr.slug_dir, sr.unit.unit)):
+            looker.subject(ex, pg)
+    return model_id
+
 
 def _load(path: Path) -> dict[str, Any]:
     """The saved verdicts; {} when there are none or the file does not parse

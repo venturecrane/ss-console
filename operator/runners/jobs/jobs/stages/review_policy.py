@@ -78,7 +78,7 @@ left). Each settles by deletion or disclosure, never by a written word:
     no provider becomes the firm's "(provider not stated in the record)".
 
 Code integrity findings (an empty chronology, a cited exhibit not delivered,
-an entry dated after today) and a check 1 finding no single entry could be
+an entry dated after today) and a check 1 finding no page could be
 found for (another person's records) are never touched: they hold.
 Nothing here invents client text: every step only deletes or re-grades.
 """
@@ -222,103 +222,38 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
     """Steps 0a and 0b (2026-10-24, the stop audit rows 11 and 12), on the
     cited pages (``review_evidence``):
 
+    * check 1, another person's records (2026-11-23), is decided by page
+      (``review_evidence.settle_identity``): the pages the entry reader
+      recorded as another person's and the pages each model check 1 MUST-FIX
+      is about are looked at (``whose_page``: a model reads each picture),
+      and every entry citing a page judged another person's is left out by
+      rule and disclosed in code's words, never the model's (they named the
+      person). A check 1 on pages not judged so is a NOTE and the entry is
+      kept: a record the map read is never dropped on suspicion alone;
     * a check 3 MUST-FIX (code or model) whose every quoted phrase is printed
       verbatim on the page each sentence carrying it cites is the record's
-      wording: a NOTE;
-    * a model check 1 MUST-FIX on one entry is decided by a model looking at
-      each cited page's picture (``whose_page``, 2026-11-22): "other" on any
-      of them has the entry left out by rule and disclosed (never naming that
-      person); anything else makes the finding a NOTE and keeps the entry (a
-      record the map read is never dropped on the review's suspicion alone).
-
-    First the entry reader's own ``another_person`` findings are settled the
-    same way (``review_evidence.reader_another_person``); a model check 1
-    naming only pages of an entry that settle left out is a NOTE, so one
-    entry is left out once. Every page either path will look at is looked at
-    BEFORE anything is edited, so a look that fails leaves the chronology as
-    it was."""
+      wording: a NOTE."""
     from . import review_evidence as EV, whose_page
 
-    before = md = doc.read_text(encoding="utf-8")
-    looker = whose_page.Looker(sr)
-    flagged = sorted(whose_page.reader_pages(sr.slug_dir, sr.unit.unit) | set(_check1_pages(md, out.findings)))
-    for ex, pg in flagged:
-        looker.subject(ex, pg)
-    gone = EV.reader_another_person(sr, doc, out, looker, stats)
+    before = doc.read_text(encoding="utf-8")
+    check1 = [k for k, f in enumerate(out.findings) if f.grade == review.MUST and f.by == "model" and check_no(f) == 1]
+    reader = set() if sr.job.update else whose_page.reader_pages(sr.slug_dir, sr.unit.unit)
+    EV.settle_identity(sr, doc, out, whose_page.Looker(sr).settled, stats, check1, reader)
     md = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
-        if f.grade != review.MUST:
-            continue
-        n = check_no(f)
-        named = EV._named_pages(_text(f))
-        if n == 1 and f.by == "model" and named and set(named) <= gone:
-            if not any(EV._cites(b[2], ex, pg) for b in EV.entry_blocks(md) for ex, pg in named):
-                # The entry reader's finding on the same page already left it out.
-                out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"left out before delivery by rule: {f.finding}"
-                )
-                continue
-        if n == 3 and (f.by == "model" or f.cite == "the chronology"):
+        if f.grade == review.MUST and check_no(f) == 3 and (f.by == "model" or f.cite == "the chronology"):
             ph = _phrases(f)
             if ph and all(EV.verbatim_on_record(md, p, pages) for p in ph):
                 out.findings[k] = replace(
                     f, grade=review.NOTE, finding=f"the record's own wording, printed on the cited page: {f.finding}"
                 )
                 stats["system_words_on_record"] += 1
-        elif n == 1 and f.by == "model":
-            block = EV.entry_for(md, _text(f))
-            if block is None:
-                continue
-            cited = EV.cited_pages(block[2], _text(f))
-            seen = [looker.subject(ex, pg) for ex, pg in cited]
-            if "other" not in seen:
-                # The client's page, both, no one's, or unreadable: the entry
-                # is a record the map read, and suspicion alone never drops it.
-                kind = next((s for s in ("both", "client", "none") if s in seen), whose_page.UNREADABLE)
-                out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"checked against the cited page, {_WHOM[kind]}: {f.finding}"
-                )
-                stats[f"identity_page_{kind}"] += 1
-                continue
-            reason = EV.LEFT_OUT_REASON
-            EV.leave_out(sr, doc, block, cited, reason)
-            md = doc.read_text(encoding="utf-8")
-            out.changed = True
-            date_line = block[2].split("\n", 1)[0].strip()
-            out.findings[k] = replace(
-                f, grade=review.NOTE, finding=f"left out before delivery by rule: the entry dated {date_line} {reason}"
-            )
-            stats["identity_left_out"] += 1
-            out.left_out += 1
-            sr.log(f"review: the {date_line} entry left out by rule (its cited page: another person's)")
     if stats["identity_left_out"]:
         # The summary tables count the entries: computed again from those left.
         from . import review_tables
 
         doc.write_text(review_tables.rederive(sr, before, md), encoding="utf-8")
         sr.log("review: Treatment Timeline and Diagnostic Highlights re-derived from the remaining entries")
-
-
-#: How a kept check 1 is noted, by what the cited page's picture showed.
-_WHOM = {
-    "client": "which is the client's",
-    "both": "which is the client's and also names someone else",
-    "none": "which names no patient; the entry is kept",
-    "unreadable": "which could not be read; the entry is kept",
-}
-
-
-def _check1_pages(md: str, found: list[review.Finding]) -> list[tuple[int, int]]:
-    """The pages the review's model check 1 MUST-FIX findings cite, on the
-    chronology as it stands before anything is edited."""
-    from . import review_evidence as EV
-
-    out: list[tuple[int, int]] = []
-    for f in found:
-        if f.grade == review.MUST and f.by == "model" and check_no(f) == 1:
-            block = EV.entry_for(md, _text(f))
-            out += EV.cited_pages(block[2], _text(f)) if block is not None else []
-    return out
 
 
 def _repairable(f: review.Finding) -> bool:
@@ -364,7 +299,6 @@ def settle(
             "identity_page_none",
             "identity_page_unreadable",
             "identity_left_out",
-            "identity_reader_unplaced",
             "summary_deleted",
             "system_scrubbed",
             "differ_disclosed",

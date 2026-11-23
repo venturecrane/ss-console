@@ -179,7 +179,7 @@ def test_a_check1_on_a_page_that_names_no_one_keeps_the_entry_as_a_note(job_dir,
     assert not (sr.slug_dir / "out" / "alpha" / review_evidence.LEFT_OUT).exists(), "no left-out row for it"
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert rec["must_fix"] == 0
-    assert rec["findings"][0]["finding"].startswith("checked against the cited page, which names no patient")
+    assert rec["findings"][0]["finding"] == "checked against the cited page: kept"
     pol = json.loads((sr.slug_dir / "runs" / "alpha" / review_policy.POLICY_RECORD).read_text())
     assert pol["identity_left_out"] == 0 and pol["identity_page_none"] == 1
     assert "left out" not in _notes(sr)
