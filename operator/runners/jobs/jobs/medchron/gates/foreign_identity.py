@@ -80,23 +80,26 @@ WITHHELD_REASONS = frozenset({WITHHELD_REASON, *RULE_REASONS.values()})
 
 
 def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
-    """MM/DD/YYYY, or None for a date no calendar has (02/31, 13/01, 00/00)."""
+    """MM/DD/YYYY, or None for a date no calendar has (02/31, 13/01, 00/00).
+    Only a two-digit year is expanded: "0000" is year 0, never 2000."""
     y = int(yr)
-    y = y + (1900 if y > 30 else 2000) if y < 100 else y
+    if len(yr) <= 2:
+        y += 1900 if y > 30 else 2000
     try:
-        return date(y, int(mo), int(dy)).strftime("%m/%d/%Y") if y >= 1 else None
+        d = date(y, int(mo), int(dy))
     except ValueError:
         return None
+    return f"{d.month:02d}/{d.day:02d}/{d.year:04d}"
 
 
 def placeholder_dob(mo: str, dy: str, yr: str) -> bool:
     """True when a labelled date of birth is a registration placeholder, not
     anyone's birthday (2026-11-22: a hospital's 01/01/1900 and 00/00/0000 on
     144 of a client's own pages read as "a date of birth that is not the
-    client's"): an impossible date, a year at or before 1900, or every digit
-    the same."""
+    client's"): an impossible date (a 00 month or day, all zeros, 02/31), or
+    a year at or before 1900."""
     d = _norm_dob(mo, dy, yr)
-    return d is None or int(d[-4:]) <= 1900 or len(set(mo + dy + yr)) == 1
+    return d is None or int(d[-4:]) <= 1900
 
 
 def full_name(name: str, after: str) -> bool:
@@ -156,63 +159,6 @@ def findings(
             ):
                 out.append("a patient name without the client's surname")
     return sorted(set(out))
-
-
-#: A field label the name pattern can swallow when no colon follows it
-#: ("Patient: Jane Doe DOB 01/02/1960").
-_TRAILING_LABEL = frozenset("dob d.o.b d.o.b. mrn acct account sex age id date".split())
-
-
-def _first_word(given: str) -> str:
-    """A given name compared on its first word, cut at a hyphen, case aside."""
-    words = given.split()
-    return words[0].split("-")[0].strip(".'").lower() if words else ""
-
-
-def _given(name: str, surname: str) -> str:
-    """The first given word of a "Patient:" name carrying `surname`
-    ("DOE, JANE M" and "Jane M Doe" both give "jane"); '' when none."""
-    if "," in name:
-        head, _, rest = name.partition(",")
-        return _first_word(rest) if _has(surname, head) else ""
-    return _first_word(" ".join(w for w in name.split() if not _has(surname, w)))
-
-
-def household(text: str, surname: str, first: str, dob: str) -> bool:
-    """True when `text` labels as its patient someone who shares the client's
-    surname under another given name (a spouse, a child), and nothing on it
-    labels the client: no labelled date of birth that is the client's, no
-    "Patient:" name with the client's given name and surname.
-
-    WHY (2026-11-22): nine entries citing a household member's pages were
-    delivered in two chronologies, because ``_conflicts`` reads any patient
-    name with the client's surname as the client. Used only by the review's
-    cited-page check (``stages/review_evidence.whose``); the file-withholding
-    gates keep ``findings`` as it is. A bare initial is never another person,
-    and neither is a given name the client's own begins with (a registration
-    field cut short, "ELIZAB")."""
-    mine = _first_word(first)
-    if not surname or not mine:
-        return False
-    other = False
-    for line in (text or "").splitlines():
-        if RELATIVE.search(line):
-            continue
-        if dob and any(_norm_dob(*m.groups()) == dob for m in DOB_LABEL.finditer(line)):
-            return False
-        for m in PATIENT_LABEL.finditer(line):
-            words, after = m.group(1).split(), line[m.end() :]
-            while len(words) > 2 and words[-1].lower() in _TRAILING_LABEL:
-                after = f" {words.pop()}{after}"
-            name = " ".join(words)
-            if not (full_name(name, after) and _has(surname, name)):
-                continue
-            given = _given(name, surname)
-            if given == mine:
-                return False
-            if len(given) > 1 and not mine.startswith(given):
-                other = True
-    return other
 
 
 def _decided(slug_dir: Path, key: str) -> set[str]:

@@ -163,7 +163,11 @@ def entry_for(md: str, text: str) -> tuple[int, int, str] | None:
     """The one entry a finding's text names by its date, then its provider
     when the date has several entries, then the exhibit page the finding
     cites when the same provider has several entries that day (an ED visit
-    and its admission); None when it names no single one."""
+    and its admission); None when it names no single one. A finding that
+    names pages lands only on an entry citing one of them, even when one
+    entry is left on its date (2026-11-22: after an entry was left out, a
+    finding about it landed on the date's other entry, which cited another
+    page)."""
     low = text.lower()
     blocks = entry_blocks(md)
     named = _named_pages(text)
@@ -171,7 +175,7 @@ def entry_for(md: str, text: str) -> tuple[int, int, str] | None:
         same = [b for b in blocks if b[2].startswith(d)]
         if len(same) > 1:
             same = [b for b in same if _provider(b[2]) and _provider(b[2]) in low]
-        if len(same) > 1 and named:
+        if named:
             same = [b for b in same if any(_cites(b[2], ex, pg) for ex, pg in named)]
         if len(same) == 1:
             return same[0]
@@ -200,9 +204,7 @@ def cited_pages(block: str, text: str) -> list[tuple[int, int]]:
 def whose(sr: StageRun, texts: list[str]) -> str:
     """'other' when a cited page labels a patient who is not the client (a
     date of birth or a patient name, read as the identity rule reads them,
-    a patient with the client's surname and another given name and nothing
-    labelling the client, ``FI.household``, or another client on the matter
-    named where the client is not);
+    or another client on the matter named where the client is not);
     'client' when the pages name the client (surname or date of birth) and
     no one else; 'unnamed' otherwise (no text, or no one named)."""
     u = sr.unit
@@ -212,7 +214,7 @@ def whose(sr: StageRun, texts: list[str]) -> str:
     sur = {u.surname} if u.surname else set()
     dobs = {u.dob} if u.dob else set()
     first = set(str(u.client_name).split()[:1])
-    if FI.findings(text, sur, dobs, first) or FI.household(text, u.surname or "", str(u.client_name), u.dob or ""):
+    if FI.findings(text, sur, dobs, first):
         return "other"
     mine = _count(str(u.client_name), text)
     for o in sr.job.units:
@@ -299,11 +301,13 @@ def reader_another_person(sr: StageRun, doc: Path, out: Any, pages: Any, stats: 
     gone: set[tuple[int, int]] = set()
     done: set[str] = set()  # anchors left out: a second finding on one entry is not counted again
     trusted = rec.get("doc_sha") == doc_sha(doc.read_text(encoding="utf-8"))
-    for row in rec.get("rows") or []:
-        if not isinstance(row, dict):
+    rows = rec.get("rows")
+    for row in rows if isinstance(rows, list) else []:
+        recorded = row.get("recorded") if isinstance(row, dict) else None
+        if not isinstance(recorded, list):
             continue
         anchor = str(row.get("key") or "").split("-")[0]
-        for item in row.get("recorded") or []:
+        for item in recorded:
             if not isinstance(item, dict) or item.get("class") != "another_person" or anchor in done:
                 continue
             ex, pg = item.get("exhibit"), item.get("page")
