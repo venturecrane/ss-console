@@ -744,11 +744,12 @@
           "id": "r-thin200",
           "name": "Thin200",
           "pages": 2,
-          "text_path": "<TMP>/mc/data/example-matter/text/r-thin200.txt"
+          "text_path": "<TMP>/mc/data/example-matter/text/r-thin200.txt",
+          "vision_pages": [2]
         },
         "text": [
           "[p.1]\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
-          "[p.2]\nwords words words words words words words words words words words words words words words words\nwords words words words words words words words words words words words words words words words\nwords words words words words words words words"
+          "[p.2] (machine transcription)\nTRANSCRIPT OF thin200 PAGE 2\n"
         ]
       },
       "typed60": {
@@ -934,6 +935,14 @@
         "id": "r-thin199",
         "illegible_marks": 0,
         "name": "Thin199",
+        "pages": 2,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-thin200",
+        "illegible_marks": 0,
+        "name": "Thin200",
         "pages": 2,
         "pages_out": 1
       },
@@ -1243,6 +1252,19 @@
               "media": "image/png",
               "shows": {
                 "fixture": "thin199",
+                "page": 2
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "thin200",
                 "page": 2
               },
               "size": [1275, 1650]
@@ -3395,6 +3417,16 @@
         "vision_pages": [2]
       },
       {
+        "chars": 668,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-thin200",
+        "name": "Thin200",
+        "pages": 2,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-thin200.txt",
+        "vision_pages": [2]
+      },
+      {
         "ext": ".pdf",
         "folder": "/MEDICAL",
         "id": "r-absent399",
@@ -3444,12 +3476,12 @@
     "JOBS_DATA_DIR": {},
     "JOBS_LITIGATION_TEXTCACHE_DIR": {},
     "JOBS_TEXTCACHE_DIR": {
-      "pages/.bytes": "27978",
+      "pages/.bytes": "28100",
       "pages/.lock": "",
       "pages/.stats.json": {
         "medchron": {
           "hits": 0,
-          "misses": 225
+          "misses": 226
         }
       },
       "pages/<sha:absent399>/1e7699df11f7/1.json": {
@@ -4351,6 +4383,10 @@
       "pages/<sha:thin199>/1e7699df11f7/2.json": {
         "matter_ids": ["00000000-0000-4000-8000-000000000001"],
         "text": "HANDWRITING: no\nTRANSCRIPT OF thin199 PAGE 2"
+      },
+      "pages/<sha:thin200>/1e7699df11f7/2.json": {
+        "matter_ids": ["00000000-0000-4000-8000-000000000001"],
+        "text": "HANDWRITING: no\nTRANSCRIPT OF thin200 PAGE 2"
       }
     },
     "SMD_POST_JOURNAL_DIR": {},
