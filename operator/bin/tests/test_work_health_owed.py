@@ -180,3 +180,35 @@ def test_owed_jobs_are_passed_only_to_a_reader_that_takes_them() -> None:
 
     assert owed_wh.owed_jobs_kwargs(open_owed, takes) == {"owed_jobs": [{"id": "j"}]}
     assert owed_wh.owed_jobs_kwargs(open_owed, older) == {}
+
+
+def test_an_owed_rule_is_listed_once_with_its_seat_kind_and_age() -> None:
+    """Rule store parity, 2026-11-23: a rule a firm person stated and the seat
+    owes SMD stays on the hourly list, one line, until it is recorded.
+    FALSIFIER: drop the rule kinds' wording and the line reads as a generic
+    answer owed, or drop the open read and a rule older than the window falls
+    off the list."""
+    stated = NOW - timedelta(days=12)
+    rows = [
+        {"id": f"01JRULE{n}", "created_at": stated.isoformat(), "kind": kind, "request_ref": REF, "detail": "rule"}
+        for n, kind in enumerate(("rule_stated", "rule_needs_person", "rule_not_recorded", "rule_install_failed"))
+    ]
+    items = owed_wh.smd_owed_items(SEAT, [], CFG, NOW, None, {"owed": rows, "owed_jobs": []})
+    assert [i.job for i in items] == [r["id"] for r in rows]
+    first = items[0]
+    assert first.seat == SEAT and first.onset == stated and first.kind == owed_wh.KIND
+    assert "stated a drafting rule" in first.what and "record the rule" in first.todo
+    assert not any("SMD owes a firm person an answer" in i.what for i in items)
+    previous = {mail.state_key(i.key): (NOW - timedelta(hours=1)).isoformat() for i in items}
+    plan = mail.decide(
+        items=items,
+        seats=[SEAT],
+        gaps={},
+        previous=previous,
+        since=NOW - timedelta(hours=1),
+        now=NOW,
+        all_clear_hour_utc=15,
+    )
+    assert plan.new == [] and len(plan.still_open) == 4
+    (line,) = [ln for ln in plan.text.splitlines() if "stated a drafting rule" in ln]
+    assert line.endswith("(open 12d)")
