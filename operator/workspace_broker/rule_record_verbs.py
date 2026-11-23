@@ -84,6 +84,23 @@ VERB_RECORD = "rule_record_by_smd"
 VERB_PROBE = "rule_record_probe"
 VERBS: tuple[str, ...] = (VERB_RECORD, VERB_PROBE)
 
+
+def _store(broker: BrokerContext) -> Any:
+    """The seat's establishment store; every verb here refuses first when it is absent."""
+    store = broker.establishment
+    if store is None:
+        raise RuntimeError("no establishment store on this broker")
+    return store
+
+
+def _ledger(broker: BrokerContext) -> Any:
+    """The seat's audit ledger; refused first when absent, like the store."""
+    ledger = broker.ledger
+    if ledger is None:
+        raise RuntimeError("no audit ledger on this broker")
+    return ledger
+
+
 #: Appended once per rule SMD records on a client's written instruction.
 RULE_RECORDED_BY_SMD_ACTION_TYPE = "RULE_RECORDED_BY_SMD"
 #: What a rule must say beyond the stock line, folded, so it is a rule.
@@ -253,7 +270,7 @@ def _canon(subject: dict[str, Any]) -> dict[str, Any]:
 def _peek(broker: BrokerContext, run_id: str) -> str:
     """A waiting result's status, read without consuming it (the dry run)."""
     try:
-        result = json.loads((broker.establishment.results_dir / f"{run_id}.json").read_text("utf-8"))
+        result = json.loads((_store(broker).results_dir / f"{run_id}.json").read_text("utf-8"))
     except (OSError, ValueError):
         return ""
     return str(result.get("status") or "") if isinstance(result, dict) else ""
@@ -263,7 +280,7 @@ def _install_state(broker: BrokerContext, row: dict[str, Any], *, settle: bool) 
     """``installed``, ``pending`` or ``failed`` for a committed row. With
     ``settle`` a waiting result is read for good (the live record); without it
     nothing is written (the dry run)."""
-    pending = broker.establishment.pending
+    pending = _store(broker).pending
     run_id = str(row.get("consumed_run_id") or "")
     if row.get("installed_at") is None and run_id:
         if settle and _settle(broker, row["proposal_id"], run_id):
@@ -315,7 +332,7 @@ def _existing(broker: BrokerContext, p: dict[str, Any], *, settle: bool = True) 
 def _proposal_for(broker: BrokerContext, p: dict[str, Any], source_ref: str) -> tuple[str, bool]:
     """The row to commit: a fresh proposal, or the open twin of the same words
     and subject that waits on nobody. ``(proposal_id, was_open_twin)``."""
-    proposed = broker.establishment.propose(
+    proposed = _store(broker).propose(
         {
             "scope": SCOPE,
             "subject": p["subject"],
@@ -342,7 +359,7 @@ def _proposal_for(broker: BrokerContext, p: dict[str, Any], source_ref: str) -> 
 
 def _record(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any]:
     """Propose, commit and watch, under the establishment lock. The one install path."""
-    store = broker.establishment
+    store = _store(broker)
     email = p["email"]
     source_ref = email["internet_message_id"][:200] or email["graph_message_id"][:200]
     with broker._establish_lock:
@@ -364,7 +381,7 @@ def _record(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any]:
         )
         run_id = submitted["run_id"]
         own_rule_verbs.install_watch(broker, {"proposal_id": proposal_id, "run_id": run_id})
-        broker.ledger.append(
+        _ledger(broker).append(
             {
                 "action_type": RULE_RECORDED_BY_SMD_ACTION_TYPE,
                 "actor": "smd",
@@ -438,7 +455,7 @@ def _settle(broker: BrokerContext, proposal_id: str, run_id: str) -> str | None:
     """Read this run's result now if the intake has written it: the install
     check's read (``own_rule_verbs._verdict``), done once, its watch settled
     and a failure owed to SMD. ``None`` when there is no result yet."""
-    store = broker.establishment
+    store = _store(broker)
     if not (store.results_dir / f"{run_id}.json").is_file():
         return None
     why = own_rule_verbs._verdict(store, run_id, 0.0)
@@ -462,7 +479,7 @@ def probe_verb(
     broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     """Where one rule stands. Reads its install result when one is waiting."""
-    store = broker.establishment
+    store = _store(broker)
     if store is None or store.pending is None:
         raise ValueError("rule_record_probe needs the establishment spool and its rule store")
     proposal_id = _require_proposal_id(request.get("proposal_id"))
