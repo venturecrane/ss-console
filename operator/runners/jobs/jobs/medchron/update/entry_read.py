@@ -33,7 +33,6 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from ..audit import claims as CL
 from ..prompts import load
 from . import body as B, entry_lines as EL, review_pages as RV, review_parts as RP, review_repair as RR
 from .entry_lines import count_sentences as count_sentences  # the tripwire's count, the labels' splitter
@@ -155,9 +154,7 @@ def _own_lines(
             body[i].append(lb)
     room = LABELS_PER_READ - len(head)
     return [
-        (c, head + b[i : i + room])
-        for c, b in zip(chunks, body, strict=True)
-        for i in range(0, max(len(b), 1), room)
+        (c, head + b[i : i + room]) for c, b in zip(chunks, body, strict=True) for i in range(0, max(len(b), 1), room)
     ]
 
 
@@ -175,7 +172,16 @@ def _units(anchor: str, text: str, cited: set[tuple[int, int]], npages: Callable
     # An entry this long is read in parts that each judge only their own lines.
     parts = _own_lines(text, bool(kw.get("record_only")), lines, chunks)
     return [
-        Unit(anchor, text, _shown(c, npages), part=i, parts=len(parts), cited=c, lines={lb: lines[lb] for lb in own}, **kw)
+        Unit(
+            anchor,
+            text,
+            _shown(c, npages),
+            part=i,
+            parts=len(parts),
+            cited=c,
+            lines={lb: lines[lb] for lb in own},
+            **kw,
+        )
         for i, (c, own) in enumerate(parts, 1)
     ]
 

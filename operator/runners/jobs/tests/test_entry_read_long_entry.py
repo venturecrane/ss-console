@@ -128,3 +128,23 @@ def _cfg(path: Any) -> Any:
     from jobs.medchron import config as config_mod
 
     return config_mod.load(str(path))
+
+
+def test_a_saved_read_that_ran_out_is_still_to_pay_in_the_projection(tmp_path: Any) -> None:
+    from jobs.stages import entry_audit_io as IO
+
+    u, other = parts(long_entry(20, 40))
+
+    def save(name: str, stop: str) -> None:
+        (tmp_path / f"{name}.json").write_text(json.dumps({"hash": "h", "text": "{}", "stop_reason": stop}))
+
+    assert not IO._read_on_file(tmp_path, u)  # nothing on file
+    save(f"{u.key}.read1", "max_tokens")
+    save(f"{u.key}.read2", "max_tokens")
+    assert not IO._read_on_file(tmp_path, u)  # every reply ran out: still to pay (before the fix: counted read)
+    n = len([pg for pg in u.pages if pg in set(u.cited)])
+    for i in range(1, n + 1):
+        save(f"{u.key}~s{i}.read1", "end_turn")
+    assert IO._read_on_file(tmp_path, u)  # read page by page
+    save(f"{other.key}.read2", "end_turn")
+    assert IO._read_on_file(tmp_path, other)  # a whole read that finished

@@ -258,6 +258,25 @@ def unit_tokens(u: ER.Unit, modes: Modes | None) -> tuple[int, int]:
     return tin, READ_OUT_EXPECTED + VERIFIES_PER_UNIT * VERIFY_OUT_EXPECTED
 
 
+def _answered(f: Path) -> bool:
+    """A saved answer the stage would reuse: one that did not run out."""
+    got = read_json(f, {}) if f.is_file() else {}
+    return isinstance(got, dict) and isinstance(got.get("text"), str) and got.get("stop_reason") != "max_tokens"
+
+
+def _read_on_file(d: Path, u: ER.Unit) -> bool:
+    """True when the unit's read is already paid for: a whole read that did
+    not run out, or (a whole read that did) every page read alone answered.
+    Before 2026-11-23 any file at all counted, so a part whose replies all ran
+    out (job 01M84VVS, 8 parts) went unpriced on its resume."""
+    if any(_answered(d / f"{u.key}.read{a}.json") for a in (1, 2)):
+        return True
+    subs = [pg for pg in u.pages if pg in set(u.cited)]
+    return len(subs) > 1 and all(
+        any(_answered(d / f"{u.key}~s{i}.read{a}.json") for a in (1, 2)) for i in range(1, len(subs) + 1)
+    )
+
+
 def tokens(slug_dir: Path, unit: str, cfg: Any) -> tuple[int, int, int, int] | None:
     """(units, units already read, input tokens, output tokens) still to pay
     for; None before the chronology exists."""
@@ -266,7 +285,7 @@ def tokens(slug_dir: Path, unit: str, cfg: Any) -> tuple[int, int, int, int] | N
         return None
     units = plan(slug_dir, unit, cfg, doc.read_text(encoding="utf-8")).units
     d = slug_dir / "runs" / unit / DIR
-    todo = [u for u in units if not any((d / f"{u.key}.read{a}.json").is_file() for a in (1, 2))]
+    todo = [u for u in units if not _read_on_file(d, u)]
     modes = Modes.open(slug_dir, unit)
     try:
         got = [unit_tokens(u, modes) for u in todo]
