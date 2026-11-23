@@ -694,3 +694,15 @@ def test_no_recent_rule_means_no_follow_up_note(seat):
     state["recent"] = []
     context = _reply(mod, "Please apply this to this file")
     assert "they are recorded" not in (context or "")
+
+
+def test_an_interrogatory_rule_names_discovery_responses(seat):
+    """The 12:55 case: "Anytime a special interrogatory asks for ..." with no
+    other kind word. FALSIFIER: the reach found no kind, refused the rule, and
+    the attorney was asked to name the document."""
+    mod, _state = seat
+    for text in (
+        "Anytime a special interrogatory asks for 10 years of provider history, object.",
+        "If any form interrogatory asks for the address, give the office address.",
+    ):
+        assert "discovery_response" in mod.rule_reach.kinds_named(text)
