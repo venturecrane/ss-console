@@ -89,6 +89,16 @@ def test_rules_with_the_same_words_fold_to_the_oldest_id_and_the_newest_time() -
     assert firm_wording.fold([first, other]) == [first, other]
 
 
+def test_a_rule_restated_with_corrected_words_is_not_folded_away() -> None:
+    """FALSIFIER: fold on the text alone and the corrected wording is dropped."""
+    old = {**_rule("wr-a", ["discovery_response"], words="Use the wording."), "at": "2026-11-01T00:00:00Z"}
+    new = {**old, "rule_id": "wr-b", "wording": ['Say "new corrected words"'], "at": "2026-11-20T00:00:00Z"}
+    assert [r["rule_id"] for r in firm_wording.fold([old, new])] == ["wr-a", "wr-b"]
+    same = {**old, "rule_id": "wr-c", "wording": ["use  the wording."], "at": "2026-11-21T00:00:00Z"}
+    folded = firm_wording.fold([old, same])
+    assert len(folded) == 1 and folded[0]["rule_id"] == "wr-a" and folded[0]["wording"] == ["use  the wording."]
+
+
 def test_freeze_writes_the_folded_rules(tmp_path, monkeypatch) -> None:
     _switch(tmp_path, monkeypatch, True)
     spec = tmp_path / "spec"
@@ -121,14 +131,84 @@ def test_a_bare_interrogatory_heading_takes_its_kind_from_title_hint_or_number(t
     assert all(r.request for r in doc.responses)  # the request as restated is paired
 
 
+def test_the_title_reads_specially_prepared_and_the_delivered_kind_outranks_prose(tmp_path) -> None:
+    """FALSIFIER: read every front-matter paragraph and prose naming Form
+    Interrogatories outranks the title and the kind the document was delivered as."""
+    title = "PLAINTIFF'S RESPONSES TO SPECIALLY PREPARED INTERROGATORIES, SET ONE"
+    prose = "These responses, like Plaintiff's responses to Form Interrogatories, are made after diligent inquiry."
+    d = docx.Document()
+    d.add_paragraph(title)
+    d.add_paragraph(prose)
+    for n in ("1", "2"):
+        d.add_paragraph(f"INTERROGATORY NO. {n}:")
+        d.add_paragraph(f"RESPONSE TO INTERROGATORY NO. {n}:")
+        d.add_paragraph(f"Answer {n}.")
+    buf = io.BytesIO()
+    d.save(buf)
+    md = md_of(tmp_path, buf.getvalue())
+    assert rs.read(md).set_type == "special_interrogatories"
+    assert rs.read(md, "special_interrogatories").set_type == "special_interrogatories"
+    assert rs.read(md.replace(title, "RESPONSES"), "special_interrogatories").set_type == "special_interrogatories"
+    assert rs.read(md.replace(title, "RESPONSES"), "form_interrogatories").set_type == "form_interrogatories"
+
+
 def test_a_bare_heading_nothing_settles_does_not_read(tmp_path) -> None:
     with pytest.raises(rs.ResponsesUnread, match="special or form"):
         rs.read(md_of(tmp_path, build("INTERROGATORY", ["1", "2"])), "requests_for_production")
 
 
+def test_a_body_sentence_that_starts_like_a_heading_ends_nothing(tmp_path) -> None:
+    """FALSIFIER: match the notes or index heading at a paragraph's start and
+    'Attorney's notes are protected ...' in response 1 drops responses 2 and 3."""
+    body = {"1": ["Objection.", "Attorney's notes are protected by the work product doctrine.",
+                  "Index of exhibits served herewith lists them.", "Responding party will produce the rest."]}  # fmt: skip
+    d = docx.Document()
+    for n in ("1", "2", "3"):
+        d.add_paragraph(f"REQUEST FOR PRODUCTION NO. {n}:")
+        d.add_paragraph(f"RESPONSE TO REQUEST FOR PRODUCTION NO. {n}:")
+        for line in body.get(n, [f"Answer {n}."]):
+            d.add_paragraph(line)
+    d.add_paragraph("DATED: today")
+    buf = io.BytesIO()
+    d.save(buf)
+    doc = rs.read(md_of(tmp_path, buf.getvalue()))
+    assert doc.numbers == ["1", "2", "3"] and doc.notes is None and doc.index is None
+    assert doc.text_of(doc.by_number()["1"]).endswith("will produce the rest.")
+
+
+@pytest.mark.parametrize("label", ["SPECIAL INTERROGATORY", "REQUEST FOR PRODUCTION"])
+def test_a_body_sentence_naming_an_interrogatory_is_not_a_heading(tmp_path, label) -> None:
+    """FALSIFIER: read 'Interrogatory No. 4 asks the same' as a bare heading and
+    response 1 is cut short, or a production document does not read at all."""
+    answers = {"1": "Objection, vague."}
+    d = docx.Document()
+    d.add_paragraph("PLAINTIFF'S RESPONSES TO SPECIAL INTERROGATORIES")
+    for n in ("1", "2"):
+        d.add_paragraph(f"{label} NO. {n}:")
+        d.add_paragraph(f"RESPONSE TO {label} NO. {n}:")
+        d.add_paragraph(answers.get(n, f"Answer {n}."))
+        if n == "1":
+            d.add_paragraph("Interrogatory No. 4 asks the same; see response there.")
+            d.add_paragraph("Plaintiff saw Dr. Example.")
+    buf = io.BytesIO()
+    d.save(buf)
+    doc = rs.read(md_of(tmp_path, buf.getvalue()))
+    assert doc.numbers == ["1", "2"]
+    assert doc.text_of(doc.by_number()["1"]).endswith("Plaintiff saw Dr. Example.")
+
+
+def test_a_heading_quoted_at_the_start_of_the_notes_never_reads_silently(tmp_path) -> None:
+    """The notes begin only after the last response heading, so a response
+    heading quoted there is a second response 2: the document does not read,
+    never a response silently cut."""
+    notes = ["NOTES FOR THE ATTORNEY", "RESPONSE TO REQUEST FOR PRODUCTION NO. 2: reworded as you asked."]
+    with pytest.raises(rs.ResponsesUnread, match="more than once"):
+        rs.read(md_of(tmp_path, build("REQUEST FOR PRODUCTION", ["1", "2"], notes=notes)))
+
+
 def test_the_index_and_the_notes_are_never_part_of_the_last_response(tmp_path) -> None:
     """FALSIFIER: no index end and the index reads as response 2's paragraphs."""
-    notes = ["NOTES FOR THE ATTORNEY", "RESPONSE TO REQUEST FOR PRODUCTION NO. 2: reworded as you asked."]
+    notes = ["NOTES FOR THE ATTORNEY", "Response 2 was reworded as you asked."]
     md = md_of(tmp_path, build("REQUEST FOR PRODUCTION", ["1", "2"], index=INDEX, notes=notes))
     doc = rs.read(md)
     assert doc.numbers == ["1", "2"]
@@ -141,6 +221,42 @@ def test_the_index_and_the_notes_are_never_part_of_the_last_response(tmp_path) -
     assert doc.index_lines()[0] == "EXHIBIT A: SAMPLE RECORDS" and doc.notes is not None
     edited = md.replace("2. Letter to Example Adjuster (Request Nos. 2)\n\n", "")
     assert rs.changed(md, edited) == ([], True)  # an index edit is outside every response
+
+
+def _index_file(lines: list[str], title: str = "PLAINTIFF'S INDEX OF EXHIBITS") -> bytes:
+    d = docx.Document()
+    d.add_paragraph("SUPERIOR COURT OF THE STATE OF EXAMPLE")
+    if title:
+        d.add_paragraph(title)
+    for line in lines:
+        d.add_paragraph(line)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("title", ["PLAINTIFF'S INDEX OF EXHIBITS", "INDEX OF EXHIBITS", ""])
+def test_a_file_that_is_only_an_index_reads_as_an_index(tmp_path, title) -> None:
+    """FALSIFIER: require a response heading and an index file does not read."""
+    doc = rs.read(md_of(tmp_path, _index_file(INDEX[1:], title)))
+    assert doc.is_index and doc.responses == [] and doc.set_type == ""
+    assert doc.index is not None and [e.letter for e in doc.index.exhibits] == ["A", "B"]
+    assert doc.index_lines()[0] == "EXHIBIT A: SAMPLE RECORDS"
+    with pytest.raises(rs.ResponsesUnread):  # a file with neither responses nor exhibits still does not read
+        rs.read(md_of(tmp_path, _index_file(["Some caption text."], "")))
+
+
+def test_the_rehearsal_keeps_an_index_file_and_scores_its_lines(tmp_path) -> None:
+    unit = tmp_path / "units" / "idx"
+    unit.mkdir(parents=True)
+    (unit / "base.docx").write_bytes(_index_file(INDEX[1:]))
+    (unit / "key.docx").write_bytes(_index_file(INDEX[1:-1]))
+    rep = set_rehearse.rehearse_set(unit.parent, "apply the new rules", RULES, unit.parent / "recordings.jsonl")
+    d = rep["documents"][0]
+    assert d["index_file"] is True and d["changed"] == [] and "error" not in d
+    assert (d["index"]["missed"], d["index"]["made"]) == (1, 0)
+    assert rep["totals"]["index"]["missed"] == 1 and rep["needed"] == []
+    assert rep["request"]["outcome"] == "held"  # nothing else to revise: held, never failed
 
 
 # ---- exhibit letters --------------------------------------------------------------------------
@@ -163,7 +279,7 @@ def test_the_exhibit_letter_comes_from_the_documents_own_index(tmp_path) -> None
 
 def test_a_letter_from_the_model_is_refused(tmp_path) -> None:
     doc = _doc(tmp_path)
-    for exhibits in (["B"], [], None, ["Exhibit B"]):
+    for exhibits in (["B"], ["Exhibit B"], "SAMPLE BILLS", [""]):
         raw = {"values": [{"request": "2", "rule": "wr-prod", "action": "end", "phrase": 1, "exhibits": exhibits}]}
         values, _c, problems = rules_mod.check(raw, RULES, doc)
         assert not values and problems, exhibits
@@ -185,6 +301,47 @@ def test_an_exhibit_the_index_does_not_name_once_leaves_the_response_as_filed(tm
     new, did, skipped = rs.apply(doc, [value])
     assert not did and new.md == doc.md
     assert skipped and rs.EXHIBIT_UNRESOLVED in skipped[0]
+
+
+def test_no_exhibit_named_leaves_that_response_and_fails_nothing(tmp_path) -> None:
+    """FALSIFIER: refuse an empty list and a document whose index code cannot
+    read fails the whole job (revise_unchecked) after its retry."""
+    doc = _doc(tmp_path, None)
+    for exhibits in ([], None):
+        raw = {"values": [{"request": "2", "rule": "wr-prod", "action": "end", "phrase": 1, "exhibits": exhibits},
+                          {"request": "1", "rule": "wr-prod", "action": "end", "phrase": 2}]}  # fmt: skip
+        values, _c, problems = rules_mod.check(raw, RULES, doc)
+        assert not problems and len(values) == 2
+        new, did, skipped = rs.apply(doc, values)
+        assert did == ["1 (wr-prod): end"] and rs.EXHIBIT_UNRESOLVED in skipped[0]
+        assert new.text_of(new.by_number()["2"]) == doc.text_of(doc.by_number()["2"])
+
+
+def test_two_exhibits_are_named_in_order_with_the_plural_word(tmp_path) -> None:
+    index = ["INDEX OF EXHIBITS", "EXHIBIT A: Bills", "EXHIBIT B: Records"]
+    doc = _doc(tmp_path, index)
+    assert rs.fill(doc, "found at Exhibit", ("Records", "Bills")) == ("found at Exhibits A and B.", "")
+    assert rs.fill(doc, "found at Exhibit", ("Records",)) == ("found at Exhibit B.", "")
+
+
+def test_a_response_that_already_says_the_phrase_without_its_period_is_left(tmp_path) -> None:
+    """FALSIFIER: compare with the filled phrase's own period and the phrase is added a second time."""
+    said = f"Responding party answers item 2. {PROD} B"
+    doc = rs.read(md_of(tmp_path, build("REQUEST FOR PRODUCTION", ["1", "2"], {"2": said}, index=INDEX)))
+    new, did, skipped = rs.apply(doc, [rs.Value("2", "wr-prod", "end", PROD, "", ("SAMPLE BILLS",))])
+    assert not did and new.md == doc.md and "already reads" in skipped[0]
+
+
+def test_exhibit_lines_without_a_colon_and_with_two_letters_are_exhibits(tmp_path) -> None:
+    index = ["INDEX OF EXHIBITS", "EXHIBIT A: Bills", "1. Bills of Example Clinic", "EXHIBIT AA: Records",
+             "EXHIBIT B Records of Dr. Example"]  # fmt: skip
+    doc = _doc(tmp_path, index)
+    assert doc.index is not None
+    assert [(e.letter, e.title, len(e.lines)) for e in doc.index.exhibits] == [
+        ("A", "Bills", 1),
+        ("AA", "Records", 0),
+        ("B", "Records of Dr. Example", 0),
+    ]
 
 
 def test_values_keep_their_exhibits_through_the_jobs_file() -> None:

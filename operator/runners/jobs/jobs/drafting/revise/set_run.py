@@ -147,6 +147,9 @@ class ReviseSetRun(ReviseRun):
             md, doc = su.read_base(d / "filed.docx", d, self._hint(k))
         except su.BaseUnproven as exc:
             raise DraftingFailed(f"revise_base_unproven: {u['name']}: {exc}; nothing was edited or filed") from None
+        if doc.is_index:
+            self._keep_index(k, u, before)
+            return
         if u["set_type"] and doc.set_type != u["set_type"]:
             raise DraftingFailed(
                 f"revise_base_unproven: {u['name']} is headed as {doc.set_type or 'mixed'} responses, "
@@ -176,11 +179,24 @@ class ReviseSetRun(ReviseRun):
             },
         )
 
+    def _keep_index(self, k: int, u: dict[str, Any], version: str) -> None:
+        """A delivered file that is only an Index of Exhibits: never a failure of
+        the request (2026-11-23: 4 of 7 real requests failed on one). It is kept
+        as filed; its lines are not revised yet, and the notes say so."""
+        sha = hashlib.sha256((self._udir(k) / "filed.docx").read_bytes()).hexdigest()
+        self._uwrite(
+            k,
+            "base.json",
+            {"file_id": u["file_id"], "name": u["name"], "version": version, "sha256": sha, "set_type": "",
+             "index": True, "numbers": [], "in_scope": False, "newer_than_delivery": sha != u["sha256"]},
+        )  # fmt: skip
+
     def _base(self) -> None:
         for k in range(len(self.units)):
             self._base_unit(k)
-        kinds = [self._ujson(k, "base.json")["set_type"] for k in range(len(self.units))]
-        flags = su.in_scope(self.job.request_text, kinds)
+        bases = [self._ujson(k, "base.json") for k in range(len(self.units))]
+        kinds = [b["set_type"] for b in bases]
+        flags = [on and not b.get("index") for on, b in zip(su.in_scope(self.job.request_text, kinds), bases)]
         for k, on in enumerate(flags):
             self._uwrite(k, "base.json", {**self._ujson(k, "base.json"), "in_scope": on})
         if not any(flags):
@@ -262,6 +278,9 @@ class ReviseSetRun(ReviseRun):
         for k, u in enumerate(self.units):
             base, rec = self._ujson(k, "base.json") or {}, self._ujson(k, "render.json") or {}
             lines.append(f"## {u['name']}")
+            if base.get("index"):
+                lines += ["An index of exhibits; left as filed (its lines are not revised in this version).", ""]
+                continue
             if not base.get("in_scope"):
                 lines += ["Not in this request's scope; left as filed.", ""]
                 continue

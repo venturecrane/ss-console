@@ -52,13 +52,23 @@ BARE = "INTERROGATORY"
 _HEAD = re.compile(r"^(RESPONSE\s+TO\s+)?" + _LABEL + r"\s+NO\.?\s*(\d+(?:\.\d+)?)\s*[:.]?\s*(.*)$", re.I | re.S)
 _CLOSING = re.compile(r"^(DATED|DATE:|RESPECTFULLY|VERIFICATION|PROOF OF SERVICE|DECLARATION OF SERVICE)\b", re.I)
 _MARKS = re.compile(r"[*_`]")
-_INDEX = re.compile(r"^INDEX\s+OF\s+EXHIBITS\b", re.I)
-_NOTES = re.compile(r"^(?:=+\s*)?(?:NOTES\s+FOR\s+THE\s+ATTORNEY|ATTORNEY(?:'S|\u2019S)?\s+NOTES)\b", re.I)
-_EXHIBIT = re.compile(r"^EXHIBIT\s+([A-Z])\b\s*(?:[:.\-\u2013\u2014]\s*(.*))?$", re.I)
+#: The index and notes headings: the WHOLE paragraph is the heading. A body
+#: sentence that starts with the same words ("Attorney's notes are protected
+#: ...") is a response's words, never the end of the responses.
+_INDEX = re.compile(r"^INDEX\s+OF\s+EXHIBITS\s*:?\s*$", re.I)
+_NOTES = re.compile(
+    r"^(?:=+\s*)?(?:NOTES\s+FOR\s+THE\s+ATTORNEY|ATTORNEY(?:'S|\u2019S)?\s+NOTES)\s*:?\s*(?:=+)?\s*$", re.I
+)
+#: An exhibit's line: "EXHIBIT B: TITLE", "EXHIBIT B - TITLE", "EXHIBIT B TITLE",
+#: "EXHIBIT AA: TITLE". The letters are capitals as written.
+_EXHIBIT = re.compile(r"^(?i:EXHIBIT)\s+([A-Z]{1,2})\b\s*[:.\-\u2013\u2014]?\s*(.*)$")
 #: Where the firm's phrase leaves the exhibit to be named: "Exhibit" at the
 #: phrase's end, or before a blank ("Exhibit ___", "Exhibit [letter]").
 _SLOT = re.compile(r"\b(Exhibits?)(?:\s+(?:_+|\[[^\]]*\]|\{[^}]*\}|<[^>]*>))?(?=\s*[.;,]?\s*$)")
-_TITLE_FORM = re.compile(r"\b(SPECIAL|FORM)\s+INTERROGATOR", re.I)
+_TITLE_FORM = re.compile(r"\b(SPECIAL(?:LY\s+PREPARED)?|FORM)\s+INTERROGATOR", re.I)
+#: A bare interrogatory heading is the whole paragraph: a sentence that starts
+#: "Interrogatory No. 4 asks the same" is a response's words.
+_BARE_ALONE = re.compile(r"^INTERROGATORY\s+NO\.?\s*\d+(?:\.\d+)?\s*[:.]?\s*$", re.I)
 #: Where a value puts the firm's phrase.
 ACTIONS = ("replace", "start", "end")
 
@@ -80,27 +90,34 @@ def _head(block: str) -> tuple[bool, str, str, str] | None:
     if not m:
         return None
     label = re.sub(r"\s+OF DOCUMENTS$", "", " ".join(m.group(2).upper().split()))
+    if label == BARE and not m.group(1) and not _BARE_ALONE.match(plain(block)):
+        return None
     return bool(m.group(1)), BARE if label == BARE else LABELS.get(label, ""), m.group(3), m.group(4).strip()
 
 
 def _title_kind(blocks: list[str], heads: list[Any]) -> str:
-    """The interrogatory kind the document's front matter names first, or ""."""
+    """The interrogatory kind the document's TITLE names, or "": the first
+    front-matter paragraph written in capitals that names one. Prose in the
+    front matter ("like Plaintiff's responses to Form Interrogatories") is not
+    the title and is not read."""
     for b, h in zip(blocks, heads):
         if h is not None:
             return ""
-        m = _TITLE_FORM.search(plain(b))
-        if m:
-            return LABELS[f"{m.group(1).upper()} INTERROGATORY"]
+        p = plain(b)
+        m = _TITLE_FORM.search(p)
+        if m and p == p.upper():
+            return LABELS["FORM INTERROGATORY" if m.group(1).upper() == "FORM" else "SPECIAL INTERROGATORY"]
     return ""
 
 
 def _resolve(blocks: list[str], heads: list[Any], hint: str | None) -> list[Any]:
-    """Every bare interrogatory heading given its kind: title, then the delivered
-    kind, then a dotted number means form. ``ResponsesUnread`` when none says."""
+    """Every bare interrogatory heading given its kind: the kind it was
+    delivered as, then the title, then a dotted number means form.
+    ``ResponsesUnread`` when none says."""
     if not any(h is not None and h[1] in (BARE, "") for h in heads):
         return heads
     kinds = {LABELS["SPECIAL INTERROGATORY"], LABELS["FORM INTERROGATORY"]}
-    kind = _title_kind(blocks, heads) or (hint if hint in kinds else "")
+    kind = (hint if hint in kinds else "") or _title_kind(blocks, heads)
     out: list[Any] = []
     for h in heads:
         if h is not None and h[1] == "":
@@ -146,7 +163,8 @@ class Exhibit:
 
 @dataclass
 class Index:
-    #: The block index of the ``INDEX OF EXHIBITS`` heading.
+    #: The block index of the ``INDEX OF EXHIBITS`` heading (-1: an index file
+    #: whose first block is already an exhibit line).
     head: int
     #: Every block of the index after its heading.
     blocks: list[int] = field(default_factory=list)
@@ -190,56 +208,79 @@ class Document:
     def exhibit_titles(self) -> list[str]:
         return [e.title for e in self.index.exhibits] if self.index else []
 
+    @property
+    def is_index(self) -> bool:
+        """A file that is only an Index of Exhibits: no response, an index region."""
+        return not self.responses and self.index is not None
+
 
 def _ends(block: str) -> bool:
-    p = plain(block)
-    return block.startswith("|") or bool(_CLOSING.match(p) or _INDEX.match(p) or _NOTES.match(p))
+    return block.startswith("|") or bool(_CLOSING.match(plain(block)))
 
 
-def _index(blocks: list[str], heads: list[Any]) -> Index | None:
-    """The Index of Exhibits: from its heading to the closing, the notes, or a
-    response heading. A request heading listed in it opens nothing."""
-    start = next((i for i, b in enumerate(blocks) if _INDEX.match(plain(b))), None)
+def _after_last(blocks: list[str], heads: list[Any], pat: re.Pattern[str]) -> int | None:
+    """The first heading ``pat`` names after the last response heading: an index
+    or notes heading before a response is never the end of the responses."""
+    last = max((i for i, h in enumerate(heads) if h is not None and h[0]), default=-1)
+    return next((i for i in range(last + 1, len(blocks)) if pat.match(plain(blocks[i]))), None)
+
+
+def _index(blocks: list[str], start: int | None) -> Index | None:
+    """The Index of Exhibits: from its heading to the closing or the notes."""
     if start is None:
         return None
     idx = Index(start)
     for i in range(start + 1, len(blocks)):
         p = plain(blocks[i])
-        if _CLOSING.match(p) or _NOTES.match(p) or (heads[i] is not None and heads[i][0]):
+        if _CLOSING.match(p) or _NOTES.match(p):
             break
         idx.blocks.append(i)
         m = _EXHIBIT.match(p)
         if m:
-            idx.exhibits.append(Exhibit(m.group(1).upper(), " ".join((m.group(2) or "").split()), i))
+            idx.exhibits.append(Exhibit(m.group(1), " ".join(m.group(2).split()), i))
         elif idx.exhibits:
             idx.exhibits[-1].lines.append(i)
     return idx
 
 
-def _quiet(blocks: list[str], heads: list[Any], index: Index | None) -> tuple[list[Any], int | None]:
-    """The headings with those inside the index and the notes removed, and the notes' block."""
-    notes = next((i for i, b in enumerate(blocks) if _NOTES.match(plain(b))), None)
+def _index_file_start(blocks: list[str]) -> int | None:
+    """Where an index-only file's index begins: its heading as a whole paragraph,
+    else a title in capitals that names it ("PLAINTIFF'S INDEX OF EXHIBITS"),
+    else just before its first ``EXHIBIT <letter>`` line (a file headed only by
+    the caption). None when the file lists no exhibit."""
+    first = next((i for i, b in enumerate(blocks) if _EXHIBIT.match(plain(b))), None)
+    if first is None:
+        return None
+    for i in range(first):
+        p = plain(blocks[i])
+        if _INDEX.match(p) or (p == p.upper() and re.search(r"\bINDEX\s+OF\s+EXHIBITS\b", p)):
+            return i
+    return first - 1
+
+
+def _quiet(heads: list[Any], index: Index | None) -> list[Any]:
+    """The headings with the request headings listed in the index removed. Both
+    regions start after the last response heading, so none is ever removed."""
     out = list(heads)
     for i in index.blocks if index else ():
-        out[i] = None
-    if notes is not None:
-        for i in range(notes + 1, len(blocks)):
-            if _CLOSING.match(plain(blocks[i])):
-                break
+        if out[i] is not None and not out[i][0]:
             out[i] = None
-    return out, notes
+    return out
 
 
 def read(md: str, set_type: str | None = None) -> Document:
     """The document's responses, in order, its index and its notes. ``set_type``
     is the kind it was delivered as, read only for a bare interrogatory heading
-    its title does not settle. ``ResponsesUnread`` when none reads, when one
-    number repeats, or when the document mixes set types."""
+    its title does not settle. A file with no response heading that lists
+    exhibits is an index file (``Document.is_index``: no responses, its index).
+    ``ResponsesUnread`` when nothing reads, when one number repeats, or when the
+    document mixes set types."""
     blocks = inplace.blocks(md)
     heads = [_head(b) for b in blocks]
-    index = _index(blocks, heads)
-    heads, notes = _quiet(blocks, heads, index)
-    heads = _resolve(blocks, heads, set_type)
+    notes = _after_last(blocks, heads, _NOTES)
+    index = _index(blocks, _after_last(blocks, heads, _INDEX))
+    heads = _resolve(blocks, _quiet(heads, index), set_type)
+    stops = {i for i in (notes, index.head if index else None) if i is not None}
     out: list[Response] = []
     for i, h in enumerate(heads):
         if h is None or not h[0]:
@@ -253,11 +294,16 @@ def read(md: str, set_type: str | None = None) -> Document:
         if prev is not None and not prev[0] and prev[2] == h[2]:
             resp.request = list(range(j, i))
         k = i + 1
-        while k < len(blocks) and heads[k] is None and not _ends(blocks[k]):
+        while k < len(blocks) and heads[k] is None and k not in stops and not _ends(blocks[k]):
             resp.body.append(k)
             k += 1
         out.append(resp)
     if not out:
+        # 2026-11-23: a request delivered its Index of Exhibits as a file of its
+        # own, and reading it as a response document failed the whole request.
+        index = index or _index(blocks, _index_file_start(blocks))
+        if index is not None and index.exhibits:
+            return Document(blocks, [], index, notes)
         raise ResponsesUnread("no block reads as RESPONSE TO <request> NO. <n>")
     nums = [r.number for r in out]
     dup = sorted({n for n in nums if nums.count(n) > 1})
@@ -327,7 +373,15 @@ def title_key(title: str) -> str:
 
 
 def _letters(letters: list[str]) -> str:
+    """ "A", "A and B", "A, B and C": in index order (A..Z, then AA..)."""
+    letters = sorted(letters, key=lambda x: (len(x), x))
     return letters[0] if len(letters) == 1 else ", ".join(letters[:-1]) + " and " + letters[-1]
+
+
+def _word(written: str, many: bool) -> str:
+    """The phrase's own word for "Exhibit", made plural for two or more."""
+    stem = written[:-1] if written.lower().endswith("s") else written
+    return stem + ("S" if stem.isupper() else "s") if many else stem
 
 
 def fill(doc: Document, phrase: str, titles: tuple[str, ...]) -> tuple[str, str]:
@@ -348,8 +402,14 @@ def fill(doc: Document, phrase: str, titles: tuple[str, ...]) -> tuple[str, str]
             return "", f"the exhibit {t[:60]!r} {where} the document's index"
         letters += [x for x in hits if x not in letters]
     rest = phrase[m.end() :]
-    out = f"{phrase[: m.start()]}{m.group(1)} {_letters(letters)}{rest}"
+    out = f"{phrase[: m.start()]}{_word(m.group(1), len(letters) > 1)} {_letters(letters)}{rest}"
     return (out if rest.strip() else out.rstrip() + "."), ""
+
+
+def _bare(phrase: str) -> str:
+    """The phrase as the already-says-this check reads it: end punctuation off,
+    so "... Exhibit B" in a response is the phrase "... Exhibit B." already."""
+    return " ".join(phrase.split()).rstrip(" .;,")
 
 
 def holds(doc: Document, v: Value) -> list[int]:
@@ -400,7 +460,7 @@ def apply(doc: Document, values: list[Value]) -> tuple[Document, list[str], list
             skipped.append(f"{v.request} ({v.rule}): {EXHIBIT_UNRESOLVED}: {why}; left as filed")
             continue
         here = "\n\n".join(blocks[i] for i in r.editable)
-        if " ".join(phrase.split()) in " ".join(plain(here).split()):
+        if _bare(phrase) in " ".join(plain(here).split()):
             skipped.append(f"{v.request} ({v.rule}): already reads as the rule says; left as filed")
             continue
         why = _place(blocks, r, v, phrase)

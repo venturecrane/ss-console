@@ -81,6 +81,11 @@ def _unit(
     key_md = docx_to_md(key)
     key_changed, key_outside = rs.changed(md, key_md, hint)
     rep.update(set_type=doc.set_type, key_changed=key_changed, key_outside=key_outside)
+    if doc.is_index:  # kept as filed, as the job keeps it; its lines scored against the key
+        ok = not key_outside
+        why = "" if ok else "an index file: the key changed its lines, which are not revised yet"
+        return {**rep, "ok": ok, "index_file": True, "in_scope": False, "changed": [], "why": why,
+                **_score(md, None, key_md, hint)}  # fmt: skip
     if not su.in_scope(request, [doc.set_type])[0]:
         ok = not key_changed and not key_outside
         why = "" if ok else "out of scope, key changed it"

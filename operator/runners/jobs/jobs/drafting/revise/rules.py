@@ -155,10 +155,13 @@ _LETTER = re.compile(r"^(?:exhibits?\s+)?[A-Z]$", re.I)
 
 def _exhibits(raw: Any, phrase: str) -> tuple[tuple[str, ...], str]:
     """(the exhibit titles a value names, "") or ((), what is wrong). Only a
-    phrase that ends at "Exhibit" takes titles; a letter is never accepted."""
-    if not rs.has_slot(phrase):
+    phrase that ends at "Exhibit" takes titles; a letter is never accepted. No
+    titles (a document with no index code can read) is not refused here: the
+    response is then left as filed and named (``responses.fill``), so one
+    unreadable index never fails every other document's revision."""
+    if not rs.has_slot(phrase) or raw is None or raw == []:
         return (), ""
-    if not (isinstance(raw, list) and raw and all(isinstance(t, str) and t.strip() for t in raw)):
+    if not (isinstance(raw, list) and all(isinstance(t, str) and t.strip() for t in raw)):
         return (), 'the phrase ends at "Exhibit": "exhibits" is a list of the exhibits\' titles from the index'
     if any(_LETTER.match(t.strip()) for t in raw):
         return (), "name each exhibit by its title as the index lists it, never by its letter"

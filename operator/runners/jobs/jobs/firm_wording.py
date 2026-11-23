@@ -79,10 +79,20 @@ def switched_on() -> bool:
     return logic_in_code.load_switch(SWITCH).enforcing
 
 
+def _said(value: Any) -> str:
+    """Words as two rows are compared: spacing, case and curly quotes folded."""
+    return " ".join(str(value or "").translate(_QUOTES).split()).casefold()
+
+
 def _text_key(rule: dict[str, Any]) -> str:
-    """A rule's words as two rows are compared: spacing, case and curly quotes folded."""
-    text = str(rule.get("text") or "").translate(_QUOTES)
-    return hashlib.sha256(" ".join(text.split()).casefold().encode("utf-8")).hexdigest()
+    """A rule as two rows are compared: its text, its wording and its phrases.
+    A rule restated with corrected wording or phrases is a different rule, never
+    folded into the old one."""
+    parts = [_said(rule.get("text"))]
+    for field in ("wording", "phrases"):
+        got = rule.get(field)
+        parts.append("\x1f".join(_said(w) for w in got) if isinstance(got, list) else "")
+    return hashlib.sha256("\x1e".join(parts).encode("utf-8")).hexdigest()
 
 
 _QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
@@ -117,7 +127,8 @@ def fold(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
         oldest = min(idx, key=lambda i: (_when(rules[i]), i))
         newest = max(idx, key=lambda i: (_when(rules[i]), i))
         aliases = [str(rules[i]["rule_id"]) for i in idx if i != oldest]
-        out.append((newest, {**rules[oldest], "at": rules[newest].get("at", ""), "aliases": aliases}))
+        words = {k: rules[newest][k] for k in ("wording", "phrases") if k in rules[newest]}
+        out.append((newest, {**rules[oldest], **words, "at": rules[newest].get("at", ""), "aliases": aliases}))
     return [rule for _i, rule in sorted(out, key=lambda pair: pair[0])]
 
 
