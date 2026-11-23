@@ -599,6 +599,42 @@ def _code(
     return found, chron, names
 
 
+def _look_failed(sr: StageRun, exc: whose_page.LookFailed) -> int:
+    """A page check that failed: nothing filed; a network failure retries."""
+    sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun looks again" if exc.transient else ""))
+    return EXIT_INFRA if exc.transient else EXIT_LOOK
+
+
+def _resettle_held(
+    sr: StageRun, rd: Path, rec: dict[str, Any], rows: list[Any], today: date | None
+) -> tuple[int | None, list[Any], str, Any]:
+    """A resume re-applies the $0 rules to the findings already paid for
+    (``review_settle.resettle``): no model call, the same result each time.
+    Returns (an exit code or None, rows, status, record)."""
+    try:
+        again = review_settle.resettle(
+            sr,
+            rd,
+            rec,
+            rows,
+            lambda r: _code(sr, rd, r, today)[0],
+            update=update_material(rd) is not None,
+            notes_tag=_NOTES_TAG,
+            today=today or date.today(),
+        )
+    except whose_page.LookFailed as exc:
+        return _look_failed(sr, exc), rows, "held", rec
+    if again is None:
+        return EXIT_RERENDER, rows, "held", rec
+    if again[1] is not rows:
+        rows = again[1]
+        review.save(rd, again[0], model=str(rec.get("model") or ""), lane="chronology")
+        (rd / INPUT_SHA).write_text(_input_sha(rows), encoding="utf-8")
+        status, rec2 = review.gate(rd, sr.job.path.parent, consume_redo=False)
+        return None, rows, status, rec2
+    return None, rows, "held", rec
+
+
 def run(
     sr: StageRun,
     *,
@@ -623,29 +659,9 @@ def run(
     _consume_redo(rd, sr.job.path.parent)
     status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)
     if status == "held" and rec:
-        # A resume re-applies the $0 rules to the findings already paid for
-        # (``review_settle.resettle``): no model call, the same result each time.
-        try:
-            again = review_settle.resettle(
-                sr,
-                rd,
-                rec,
-                rows,
-                lambda r: _code(sr, rd, r, today)[0],
-                update=update_material(rd) is not None,
-                notes_tag=_NOTES_TAG,
-                today=today or date.today(),
-            )
-        except whose_page.LookFailed as exc:
-            sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun looks again" if exc.transient else ""))
-            return EXIT_INFRA if exc.transient else EXIT_LOOK
-        if again is None:
-            return EXIT_RERENDER
-        if again[1] is not rows:
-            rows = again[1]
-            review.save(rd, again[0], model=str(rec.get("model") or ""), lane="chronology")
-            (rd / INPUT_SHA).write_text(_input_sha(rows), encoding="utf-8")
-            status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)
+        code, rows, status, rec = _resettle_held(sr, rd, rec, rows, today)
+        if code is not None:
+            return code
     if status == "missing":
         found, chron, names = _code(sr, rd, rows, today)
         model = _model(sr)
@@ -674,8 +690,7 @@ def run(
             sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun reviews again" if exc.retry else ""))
             return EXIT_INFRA if exc.retry else EXIT_INCOMPLETE
         except whose_page.LookFailed as exc:
-            sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun looks again" if exc.transient else ""))
-            return EXIT_INFRA if exc.transient else EXIT_LOOK
+            return _look_failed(sr, exc)
         if settled is None:
             return EXIT_RERENDER
         rows = settled
