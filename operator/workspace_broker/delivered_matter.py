@@ -137,6 +137,14 @@ SENTENCES: dict[str, dict[str, str]] = {
             "The document for matter {number} and its attorney notes are filed as new versions of the same files in "
             "the same folder, each named exactly as filed."
         ),
+        "revise_doc_lead": (
+            "The document for matter {number} is filed as new versions of the same files in the same folder, "
+            "each named exactly as filed: {files}."
+        ),
+        "revise_doc_lead_bare": (
+            "The document for matter {number} is filed as new versions of the same files in the same folder, "
+            "each named exactly as filed."
+        ),
         "revise_history": "The earlier versions stay in each file's version history.",
         "revise_notes": "The attorney notes list each change asked for, whether it was made, and why any was not.",
         "revise_unchanged": (
@@ -360,17 +368,22 @@ def _revise_held(row: dict[str, Any], reason: str) -> str:
 def _revise_delivered(row: dict[str, Any], files: list[Any], delivery: dict[str, Any]) -> str:
     """A delivered revision: new versions of the filed files, in place. What was
     and was not made is in the attorney notes; the row does not carry it (wave 2),
-    so the reply points to the notes rather than claim every change was made."""
+    so the reply points to the notes rather than claim every change was made.
+    It names attorney notes only when the record lists a notes file: on
+    2026-11-23 a revision SMD filed by hand with no notes was told its notes
+    were filed."""
     named = [f'"{n}"' for role in ("draft", "attorney_notes") for n in names(files, role)]
     number = _number(row)
+    notes = bool(names(files, "attorney_notes"))
+    lead, bare = ("revise_lead", "revise_lead_bare") if notes else ("revise_doc_lead", "revise_doc_lead_bare")
     return compose(
         paragraph(
             first(
-                _s("drafting", "revise_lead", number=number, files=and_list(named) or None),
-                _s("drafting", "revise_lead_bare", number=number),
+                _s("drafting", lead, number=number, files=and_list(named) or None),
+                _s("drafting", bare, number=number),
             ),
             _s("drafting", "revise_history"),
-            _s("drafting", "revise_notes"),
+            _s("drafting", "revise_notes") if notes else None,
         ),
         _markers(delivery),
         _not_covered(delivery),

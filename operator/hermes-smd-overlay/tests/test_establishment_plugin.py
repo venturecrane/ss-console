@@ -85,6 +85,11 @@ def establishment(monkeypatch, tmp_path):
     requests: list[dict] = []
 
     def fake_broker_request(payload):
+        if payload.get("include_recent_committed"):
+            # Every attributed turn reads the sender's recently recorded rules
+            # (already_recorded.recent, 2026-11-23); these tests count the
+            # staging and submit calls, so that read-only lookup is not listed.
+            return {"ok": True, "pending": [], "recent_committed": []}
         requests.append(payload)
         return {"ok": True, "staging_id": "set-1", "doc_id": "doc-1", "run_id": "run-1"}
 

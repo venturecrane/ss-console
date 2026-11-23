@@ -96,7 +96,13 @@ def seat(monkeypatch, tmp_path):
         if action == "establish_pending":
             if payload.get("proposal_id"):
                 return {"ok": True, "pending": []}
-            return {"ok": True, "pending": list(state["pending"])}
+            out = {"ok": True, "pending": list(state["pending"])}
+            if payload.get("include_recent_committed"):
+                # The broker's own answer (``readback_bindings._recent_committed``).
+                out["recent_committed"] = list(state.get("recent", []))
+            return out
+        if action == "drafting_job_status":
+            return {"ok": True, "jobs": list(state.get("jobs", []))}
         if action == "establish_readback_for":
             binding = state["binding"]
             if binding is None:
@@ -566,3 +572,137 @@ def test_a_committed_rules_reply_is_held_with_the_truth_not_a_failed_commit(seat
     assert held["action"] == "block"
     assert "It IS recorded" in held["message"] and "did not succeed" not in held["message"]
     assert "waiting on their yes" in held["message"] and B not in held["message"]
+
+
+# ---- 2026-11-23, the A&P seat: a follow-up after a rule was confirmed -------------
+# The attorney confirmed a discovery-response rule at 11:01. At 11:03 "Please
+# apply this to this file" was told nothing was applied and asked which documents
+# the rule was for; at 11:07 a reworded copy was proposed and committed as a
+# second rule. Every sentence, address, number and id below is invented.
+
+RFP = "5e5e5e5e"
+RFP_SUBJECT = {
+    "output_class": "work_product",
+    "property": "voice",
+    "doc_kinds": ["discovery_response"],
+}
+RFP_RULE = (
+    "When a request for production asks for documents across several categories of "
+    "damages, cite all objections and state that no further response will be made."
+)
+REWORDED = (
+    "For requests for production seeking documents in multiple damages categories, "
+    "assert every objection and state no further production will follow."
+)
+
+
+def _recorded():
+    return {"proposal_id": RFP, "text": RFP_RULE, "subject": dict(RFP_SUBJECT)}
+
+
+def _propose_gate(mod, text, session="sess-1", **subject):
+    args = {
+        "scope": "firm_adjust",
+        "subject": {"output_class": "work_product", "property": "voice", **subject},
+        "text": text,
+        "instructed_by": ATTORNEY,
+        "source_ref": "msg-2",
+    }
+    return mod.on_pre_tool_call(tool_name="establish_propose", session_id=session, args=args)
+
+
+def _proposed(state):
+    return [r for r in state["requests"] if r.get("action") == "establish_propose"]
+
+
+def test_apply_this_to_this_file_after_a_commit_is_told_the_rule_is_recorded(seat):
+    """The 11:03 sequence. FALSIFIER: without the follow-up lookup the turn
+    learns nothing of the rule, establish_pending answers an empty list, and the
+    reply says nothing was applied and asks which documents the rule is for."""
+    mod, state = seat
+    state["recent"] = [_recorded()]
+    context = _reply(mod, "Please apply this to this file")
+    assert "they are recorded" in context and "Never ask which documents" in context
+    assert "never say a filed document already follows the rule" in context
+    # establish_pending shows the rule as committed, not gone.
+    listed = json.loads(mod._pending({"sender": ATTORNEY}, session_id="sess-1"))["pending"]
+    assert [(r["text"], r["state"]) for r in listed] == [(RFP_RULE, "committed")]
+    assert all("proposal_id" not in r for r in listed)
+
+
+def test_a_new_rule_from_the_same_sender_after_a_commit_is_still_proposed(seat):
+    mod, state = seat
+    state["recent"] = [_recorded()]
+    new = "In discovery responses, put each objection on its own line."
+    _reply(mod, new)
+    out = _propose(mod, new, session="sess-1", subject=dict(RFP_SUBJECT))
+    assert out["readback"].startswith(new)
+
+
+def test_a_first_rule_naming_no_kind_still_asks_which_documents(seat):
+    mod, _state = seat
+    _reply(mod, "Make them shorter from now on.")
+    verdict = _propose_gate(mod, "Keep them shorter.")
+    assert verdict["action"] == "block"
+    assert "ask them which documents the rule is for" in verdict["message"]
+
+
+CHANGES_WITH_RULES = """Please make these changes:
+
+Response #3: drop the second sentence.
+Response #7: add that we will produce the pay stubs we have.
+The cover letter is fine as is.
+
+Anytime a request asks for wage loss documents, a privacy objection should be included
+that says tax returns are privileged. This should be a firm rule.
+"""
+WAGE_RULE = (
+    "When a request asks for wage loss documents, include a privacy objection that tax "
+    "returns are privileged."
+)
+
+
+def test_rules_in_changes_to_discovery_responses_reach_discovery_responses(seat):
+    """The 11:58 case: line-by-line changes to a delivered discovery response
+    plus standing rules, in an email that also mentions a letter. FALSIFIER:
+    the reach read the kind as "letter" only, refused the rules for discovery
+    responses, and the attorney was asked to restate them."""
+    mod, _state = seat
+    _reply(mod, CHANGES_WITH_RULES)
+    verdict = _propose_gate(mod, WAGE_RULE, doc_kinds=["discovery_response"])
+    assert verdict is None or "names only" not in verdict["message"]
+    assert verdict is None or "Refused" not in verdict["message"]
+    assert "discovery_response" in mod.rule_reach.kinds_named(CHANGES_WITH_RULES)
+
+
+def test_bare_objection_and_produce_words_do_not_name_discovery_responses(seat):
+    """A rule about letters that uses the words of discovery stays a rule about
+    letters. FALSIFIER: bare "produce"/"objection" patterns would add
+    discovery_response to its reach."""
+    mod, _state = seat
+    for text in (
+        "For letters to adjusters, always ask them to produce the declarations page.",
+        "In demand letters, say we object to the offer.",
+    ):
+        assert "discovery_response" not in mod.rule_reach.kinds_named(text)
+
+
+def test_no_recent_rule_means_no_follow_up_note(seat):
+    """FALSIFIER for the note: with nothing committed in the hour, the turn
+    gets no note at all."""
+    mod, state = seat
+    state["recent"] = []
+    context = _reply(mod, "Please apply this to this file")
+    assert "they are recorded" not in (context or "")
+
+
+def test_an_interrogatory_rule_names_discovery_responses(seat):
+    """The 12:55 case: "Anytime a special interrogatory asks for ..." with no
+    other kind word. FALSIFIER: the reach found no kind, refused the rule, and
+    the attorney was asked to name the document."""
+    mod, _state = seat
+    for text in (
+        "Anytime a special interrogatory asks for 10 years of provider history, object.",
+        "If any form interrogatory asks for the address, give the office address.",
+    ):
+        assert "discovery_response" in mod.rule_reach.kinds_named(text)

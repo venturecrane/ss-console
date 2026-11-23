@@ -20,6 +20,23 @@ Two pieces, both code, neither chosen by the model:
 
 It also holds the turn's one binding lookup (:func:`binding`), so deciding this
 costs no second read of the reply's headers.
+
+A FOLLOW-UP (2026-11-23, the A&P seat). The attorney confirmed a rule at 11:01;
+at 11:03 he wrote "Please apply this to this file". That turn saw nothing of
+his (the rule was committed in an earlier turn, and each email is its own
+session), the reach gate refused the re-proposal because his new email named no
+kind of document, and he was told nothing was applied and asked which documents
+the rule was for. At 11:07 a reworded copy of the same rule was proposed and
+committed as a second rule. One more piece, in code:
+
+* :func:`recent`: the sender's own rules committed in the last hour, read from
+  the broker once per turn, so ``establish_pending`` shows them as committed and
+  a turn that answers no read-back is told they are recorded
+  (:func:`follow_up_note`).
+
+A gate that blocked a proposal like a recorded rule was built and removed the
+same day: word overlap could not tell a new rule from a restated one, and it
+could replace the yes-turn confirmation sentence (bug review, 2026-11-23).
 """
 
 from __future__ import annotations
@@ -170,4 +187,82 @@ def propose_answer(response: dict[str, Any]) -> dict[str, Any] | None:
     return {"ok": True, "already_recorded": True, "instruction": PROPOSE_INSTRUCTION}
 
 
-__all__ = ["PROPOSE_INSTRUCTION", "binding", "first", "note", "propose_answer", "say_for"]
+# ---- the follow-up of a rule confirmed in an earlier turn (2026-11-23) -------------
+
+#: session -> (email answered, sender, the sender's rules committed recently).
+_RECENT: dict[str, tuple[str, str, list[dict[str, Any]]]] = {}
+
+_FOLLOW_UP_NOTE = (
+    "This person confirmed standing rules within the last hour; they are recorded and "
+    "apply to drafts from now on (establish_pending lists them as committed). Never ask "
+    "which documents they cover, never ask the person to restate or confirm them, do not "
+    "call establish_propose to record them again, and never say they were not recorded. "
+    "Recording a rule changes no document already filed: changing a filed document is a "
+    "revision request, so never say a filed document already follows the rule."
+)
+
+
+def _subject(row: dict[str, Any]) -> dict[str, Any]:
+    subject = row.get("subject")
+    return subject if isinstance(subject, dict) else {}
+
+
+def recent(session_id: str | None, sender: str) -> list[dict[str, Any]]:
+    """The sender's own rules committed in the last hour (``[]`` on any fault),
+    read from the broker once per turn."""
+    inbound = readback_confirm.inbound_message_id(session_id) if session_id else ""
+    hit = _RECENT.get(session_id or "")
+    if session_id and hit is not None and hit[0] == inbound and hit[1] == sender:
+        return hit[2]
+    rows: list[dict[str, Any]] = []
+    if sender:
+        try:
+            answer = _plugin()._broker_request(
+                {
+                    "action": "establish_pending",
+                    "sender": sender,
+                    "include_for_admin": False,
+                    "include_recent_committed": True,
+                }
+            )
+        except Exception:  # noqa: BLE001 - nothing read: the turn goes on as before
+            logger.debug("hermes-smd-establishment: recent-rules lookup failed", exc_info=True)
+            answer = None
+        got = answer.get("recent_committed") if isinstance(answer, dict) else None
+        rows = [r for r in got or () if isinstance(r, dict) and r.get("text")]
+    if session_id:
+        _RECENT[session_id] = (inbound, sender, rows)
+        while len(_RECENT) > _MAX_TURNS:
+            _RECENT.pop(next(iter(_RECENT)))
+    return rows
+
+
+def recent_as_own(session_id: str, sender: str) -> list[dict[str, Any]]:
+    """The sender's rules recorded in the last hour, each marked as theirs (the
+    broker answers recent rules for the sender named), for ``pending_view``."""
+    return [{**r, "instructed_by": sender} for r in recent(session_id, sender)] if sender else []
+
+
+def follow_up_note(session_id: str, sender: str) -> str | None:
+    """Where a message could answer no read-back, so the broker read-back
+    lookup is skipped: a follow-up of a rule confirmed in an earlier turn
+    ("apply this to this file") is told such rules are recorded (2026-11-23).
+    The rules are not listed: a later rule can replace an earlier one within
+    the hour, and listing both would read back a contradiction as recorded.
+    No job sentence: the turn may be about another matter."""
+    if rules_by_hand.on() or not recent(session_id, sender):
+        return None
+    return _FOLLOW_UP_NOTE
+
+
+__all__ = [
+    "PROPOSE_INSTRUCTION",
+    "binding",
+    "first",
+    "follow_up_note",
+    "note",
+    "propose_answer",
+    "recent",
+    "recent_as_own",
+    "say_for",
+]

@@ -4145,7 +4145,7 @@ def _clear_confirmation_stash(session_id: str) -> None:
     """
     for reg in (_CONFIRMED_STASH, _CONFIRMED_TEXT, _CONFIRMED_SAY, _COMMITTED_TURN):
         reg.pop(session_id, None)
-    for reg in (_OWN_TURN, _TURN_HANDLES):
+    for reg in (_OWN_TURN, _TURN_HANDLES, already_recorded._RECENT):
         reg.pop(session_id, None)
 
 
@@ -4165,9 +4165,7 @@ def _confirmation_note(
     """
     _clear_confirmation_stash(session_id)
     if not (isinstance(user_message, str) and own_rules._could_answer(user_message)):
-        # Nothing that could be an answer (a blank one included). Skip the broker
-        # round trip entirely: this runs on every attributed turn.
-        return None
+        return already_recorded.follow_up_note(session_id, sender)
     # ss-console#2546. The SAME round trip now answers two questions: what can
     # this person still confirm, and has anything of theirs ended without them
     # being told. Terminal rows are split off immediately and never reach the

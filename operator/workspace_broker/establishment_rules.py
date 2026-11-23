@@ -430,7 +430,18 @@ class RuleProposals(ProposalLifecycle):
         # off means the old caller sees exactly what it saw before.
         if outcomes_raw:
             rows = rows + pending.unreported_outcomes_for(sender)
-        return {"ok": True, "pending": [self._pending_view(r) for r in rows]}
+        answer: dict[str, Any] = {"ok": True, "pending": [self._pending_view(r) for r in rows]}
+        # 2026-11-23 (the A&P seat): opt-in, the sender's own rules committed in
+        # the last hour, so a follow-up turn ("apply this to this file") sees a
+        # rule confirmed in an earlier turn as recorded, not as gone.
+        recent_raw = request.get("include_recent_committed", False)
+        if not isinstance(recent_raw, bool):
+            raise EstablishmentValidationError("include_recent_committed must be a boolean")
+        if recent_raw:
+            from .readback_bindings import _recent_committed
+
+            answer["recent_committed"] = _recent_committed(pending, sender)
+        return answer
 
     @staticmethod
     def _pending_view(row: dict[str, Any]) -> dict[str, Any]:

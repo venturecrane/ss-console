@@ -202,11 +202,22 @@ def install_watch(broker: BrokerContext, request: dict[str, Any]) -> dict[str, A
     return {"ok": True}
 
 
-def _verdict(store: Any, run_id: str, age: float) -> str:
+def _installed(pending: Any, proposal_id: str) -> bool:
+    """Did another reader of the run's one-shot result already see it install?
+    ``status`` stamps ``installed_at`` on the proposal whoever reads it."""
+    row = pending.get(proposal_id) or {}
+    return row.get("installed_at") is not None
+
+
+def _verdict(store: Any, run_id: str, age: float, pending: Any = None, proposal_id: str = "") -> str:
     """``""`` installed, ``"wait"`` not yet due to give up, else why it failed."""
     try:
         answer = store.status({"run_id": run_id})
     except (EstablishmentValidationError, ValueError):
+        # 2026-11-23: the result is one-shot; a run another reader collected
+        # is installed when its proposal says so, not "lost".
+        if pending is not None and proposal_id and _installed(pending, proposal_id):
+            return ""
         return "its run can no longer be read"
     result = answer.get("result") if isinstance(answer, dict) else None
     if isinstance(result, dict):
@@ -245,7 +256,7 @@ def install_check(broker: BrokerContext, request: dict[str, Any]) -> dict[str, A
     failed: list[dict[str, str]] = []
     settled: list[str] = []
     for run_id, proposal_id, committed_at in due:
-        why = _verdict(store, str(run_id), now - float(committed_at))
+        why = _verdict(store, str(run_id), now - float(committed_at), pending, str(proposal_id))
         if why == "wait":
             continue
         settled.append(str(run_id))
