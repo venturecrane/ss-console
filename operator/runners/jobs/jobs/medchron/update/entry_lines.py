@@ -82,25 +82,57 @@ def line_sentences(line: str) -> list[str]:
     return [line[s:e].strip() for s, e in spans if _wordy(line[s:e])]
 
 
-def numbered(text: str, record_only: bool = False) -> tuple[str, dict[str, str]]:
-    """(the entry as the read is shown it, label -> that line's exact text)."""
-    shown: list[str] = []
-    lines: dict[str, str] = {}
+def _walk(text: str, record_only: bool) -> list[tuple[str | None, str, str]]:
+    """(label or None, the text shown for it, the paragraph it sits in), in
+    order: the one walk ``numbered`` and ``label_pages`` share, so a label
+    means the same line in both."""
+    out: list[tuple[str | None, str, str]] = []
     k = 0
     for i, ln in enumerate(text.split("\n")):
         if not record_only and i < 2:
-            label = "DP"[i]
-            lines[label] = ln
-            shown.append(f"[{label}] {ln}")
+            out.append(("DP"[i], ln, ln))
             continue
         sents = line_sentences(ln)
         if not sents:
-            shown.append(ln)
+            out.append((None, ln, ln))
         for s in sents:
             k += 1
-            lines[f"S{k}"] = s
-            shown.append(f"[S{k}] {s}")
-    return "\n".join(shown), lines
+            out.append((f"S{k}", s, ln))
+    return out
+
+
+def numbered(text: str, record_only: bool = False) -> tuple[str, dict[str, str]]:
+    """(the entry as the read is shown it, label -> that line's exact text)."""
+    walk = _walk(text, record_only)
+    shown = [f"[{lb}] {s}" if lb else s for lb, s, _ in walk]
+    return "\n".join(shown), {lb: s for lb, s, _ in walk if lb}
+
+
+def cites_of(text: str) -> set[tuple[int, int]]:
+    """Every (exhibit, page) the text's citations name."""
+    return {(int(m.group(1)), p) for m in CL.CITE.finditer(text) for p in CL.parse_pages(m.group(2)) or [1]}
+
+
+def _blocks(text: str) -> dict[str, str]:
+    """line -> the block of lines it sits in, between blank lines."""
+    out: dict[str, str] = {}
+    for block in re.split(r"\n\s*\n", text):
+        for ln in block.split("\n"):
+            out.setdefault(ln, block)
+    return out
+
+
+def label_pages(text: str, record_only: bool = False) -> dict[str, set[tuple[int, int]]]:
+    """label -> the pages that line rests on: its own citations, else its
+    text line's (a citation often closes only the last sentence), else its
+    block's between blank lines (a citation can sit on the next line, as live
+    on 2026-10-07: ``audit/claims._walk``); empty for a line nothing cites."""
+    blocks = _blocks(text)
+    return {
+        lb: cites_of(s) or cites_of(para) or cites_of(blocks.get(para, ""))
+        for lb, s, para in _walk(text, record_only)
+        if lb
+    }
 
 
 def count_sentences(body: str) -> int:
