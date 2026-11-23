@@ -127,10 +127,25 @@ _WORD_RUN = re.compile(r"[A-Za-z]{2,}(?:\s+[A-Za-z]{2,}){2,}")
 #: printed visit summary's header and footer hold 213 to 241 over a pictured
 #: body, which ``THIN_CHARS`` let through as text.
 IMAGE_PAGE_CHARS = 400
+#: ...when its pictures cover at least this share of the page: a letterhead
+#: logo over a short typed page keeps its text layer.
+IMAGE_PAGE_AREA = 0.25
 
 
 def _body_chars(text: str) -> int:
     return len(re.sub(r"\s", "", _HEADER_LINE.sub("", text or "")))
+
+
+def _pictured(page: Any) -> bool:
+    """The page's embedded pictures cover at least IMAGE_PAGE_AREA of it."""
+    area = abs(page.rect)
+    if not area:
+        return False
+    covered = 0.0
+    for img in page.get_images():
+        for r in page.get_image_rects(img[0]):
+            covered += abs(r & page.rect)
+    return covered / area >= IMAGE_PAGE_AREA
 
 
 def thin(text: str) -> bool:
@@ -251,7 +266,7 @@ def vision_pages(path: Path, pages: list[tuple[int, str]]) -> list[int]:
                 continue
             page = doc[n - 1]
             if page.get_images():
-                if thin(text[n]) or garbled(text[n]) or _body_chars(text[n]) < IMAGE_PAGE_CHARS:
+                if thin(text[n]) or garbled(text[n]) or (_body_chars(text[n]) < IMAGE_PAGE_CHARS and _pictured(page)):
                     out.append(n)
             elif drawn_text(page):
                 out.append(n)

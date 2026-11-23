@@ -528,3 +528,21 @@ def test_an_image_page_with_a_typed_body_keeps_its_text_layer(tmp_path):
 
     pdf = _image_page_pdf(tmp_path, HEADER_ONLY + CLEAN + " " + CLEAN)
     assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == []
+
+
+def test_a_short_typed_page_under_a_small_logo_keeps_its_text_layer(tmp_path):
+    """A letterhead logo is a picture too: the header-only rule applies only
+    when pictures cover a quarter of the page, so a short typed last page is
+    not paid for and replaced by a model reading."""
+    import pymupdf
+    from jobs.stages import extract
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 20, 20), 0)
+    pix.clear_with(120)
+    page.insert_image(pymupdf.Rect(72, 30, 152, 70), pixmap=pix)  # the logo
+    page.insert_textbox(pymupdf.Rect(72, 90, 540, 300), HEADER_ONLY, fontsize=8)
+    pdf = tmp_path / "letter.pdf"
+    doc.save(str(pdf))
+    assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == []
