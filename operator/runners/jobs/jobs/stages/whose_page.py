@@ -41,6 +41,8 @@ CACHE = "whose_page.json"
 SUBJECTS = ("client", "other", "both", "none", "unreadable")
 BASES = ("dob", "name", "dob_and_name", "account", "none")
 UNREADABLE = "unreadable"
+#: A page no picture can be made of: never sent, kept, and noted as not shown.
+NOT_SHOWN = "not_shown"
 #: One look, priced for the limits: a page picture and the short system
 #: prompt in, a one-line answer out. At Opus 5.5's rates ($4/$20 per
 #: million) this is about $0.0132, against $0.0134 measured on the proof.
@@ -50,6 +52,12 @@ _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
 Images = Callable[[int, int], dict[str, Any] | None]
 #: (exhibit, page, attempt, the request's content) -> the reply text.
 Ask = Callable[[int, int, int, list[dict[str, Any]]], str]
+
+
+class LookFailed(RuntimeError):
+    """A look that did not come back (2026-11-23): the review exits through
+    its retry exit with the chronology unedited, and a resume settles again
+    from the saved review findings, looking only at what is still missing."""
 
 
 def model(cfg: Any) -> str:
@@ -107,15 +115,21 @@ class Looker:
             max_tokens=MAX_TOKENS,
             custom_id=f"whose-page-ex{exhibit}-p{page}-{attempt}",
         )
+        if str(getattr(r, "stop_reason", "") or "") == "refusal":
+            raise LookFailed(f"the look at Exhibit {exhibit} p. {page} was refused")
         return str(r.text or "")
 
     def subject(self, exhibit: int, page: int) -> str:
         """The page's subject: a saved verdict, else one look (asked again
         once when the reply is not the answer asked for; twice, unreadable).
-        A page with no picture is unreadable and never sent."""
+        A page with no picture is ``NOT_SHOWN`` and never sent. A look that
+        fails (the doorway gave up past its retries, a 400, a refusal) raises
+        ``LookFailed`` and saves nothing; a cost or stop hold raises as itself."""
+        from ..limits import LimitHold
+
         img = self.images(exhibit, page)
         if img is None:
-            return UNREADABLE
+            return NOT_SHOWN
         data = str((img.get("source") or {}).get("data") or "")
         key = f"{hashlib.sha256(data.encode()).hexdigest()}:{prompt_sha()}:{self.model}"
         row = self.cache.get(key)
@@ -124,45 +138,20 @@ class Looker:
         u = self.sr.unit
         text = {"type": "text", "text": f"Client: {u.client_name}, date of birth {u.dob}. Page {page}."}
         got = None
-        for attempt in (1, 2):
-            got = parse(self.ask(exhibit, page, attempt, [text, img]))
-            if got is not None:
-                break
+        try:
+            for attempt in (1, 2):
+                got = parse(self.ask(exhibit, page, attempt, [text, img]))
+                if got is not None:
+                    break
+        except (LimitHold, LookFailed):
+            raise
+        except Exception as exc:  # every failed look is the review's retry exit, never a kept entry
+            raise LookFailed(f"the look at Exhibit {exhibit} p. {page} failed ({type(exc).__name__})") from exc
         subject = got or UNREADABLE
         self.cache[key] = {"subject": subject, "exhibit": exhibit, "page": page}
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self.cache, indent=1, sort_keys=True), encoding="utf-8")
         return subject
-
-    def settled(self, exhibit: int, page: int) -> str:
-        """``subject`` after the paid review call: a look the doorway gave up
-        on (the network, past its retries) is unreadable, not saved, and the
-        entry is kept, so a resume never pays for the review again
-        (2026-11-23). A cost or stop hold still raises."""
-        from ..deadline import is_transient
-
-        try:
-            return self.subject(exhibit, page)
-        except Exception as exc:  # only a network failure is caught; every other error is re-raised
-            if not is_transient(exc):
-                raise
-            self.sr.log(
-                f"review: the look at Exhibit {exhibit} p. {page} failed ({type(exc).__name__}); kept, unreadable"
-            )
-            return UNREADABLE
-
-
-def first(sr: StageRun, model_id: str) -> str:
-    """The entry reader's flagged pages, looked at BEFORE the review's paid
-    call (they need nothing from it), so a look that fails ends the stage
-    before that call is made and a resume pays for neither twice. A full
-    build only (an update has its own review). Returns `model_id`: it is
-    called where the review names its model (``review.run``)."""
-    if not sr.job.update:
-        looker = Looker(sr)
-        for ex, pg in sorted(reader_pages(sr.slug_dir, sr.unit.unit)):
-            looker.subject(ex, pg)
-    return model_id
 
 
 def _load(path: Path) -> dict[str, Any]:

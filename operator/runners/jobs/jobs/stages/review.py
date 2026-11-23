@@ -624,16 +624,20 @@ def run(
     if status == "held" and rec:
         # A resume re-applies the $0 rules to the findings already paid for
         # (``review_settle.resettle``): no model call, the same result each time.
-        again = review_settle.resettle(
-            sr,
-            rd,
-            rec,
-            rows,
-            lambda r: _code(sr, rd, r, today)[0],
-            update=update_material(rd) is not None,
-            notes_tag=_NOTES_TAG,
-            today=today or date.today(),
-        )
+        try:
+            again = review_settle.resettle(
+                sr,
+                rd,
+                rec,
+                rows,
+                lambda r: _code(sr, rd, r, today)[0],
+                update=update_material(rd) is not None,
+                notes_tag=_NOTES_TAG,
+                today=today or date.today(),
+            )
+        except whose_page.LookFailed as exc:
+            sr.log(f"review: {exc}; nothing was edited or filed; a later rerun settles again")
+            return EXIT_INFRA
         if again is None:
             return EXIT_RERENDER
         if again[1] is not rows:
@@ -643,25 +647,34 @@ def run(
             status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)
     if status == "missing":
         found, chron, names = _code(sr, rd, rows, today)
-        model = whose_page.first(sr, _model(sr))  # the reader-flagged pages first: a failed look costs no review
+        model = _model(sr)
+        # The paid findings are written down before anything is settled from
+        # them: a stage that stops in between settles again from them, at $0.
+        kept = review_policy.paid(rd, sha)
         try:
-            found += _model_findings(sr, rd, model, chron, names, found)
+            found += (
+                kept
+                if kept is not None
+                else review_policy.keep(rd, sha, _model_findings(sr, rd, model, chron, names, found))
+            )
+            found, settled = review_policy.package(
+                sr,
+                rd,
+                found,
+                rows,
+                update=update_material(rd) is not None,
+                notes_tag=_NOTES_TAG,
+                verify=verify,
+                images=images,
+                audit=audit,
+                today=today or date.today(),
+            )
         except review.ReviewIncomplete as exc:
             sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun reviews again" if exc.retry else ""))
             return EXIT_INFRA if exc.retry else EXIT_INCOMPLETE
-        material = update_material(rd) is not None
-        found, settled = review_policy.package(
-            sr,
-            rd,
-            found,
-            rows,
-            update=material,
-            notes_tag=_NOTES_TAG,
-            verify=verify,
-            images=images,
-            audit=audit,
-            today=today or date.today(),
-        )
+        except whose_page.LookFailed as exc:
+            sr.log(f"review: {exc}; nothing was edited or filed; a later rerun looks again")
+            return EXIT_INFRA
         if settled is None:
             return EXIT_RERENDER
         rows = settled

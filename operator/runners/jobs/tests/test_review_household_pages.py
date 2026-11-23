@@ -10,10 +10,12 @@ surname, another given name) reached two delivered chronologies.
   pages the entry reader recorded as another person's and the pages the
   review's check 1 is about are looked at by a model reading each picture
   (``stages/whose_page``), and EVERY entry citing a page judged "other" is
-  left out and disclosed in code's words, never the model's. Each verdict is
-  cached; nothing is looked at when nothing is flagged; the reader's pages
-  are looked at before the paid review call, so a failed look never costs
-  that call twice.
+  left out, exactly as the entry reader's own list bounds it, and disclosed
+  in code's words, never the model's; so is a prior-history paragraph citing
+  one. Each verdict is cached; nothing is looked at when nothing is flagged.
+* A look that fails ends the review through its retry exit with the
+  chronology unedited, and the paid review's findings are kept, so a resume
+  settles from them without paying for the review again.
 
 Every name and date here is invented.
 """
@@ -25,7 +27,9 @@ import json
 import pytest
 
 from jobs.deadline import CallDeadlineError
+from jobs.limits import LimitHold
 from jobs.medchron.gates import foreign_identity as FI
+from jobs.medchron.update import body as B
 from jobs.proof import review as proof_review
 from jobs.stages import review, review_evidence, review_policy, whose_page
 from test_final_stages import DOC
@@ -131,10 +135,10 @@ def test_the_readers_flag_and_an_other_verdict_leave_the_entry_out(job_dir, firm
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
-    d = FakeDoorway(_look("other"), CLEAN)
+    d = FakeDoorway(CLEAN, _look("other"))
     assert _settle_review(sr, d) == 0, log
-    assert len(d.calls) == 2 and d.calls[0]["custom_id"].startswith("whose-page"), "the look comes before the review"
-    look = d.calls[0]
+    assert len(d.calls) == 2, "the review and one look"
+    look = d.calls[1]
     assert look["stage"] == "review" and look["model"] == whose_page.DEFAULT_MODEL and look["max_tokens"] == 400
     content = look["messages"][0]["content"]
     assert content[0]["text"] == "Client: Alpha Example, date of birth 01/01/1970. Page 3."
@@ -147,6 +151,7 @@ def test_the_readers_flag_and_an_other_verdict_leave_the_entry_out(job_dir, firm
     ]
     assert review_evidence.left_out_note("03/30/2026") in _notes(sr)
     assert _policy(sr)["identity_left_out"] == 1
+    assert not (sr.slug_dir / "runs" / "alpha" / proof_review.PAID).exists(), "the saved review replaces it"
 
 
 @pytest.mark.parametrize("subject", ["client", "both", "none"])
@@ -154,7 +159,7 @@ def test_the_readers_flag_with_any_other_verdict_keeps_the_entry(job_dir, firm_c
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
-    assert _settle_review(sr, FakeDoorway(_look(subject, "name"), CLEAN)) == 0, log
+    assert _settle_review(sr, FakeDoorway(CLEAN, _look(subject, "name"))) == 0, log
     assert "Continue therapy." in _md(sr) and _left(sr) == []
     pol = _policy(sr)
     assert pol[f"identity_page_{subject}"] == 1 and pol["identity_left_out"] == 0
@@ -164,7 +169,7 @@ def test_a_fenced_reply_is_read(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
-    d = FakeDoorway("```json\n" + _look("other") + "\n```", CLEAN)
+    d = FakeDoorway(CLEAN, "```json\n" + _look("other") + "\n```")
     assert _settle_review(sr, d) == 0, log
     assert len(d.calls) == 2 and len(_left(sr)) == 1
 
@@ -173,7 +178,7 @@ def test_a_reply_unparsed_twice_is_unreadable_and_the_entry_is_kept(job_dir, fir
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
-    d = FakeDoorway("not json", '{"subject": "maybe"}', CLEAN)
+    d = FakeDoorway(CLEAN, "not json", '{"subject": "maybe"}')
     assert _settle_review(sr, d) == 0, log
     assert len(d.calls) == 3, "asked once more, then unreadable"
     assert "Continue therapy." in _md(sr)
@@ -227,6 +232,85 @@ def test_a_malformed_reader_record_is_skipped(job_dir, firm_config_path, data_ro
     assert _policy(sr)["identity_left_out"] == 0
 
 
+# ---- one entry list: the entry reader's bounds ----------------------------------------
+RECORDS = (
+    "04/02/2026 (records date, not a date of service)\nExample Clinic | Records\n\nForm printed. (Exhibit 1 - p. {p})\n"
+)
+YEARLESS = "07/18 (year not stated)\nExample Clinic | Treatment Log\n\nLog row written. (Exhibit 1 - p. {q})\n"
+
+
+def _noted_doc(flagged: str) -> str:
+    """The 03/30 entry on the client's p. 2, then a records-date entry and a
+    yearless one; the `flagged` one cites p. 3, the other p. 2."""
+    p, q = (3, 2) if flagged == "records" else (2, 3)
+    extra = RECORDS.format(p=p) + "\n" + YEARLESS.format(q=q) + "\n"
+    doc = DOC.replace("Continue therapy. (Exhibit 1 - p. 3)", "Continue therapy. (Exhibit 1 - p. 2)")
+    return doc.replace("## Exhibit List", extra + "## Exhibit List")
+
+
+def test_the_entry_list_is_the_entry_readers() -> None:
+    md = _noted_doc("records")
+    pre, ents = review_evidence.entries(md)
+    assert [e[2].strip("\n") for e in ents] == B.entries_of(md)[1]
+    assert pre is not None and pre[2].strip("\n") == B.entries_of(md)[0].strip("\n")
+    lines = md.splitlines(keepends=True)
+    assert all("".join(lines[a:b]) == t for a, b, t in ents)
+
+
+@pytest.mark.parametrize("flagged", ["records", "yearless"])
+def test_only_the_flagged_entry_goes_and_its_neighbours_stay_byte_for_byte(
+    job_dir, firm_config_path, data_root, flagged
+):
+    doc = _noted_doc(flagged)
+    sr, log = _package(job_dir, firm_config_path, data_root, doc)
+    _pages(sr, PAGE)
+    _reader(sr)
+    before = B.entries_of(_md(sr))[1]
+    assert _settle_review(sr, FakeDoorway(CLEAN, _look("other"))) == 0, log
+    after = B.entries_of(_md(sr))[1]
+    gone = [e for e in before if e not in after]
+    assert len(gone) == 1 and ("Form printed." if flagged == "records" else "Log row written.") in gone[0]
+    assert all(e in after for e in before if e not in gone), "every other entry, heading and text, unchanged"
+    assert len(_left(sr)) == 1
+
+
+# ---- prior medical history ------------------------------------------------------------
+PRE_DOC = DOC.replace(
+    "**Neck:** chronic pain before the incident. (Exhibit 1 - p. 1)",
+    "**Neck:** chronic pain before the incident. (Exhibit 1 - p. 3)\n\n**Back:** no prior complaints. (Exhibit 1 - p. 1)",
+).replace("Continue therapy. (Exhibit 1 - p. 3)", "Continue therapy. (Exhibit 1 - p. 2)")
+
+
+def test_a_prior_history_paragraph_on_a_page_judged_other_goes_alone(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root, PRE_DOC)
+    _pages(sr, PAGE)
+    _reader(sr, rows=[{"key": "PRE", "recorded": [{"class": "another_person", "exhibit": 1, "page": 3}]}])
+    assert _settle_review(sr, FakeDoorway(CLEAN, _look("other"))) == 0, log
+    md = _md(sr)
+    assert "chronic pain before the incident" not in md
+    assert "Prior Medical History" in md and "**Back:** no prior complaints. (Exhibit 1 - p. 1)" in md
+    assert "[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]" in md
+    assert "Continue therapy." in md, "no dated entry cites the page"
+    assert _left(sr) == [
+        {
+            "date": "Prior Medical History",
+            "provider": "",
+            "exhibit": 1,
+            "pages": [3],
+            "reason": review_evidence.LEFT_OUT_REASON,
+        }
+    ]
+    note = review_evidence.prior_note([(1, 3)])
+    assert note == (
+        "a prior-history paragraph citing Exhibit 1 p. 3 names a person other than the client, "
+        "so it was left out of this chronology"
+    )
+    assert note in _notes(sr)
+    lim = md[md.index("## Records Reviewed and Limitations") :]
+    assert "A prior-history paragraph citing Exhibit 1 p. 3 names a person other than the client" in lim
+    assert _policy(sr)["identity_prior_left_out"] == 1
+
+
 # ---- the bug review's probes, fixed (2026-11-23) -------------------------------------
 def test_p1_the_delivered_package_never_carries_the_models_words_about_the_other_person(
     job_dir, firm_config_path, data_root
@@ -235,7 +319,7 @@ def test_p1_the_delivered_package_never_carries_the_models_words_about_the_other
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
-    assert _settle_review(sr, FakeDoorway(_look("other"), _verdict(CHECK1))) == 0, log
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1), _look("other"))) == 0, log
     text = _delivered_text(sr)
     assert "Beta" not in text and "Roe" not in text and "co-plaintiff" not in text
     assert review_evidence.left_out_note("03/30/2026") in _notes(sr)
@@ -254,7 +338,7 @@ def test_p2_a_check1_on_an_entry_the_reader_left_out_is_noted_and_does_not_hold(
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
-    assert _settle_review(sr, FakeDoorway(_look("other"), _verdict(CHECK1_NO_PAGE))) == 0, log
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1_NO_PAGE), _look("other"))) == 0, log
     assert "Continue therapy." not in _md(sr)
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert rec["must_fix"] == 0
@@ -265,7 +349,7 @@ def test_p3_every_entry_citing_the_readers_page_is_left_out(job_dir, firm_config
     sr, log = _package(job_dir, firm_config_path, data_root, TWO_ON_ONE_PAGE)
     _pages(sr, PAGE)
     _reader(sr)
-    assert _settle_review(sr, FakeDoorway(_look("other"), CLEAN)) == 0, log
+    assert _settle_review(sr, FakeDoorway(CLEAN, _look("other"))) == 0, log
     md = _md(sr)
     assert "Continue therapy." not in md and "Follow-up of the same visit." not in md and "Cervical strain." in md
     assert sorted(e["date"] for e in _left(sr)) == ["03/30/2026", "04/02/2026"]
@@ -283,44 +367,94 @@ def test_p3b_every_entry_citing_a_check1_page_is_left_out(job_dir, firm_config_p
 
 
 class _Down(FakeDoorway):
-    """The doorway giving up (past its retries) on the `fail`-th call."""
+    """A page look that fails with `error` (the doorway past its retries, a
+    400, a refusal, a limit); the review's own call answers as scripted."""
 
-    def __init__(self, *answers: str, fail: int) -> None:
+    def __init__(self, *answers: str, error: BaseException | None = None, refuse: bool = False) -> None:
         super().__init__(*answers)
-        self.fail = fail
+        self.error, self.refuse = error, refuse
 
     def call(self, stage, **kw):
-        if len(self.calls) + 1 == self.fail:
-            self.calls.append({"stage": stage, **kw})
-            raise CallDeadlineError("the call ran past its deadline")
+        if str(kw.get("custom_id") or "").startswith("whose-page"):
+            if self.refuse:
+                self.calls.append({"stage": stage, **kw})
+                return type("R", (), {"text": "", "stop_reason": "refusal", "usage": None})()
+            if self.error is not None:
+                self.calls.append({"stage": stage, **kw})
+                raise self.error
         return super().call(stage, **kw)
 
 
-def test_p4_a_failed_reader_look_ends_the_stage_before_the_paid_review(job_dir, firm_config_path, data_root):
+@pytest.mark.parametrize(
+    "down",
+    [
+        {"error": CallDeadlineError("the call ran past its deadline")},
+        {"error": ValueError("400: the request was refused as malformed")},
+        {"refuse": True},
+    ],
+    ids=["transient", "400", "refusal"],
+)
+def test_p4_a_failed_reader_look_exits_75_unedited_and_the_resume_pays_no_review(
+    job_dir, firm_config_path, data_root, down
+):
     sr, _log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
     before = _md(sr)
-    d1 = _Down(fail=1)
-    with pytest.raises(CallDeadlineError):
-        _settle_review(sr, d1)
-    assert _main(d1.calls) == [] and _md(sr) == before, "no review paid, nothing edited"
-    d2 = FakeDoorway(_look("other"), CLEAN)
+    d1 = _Down(CLEAN, **down)
+    assert _settle_review(sr, d1) == review.EXIT_INFRA
+    assert _md(sr) == before and _left(sr) == [], "nothing edited"
+    assert (sr.slug_dir / "runs" / "alpha" / proof_review.PAID).is_file(), "the paid findings are kept"
+    assert proof_review.load(sr.slug_dir / "runs" / "alpha") is None, "nothing was saved as reviewed"
+    d2 = FakeDoorway(_look("other"))
     assert _settle_review(sr, d2) == 0
-    assert len(_main(d1.calls + d2.calls)) == 1, "one review call across both attempts"
-    assert "Continue therapy." not in _md(sr)
+    assert _main(d2.calls) == [] and len(d2.calls) == 1, "the resume makes only the missing look"
+    assert len(_main(d1.calls + d2.calls)) == 1 and "Continue therapy." not in _md(sr)
 
 
-def test_p4b_a_failed_check1_look_after_the_review_keeps_the_entry_and_files(job_dir, firm_config_path, data_root):
-    sr, log = _package(job_dir, firm_config_path, data_root)
+def test_n1_a_failed_check1_look_after_the_review_exits_75_and_never_notes_it_checked(
+    job_dir, firm_config_path, data_root
+):
+    sr, _log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
-    d = _Down(_verdict(CHECK1), fail=2)
-    assert _settle_review(sr, d) == 0, log
-    assert len(_main(d.calls)) == 1 and "Continue therapy." in _md(sr)
+    before = _md(sr)
+    d1 = _Down(_verdict(CHECK1), error=CallDeadlineError("blip"))
+    assert _settle_review(sr, d1) == review.EXIT_INFRA
+    assert _md(sr) == before and not (sr.slug_dir / "runs" / "alpha" / whose_page.CACHE).exists()
+    d2 = FakeDoorway(_look("client"))
+    assert _settle_review(sr, d2) == 0
+    assert len(d2.calls) == 1 and _main(d2.calls) == []
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert rec["must_fix"] == 0 and rec["findings"][0]["finding"] == review_evidence.KEPT_NOTE
-    assert _policy(sr)["identity_page_unreadable"] == 1
-    assert not (sr.slug_dir / "runs" / "alpha" / whose_page.CACHE).exists(), "a failed look is never saved"
+
+
+def test_a_limit_hold_on_a_look_is_a_limit_hold(job_dir, firm_config_path, data_root):
+    sr, _log = _package(job_dir, firm_config_path, data_root)
+    _pages(sr, PAGE)
+    _reader(sr)
+    hold = LimitHold("levers.cap_usd", "levers.cap_usd: the job's cap is reached")
+    with pytest.raises(LimitHold):
+        _settle_review(sr, _Down(CLEAN, error=hold))
+
+
+HELD_CHECK1 = "| MUST-FIX | 1 another person's records | the 05/05/2026 visit is another patient's | entry 05/05/2026 |"
+
+
+def test_a_held_reviews_resume_with_a_failed_look_exits_75_and_pays_no_review(job_dir, firm_config_path, data_root):
+    """Held on a check 1 no entry or page can be found for; the entry reader's
+    flag arrives before the resume, whose look fails, then succeeds."""
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    _pages(sr, PAGE)
+    assert _settle_review(sr, FakeDoorway(_verdict(HELD_CHECK1))) == review.EXIT_HELD, log
+    _reader(sr)
+    before = _md(sr)
+    d1 = _Down(error=CallDeadlineError("blip"))
+    assert _settle_review(sr, d1) == review.EXIT_INFRA
+    assert _md(sr) == before and _main(d1.calls) == []
+    d2 = FakeDoorway(_look("other"))
+    assert _settle_review(sr, d2) == review.EXIT_HELD, "the unplaceable check 1 still holds"
+    assert _main(d2.calls) == [] and len(d2.calls) == 1
+    assert "Continue therapy." not in _md(sr)
 
 
 CHECK1_MISCITED = (
@@ -330,12 +464,49 @@ CHECK1_MISCITED = (
 
 
 def test_p5_a_check1_naming_the_clients_page_is_kept_and_filed(job_dir, firm_config_path, data_root):
-    """It names p. 2, which the 03/30 entry does not cite: decided on p. 2, as main did."""
+    """It names p. 2, which the 01/20 entry cites: decided on p. 2, as main did."""
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     assert _settle_review(sr, FakeDoorway(_verdict(CHECK1_MISCITED), _look("client"))) == 0, log
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert rec["must_fix"] == 0 and "Continue therapy." in _md(sr)
+
+
+CHECK1_UNCITED = (
+    "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is another patient's "
+    "| entry 03/30/2026 Example Clinic, Exhibit 1 p. 1 |"
+)
+
+
+def test_a_check1_naming_a_page_no_entry_cites_also_reads_its_entrys_pages(job_dir, firm_config_path, data_root):
+    """p. 1 is cited only by the prior history; the 03/30 entry's own p. 3 is
+    looked at too, and decides."""
+    doc = DOC.replace("**Neck:** chronic pain before the incident. (Exhibit 1 - p. 1)", "**Neck:** chronic pain.")
+    sr, log = _package(job_dir, firm_config_path, data_root, doc)
+    _pages(sr, PAGE)
+    d = FakeDoorway(_verdict(CHECK1_UNCITED), _look("client"), _look("other"))
+    assert _settle_review(sr, d) == 0, log
+    assert len(d.calls) == 3
+    assert [c["messages"][0]["content"][0]["text"].rsplit(" ", 2)[-2:] for c in d.calls[1:]] == [
+        ["Page", "1."],
+        ["Page", "3."],
+    ]
+    assert "Continue therapy." not in _md(sr)
+
+
+def test_a_page_with_no_picture_is_kept_and_says_so(job_dir, firm_config_path, data_root):
+    doc = DOC.replace("Continue therapy. (Exhibit 1 - p. 3)", "Continue therapy. (Exhibit 1 - p. 9)")
+    row = (
+        "| MUST-FIX | 1 another person's records | the visit is another patient's | entry 03/30/2026, Exhibit 1 p. 9 |"
+    )
+    sr, log = _package(job_dir, firm_config_path, data_root, doc)
+    _pages(sr, PAGE)
+    d = FakeDoorway(_verdict(row))
+    assert _settle_review(sr, d) == 0, log
+    assert len(d.calls) == 1, "nothing to show, nothing sent"
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0 and rec["findings"][0]["finding"] == review_evidence.NOT_SHOWN_NOTE
+    assert "Continue therapy." in _md(sr) and _policy(sr)["identity_page_not_shown"] == 1
 
 
 def test_the_reviews_check1_with_an_other_verdict_leaves_the_entry_out(job_dir, firm_config_path, data_root):
@@ -363,7 +534,7 @@ def test_an_entry_on_the_same_date_is_left_out_only_if_it_cites_a_page_judged_ot
     sr, log = _package(job_dir, firm_config_path, data_root, TWO_ON_ONE_DATE)
     _pages(sr, PAGE)
     _reader(sr)
-    d = FakeDoorway(_look("other"), _verdict(CHECK1_TWO_PAGES), _look("client"))
+    d = FakeDoorway(_verdict(CHECK1_TWO_PAGES), _look("other"), _look("client"))
     assert _settle_review(sr, d) == 0, log
     md = _md(sr)
     assert "Continue therapy." not in md, "A cites p. 3, judged another person's"

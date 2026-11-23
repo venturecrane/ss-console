@@ -38,6 +38,12 @@ from typing import Any, Callable, Iterable
 MUST, SHOULD, NOTE = "MUST-FIX", "SHOULD-FIX", "NOTE"
 GRADES = (MUST, SHOULD, NOTE)
 RECORD = "review.json"
+#: The paid review's own findings, kept from its call until the review is
+#: saved, so a stage that stops in between (a page look that failed) settles
+#: again from them on resume instead of paying for the call twice
+#: (``stages/review_settle.paid``, 2026-11-23). Saving or forgetting the
+#: review drops it.
+PAID = "review-paid.json"
 # The output budget of one review call: thinking at effort "high" plus the
 # findings table plus the VERDICT line all come out of it. 16,000 ran out on a
 # 422-entry update (138,138 in / 16,000 out, twice, no verdict, 2026-10-14).
@@ -171,6 +177,7 @@ def save(data: Path, findings: list[Finding], *, model: str = "", lane: str = ""
         "released": False,
     }
     _write(data, out)
+    (data / PAID).unlink(missing_ok=True)
     return out
 
 
@@ -189,6 +196,7 @@ def load(data: Path) -> dict[str, Any] | None:
 def forget(data: Path) -> None:
     """A ``redo`` of the review: the next run reviews afresh."""
     (data / RECORD).unlink(missing_ok=True)
+    (data / PAID).unlink(missing_ok=True)
 
 
 def release(data: Path, why: str) -> dict[str, Any]:

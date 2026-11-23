@@ -238,7 +238,7 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
     before = doc.read_text(encoding="utf-8")
     check1 = [k for k, f in enumerate(out.findings) if f.grade == review.MUST and f.by == "model" and check_no(f) == 1]
     reader = set() if sr.job.update else whose_page.reader_pages(sr.slug_dir, sr.unit.unit)
-    EV.settle_identity(sr, doc, out, whose_page.Looker(sr).settled, stats, check1, reader)
+    EV.settle_identity(sr, doc, out, whose_page.Looker(sr).subject, stats, check1, reader)
     md = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
         if f.grade == review.MUST and check_no(f) == 3 and (f.by == "model" or f.cite == "the chronology"):
@@ -298,6 +298,8 @@ def settle(
             "identity_page_both",
             "identity_page_none",
             "identity_page_unreadable",
+            "identity_page_not_shown",
+            "identity_prior_left_out",
             "identity_left_out",
             "summary_deleted",
             "system_scrubbed",
@@ -503,3 +505,28 @@ def gate_drops(out: Path) -> list[str]:
             f'"{str(r.get("claim") or "").strip()}"'
         )
     return lines
+
+
+def paid(rd: Path, sha: str) -> list[review.Finding] | None:
+    """The paid review's findings kept for this package (``proof.review.PAID``),
+    or None when there are none to reuse: a resume after the stage stopped
+    between the call and the saved review settles from these at $0."""
+    p = rd / review.PAID
+    try:
+        rec = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    except ValueError:
+        return None
+    if not isinstance(rec, dict) or rec.get("input_sha") != sha or not isinstance(rec.get("findings"), list):
+        return None
+    keys = ("grade", "check", "finding", "cite", "by")
+    return [review.Finding(**{k: str(f.get(k) or "") for k in keys}) for f in rec["findings"] if isinstance(f, dict)]
+
+
+def keep(rd: Path, sha: str, found: list[review.Finding]) -> list[review.Finding]:
+    """`found` (the paid review's findings) written down before anything is
+    settled from them; returned unchanged."""
+    from dataclasses import asdict
+
+    rec = {"input_sha": sha, "findings": [asdict(f) for f in found]}
+    (rd / review.PAID).write_text(json.dumps(rec, indent=1), encoding="utf-8")
+    return found

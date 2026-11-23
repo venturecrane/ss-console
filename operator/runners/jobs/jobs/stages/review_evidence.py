@@ -199,11 +199,18 @@ def cited_pages(block: str, text: str) -> list[tuple[int, int]]:
 
 
 def leave_out(
-    sr: StageRun, doc: Path, block: tuple[int, int, str], pages: list[tuple[int, int]], reason: str = LEFT_OUT_REASON
+    sr: StageRun,
+    doc: Path,
+    block: tuple[int, int, str],
+    pages: list[tuple[int, int]],
+    reason: str = LEFT_OUT_REASON,
+    row: dict[str, Any] | None = None,
 ) -> None:
-    """The entry block out of the chronology (and out of
-    ``entries_scoped_final.md`` when it is there verbatim, so a rebuild does
-    not bring it back), and its disclosure recorded in ``LEFT_OUT``."""
+    """The entry block (its first line, end line and text: exactly the lines
+    removed) out of the chronology (and out of ``entries_scoped_final.md``
+    when it is there verbatim, so a rebuild does not bring it back), and its
+    disclosure recorded in ``LEFT_OUT``: the date and provider lines, or
+    `row` (a prior-history paragraph has neither)."""
     md = doc.read_text(encoding="utf-8")
     lines = md.splitlines(keepends=True)
     start, end, text = block
@@ -226,6 +233,7 @@ def leave_out(
             "provider": rows[1].split("|")[0].strip() if len(rows) > 1 else "",
             "exhibit": pages[0][0] if pages else None,
             "pages": [pg for _ex, pg in pages],
+            **(row or {}),
             "reason": reason,
         }
     )
@@ -238,10 +246,17 @@ def leave_out(
 #: model's: the model's own wording named the other person (2026-11-23).
 CHECK1 = "1 another person's records"
 KEPT_NOTE = "checked against the cited page: kept"
+NOT_SHOWN_NOTE = "the cited page could not be shown, so it was kept"
+#: A ``LEFT_OUT`` row for a prior-history paragraph (``limitations_rules``).
+PRIOR = "Prior Medical History"
 
 
 def left_out_note(date_line: str) -> str:
     return f"left out before delivery by rule: the entry dated {date_line} {LEFT_OUT_REASON}"
+
+
+def prior_note(pages: list[tuple[int, int]]) -> str:
+    return f"a prior-history paragraph citing {_cite(pages)} {LEFT_OUT_REASON}"
 
 
 def _cite(pages: list[tuple[int, int]]) -> str:
@@ -252,23 +267,84 @@ def _date(block: str) -> str:
     return block.split("\n", 1)[0].strip()
 
 
+def _all_cites(text: str) -> set[tuple[int, int]]:
+    return {(int(c.group(1)), p) for c in CL.CITE.finditer(text) for p in CL.parse_pages(c.group(2)) or [1]}
+
+
+def entries(md: str) -> tuple[tuple[int, int, str] | None, list[tuple[int, int, str]]]:
+    """(the preamble, every dated entry) of the chronology body as (first
+    line, end line, text), bounded exactly as the entry reader's list bounds
+    them (``body.entries_of``, whose order numbers its ``N<k>``): a date line
+    with a note after it ("04/02/2026 (records date, ...)", "07/18 (year not
+    stated)") starts its own entry. (None, []) when there is no body."""
+    from ..medchron.update import body as B
+
+    head = re.search(r"(?m)^## Medical Chronology\s*$", md)
+    if head is None:
+        return None, []
+    start = head.end()
+    ends = [m.start() for h in B.SECTIONS[3:] for m in [re.search(rf"(?m)^{re.escape(h)}\s*$", md[start:])] if m]
+    end = start + min(ends) if ends else len(md)
+    cuts = [m.start() for m in B.ENTRY.finditer(md, start, end)] + [end]
+    lines = md.splitlines(keepends=True)
+
+    def span(a: int, b: int) -> tuple[int, int, str]:
+        la = md[:a].count("\n") + (0 if a == 0 or md[a - 1] == "\n" else 1)
+        lb = len(lines) if b >= len(md) else md[:b].count("\n")
+        return la, lb, "".join(lines[la:lb])
+
+    return span(start, cuts[0]), [span(a, b) for a, b in zip(cuts, cuts[1:])]
+
+
 def finding_pages(md: str, text: str) -> list[tuple[int, int]]:
-    """The pages a check 1 finding is about: those it names, else those its
-    entry (``entry_for``) cites."""
+    """The pages a check 1 finding is about: those it names, and, when no
+    entry cites any of them, also those its entry (``entry_for``) cites;
+    with no page named, those its entry cites."""
     named = list(dict.fromkeys(_named_pages(text)))
-    if named:
+    cited = set().union(*(_all_cites(e[2]) for e in entries(md)[1]))
+    if named and set(named) & cited:
         return named
     block = entry_for(md, text)
-    return cited_pages(block[2], text) if block is not None else []
+    return list(dict.fromkeys([*named, *(sorted(_all_cites(block[2])) if block is not None else [])]))
 
 
 def _citing(md: str, other: set[tuple[int, int]]) -> tuple[tuple[int, int, str], list[tuple[int, int]]] | None:
     """The first entry citing a page in `other`, and which of them it cites."""
-    for b in entry_blocks(md):
-        hit = [p for p in sorted(other) if _cites(b[2], *p)]
+    for e in entries(md)[1]:
+        hit = sorted(other & _all_cites(e[2]))
         if hit:
-            return b, hit
+            return e, hit
     return None
+
+
+def _prior_out(sr: StageRun, doc: Path, other: set[tuple[int, int]]) -> list[list[tuple[int, int]]]:
+    """Each paragraph of the prior-history block (blank-line separated) that
+    cites a page in `other`, out of the chronology and disclosed; never the
+    block's other paragraphs. Returns the pages of each paragraph removed."""
+    from ..medchron.update import body as B
+
+    out: list[list[tuple[int, int]]] = []
+    while True:
+        md = doc.read_text(encoding="utf-8")
+        pre = entries(md)[0]
+        if pre is None:
+            return out
+        lines = md.splitlines(keepends=True)
+        para: list[int] = []
+        for i in range(pre[0], pre[1] + 1):
+            if i < pre[1] and lines[i].strip():
+                if para or not B.PMH_HEAD.match(lines[i]):  # the block's heading is never part of a paragraph
+                    para.append(i)
+                continue
+            hit = sorted(other & _all_cites("".join(lines[j] for j in para)))
+            if hit:
+                row = {"date": PRIOR, "provider": "", "exhibit": hit[0][0], "pages": [p for _x, p in hit]}
+                leave_out(sr, doc, (para[0], para[-1] + 1, "".join(lines[j] for j in para)), hit, row=row)
+                out.append(hit)
+                break
+            para = []
+        else:
+            return out
 
 
 def settle_identity(
@@ -277,15 +353,18 @@ def settle_identity(
     """One decision by page for both sources (2026-11-23). The pages the
     entry reader recorded as another person's (`reader`) and the pages each
     model check 1 MUST-FIX (`check1`, indices into ``out.findings``) is about
-    are all looked at first (`subject`: (exhibit, page) -> subject). Then
-    EVERY entry citing a page judged "other" is left out, each once, and
-    disclosed. A check 1 whose pages or entry were left out becomes the
-    neutral left-out NOTE; one whose pages are not "other", the neutral kept
-    NOTE; one with no page found stays a MUST-FIX."""
+    are all looked at first (`subject`: (exhibit, page) -> subject; a look
+    that fails raises ``whose_page.LookFailed`` before anything is edited).
+    Then EVERY entry citing a page judged "other" is left out, each once, as
+    the entry reader's list bounds it, and so is each prior-history paragraph
+    citing one; each is disclosed. A check 1 whose pages or entry were left
+    out becomes the neutral left-out NOTE; one whose pages were looked at and
+    not judged so, the neutral kept NOTE; one whose pages could not be shown,
+    the not-shown NOTE; one with no page found stays a MUST-FIX."""
+    from . import whose_page
+
     md = doc.read_text(encoding="utf-8")
-    texts = {k: f"{out.findings[k].finding} {out.findings[k].cite}" for k in check1}
-    about = {k: finding_pages(md, t) for k, t in texts.items()}
-    first = {k: entry_for(md, t) for k, t in texts.items()}
+    about = {k: finding_pages(md, f"{out.findings[k].finding} {out.findings[k].cite}") for k in check1}
     seen = {p: subject(*p) for p in dict.fromkeys([*sorted(reader), *(p for ps in about.values() for p in ps)])}
     for v in seen.values():
         if v != "other":
@@ -298,17 +377,29 @@ def settle_identity(
         out.changed, out.left_out = True, out.left_out + 1
         stats["identity_left_out"] += 1
         sr.log(f"review: the {_date(hit[0][2])} entry left out by rule (it cites a page judged another person's)")
+    prior = _prior_out(sr, doc, other)
+    if prior:
+        out.changed = True
+        stats["identity_prior_left_out"] += len(prior)
+        sr.log(f"review: {len(prior)} prior-history paragraph(s) left out by rule")
     noted: set[str] = set()
     for k in check1:
-        f, ps, mine0 = out.findings[k], about[k], first[k]
-        mine = [t for t, hp in gone if set(hp) & set(ps) or (mine0 is not None and mine0[2] == t)]
+        f, ps = out.findings[k], about[k]
+        mine = [t for t, _hp in gone if _all_cites(t) & set(ps)]
         if mine:
             noted.update(mine)
-            out.findings[k] = proof_review.Finding(
-                proof_review.NOTE, CHECK1, left_out_note(_date(mine[0])), _cite(ps), f.by
-            )
+            text = left_out_note(_date(mine[0]))
+        elif any(p in other for p in ps):
+            text = prior_note(sorted(p for p in ps if p in other))
+        elif any(seen.get(p) not in (None, whose_page.NOT_SHOWN) for p in ps):
+            text = KEPT_NOTE
         elif ps:
-            out.findings[k] = proof_review.Finding(proof_review.NOTE, CHECK1, KEPT_NOTE, _cite(ps), f.by)
+            text = NOT_SHOWN_NOTE
+        else:
+            continue
+        out.findings[k] = proof_review.Finding(proof_review.NOTE, CHECK1, text, _cite(ps), f.by)
     for t, hp in gone:
         if t not in noted:
             out.findings.append(proof_review.code(proof_review.NOTE, CHECK1, left_out_note(_date(t)), _cite(hp)))
+    for hp in prior:
+        out.findings.append(proof_review.code(proof_review.NOTE, CHECK1, prior_note(hp), _cite(hp)))

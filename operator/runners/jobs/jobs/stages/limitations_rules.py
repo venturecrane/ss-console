@@ -276,6 +276,10 @@ def _review_left_out_lines(d: Path, unit: str | None, log: Callable[[str], None]
                 where.append(_pages(pages))
             place = ", ".join(w for w in where if w)
             reason = str(e["reason"]).strip().rstrip(".")
+            if e["date"] == "Prior Medical History":  # a paragraph of that block (review_evidence.PRIOR)
+                cites = "; ".join(f"Exhibit {e.get('exhibit')} p. {pg}" for pg in pages)
+                rows.append(f"* A prior-history paragraph citing {cites} {reason}.")
+                continue
             rows.append(f"* The entry dated {e['date']}" + (f" ({place})" if place else "") + f" {reason}.")
     if raw and not rows:
         log(f"WARNING: {REVIEW_LEFT_OUT} rows carry no date+reason; schema drift, disclosure would be silently empty")
