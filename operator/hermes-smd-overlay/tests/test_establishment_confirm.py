@@ -184,7 +184,12 @@ def test_an_ordinary_turn_costs_no_broker_round_trip(plugin):
     mod, state = plugin
     state["pending"] = [_row()]
     _turn(mod, ADMIN, "Please draft the demand letter for the Ashton matter.")
-    assert [r for r in state["requests"] if r["action"] == "establish_pending"] == []
+    # The one read every attributed turn makes (2026-11-23): the sender's rules
+    # recorded in the last hour, a local table read with no mailbox lookup. The
+    # open-rule list itself is still never fetched.
+    asked = [r for r in state["requests"] if r["action"] == "establish_pending"]
+    assert all(r.get("include_recent_committed") for r in asked) and len(asked) <= 1
+    assert not [r for r in state["requests"] if r["action"] == "establish_readback_for"]
 
 
 def test_a_declined_rule_says_so_and_commits_nothing(plugin):

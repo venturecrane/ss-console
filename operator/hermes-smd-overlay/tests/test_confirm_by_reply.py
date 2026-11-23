@@ -96,7 +96,13 @@ def seat(monkeypatch, tmp_path):
         if action == "establish_pending":
             if payload.get("proposal_id"):
                 return {"ok": True, "pending": []}
-            return {"ok": True, "pending": list(state["pending"])}
+            out = {"ok": True, "pending": list(state["pending"])}
+            if payload.get("include_recent_committed"):
+                # The broker's own answer (``readback_bindings._recent_committed``).
+                out["recent_committed"] = list(state.get("recent", []))
+            return out
+        if action == "drafting_job_status":
+            return {"ok": True, "jobs": list(state.get("jobs", []))}
         if action == "establish_readback_for":
             binding = state["binding"]
             if binding is None:
@@ -566,3 +572,166 @@ def test_a_committed_rules_reply_is_held_with_the_truth_not_a_failed_commit(seat
     assert held["action"] == "block"
     assert "It IS recorded" in held["message"] and "did not succeed" not in held["message"]
     assert "waiting on their yes" in held["message"] and B not in held["message"]
+
+
+# ---- 2026-11-23, the A&P seat: a follow-up after a rule was confirmed -------------
+# The attorney confirmed a discovery-response rule at 11:01. At 11:03 "Please
+# apply this to this file" was told nothing was applied and asked which documents
+# the rule was for; at 11:07 a reworded copy was proposed and committed as a
+# second rule. Every sentence, address, number and id below is invented.
+
+RFP = "5e5e5e5e"
+RFP_SUBJECT = {
+    "output_class": "work_product",
+    "property": "voice",
+    "doc_kinds": ["discovery_response"],
+}
+RFP_RULE = (
+    "When a request for production asks for documents across several categories of "
+    "damages, cite all objections and state that no further response will be made."
+)
+REWORDED = (
+    "For requests for production seeking documents in multiple damages categories, "
+    "assert every objection and state no further production will follow."
+)
+QUEUED = (
+    "Received. The discovery responses for matter 900201 are with us, and you'll get a "
+    "reply in this thread when the draft is filed in the matter."
+)
+
+
+def _recorded():
+    return {"proposal_id": RFP, "text": RFP_RULE, "subject": dict(RFP_SUBJECT)}
+
+
+def _revise_job(**extra):
+    from datetime import datetime, timezone
+
+    return {
+        "id": "01JOBREVISE0000000000000000",
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "state": "submitted",
+        "reason": "lane_unproven:document-drafter.revise_discovery_response",
+        "document_class": "discovery_response",
+        "requester": ATTORNEY,
+        "matter_number": "900201",
+        "revise_of": "01JOBDELIVERED00000000000000",
+        **extra,
+    }
+
+
+def _propose_gate(mod, text, session="sess-1", **subject):
+    args = {
+        "scope": "firm_adjust",
+        "subject": {"output_class": "work_product", "property": "voice", **subject},
+        "text": text,
+        "instructed_by": ATTORNEY,
+        "source_ref": "msg-2",
+    }
+    return mod.on_pre_tool_call(tool_name="establish_propose", session_id=session, args=args)
+
+
+def _proposed(state):
+    return [r for r in state["requests"] if r.get("action") == "establish_propose"]
+
+
+def test_apply_this_to_this_file_after_a_commit_says_recorded_and_queued(seat):
+    """The 11:03 sequence. FALSIFIER: without the follow-up lookup and gate, the
+    turn learns nothing of the rule, both proposals are refused with "ask them
+    which documents the rule is for", and the reply says nothing was applied."""
+    mod, state = seat
+    state["recent"] = [_recorded()]
+    state["jobs"] = [_revise_job()]
+    context = _reply(mod, "Please apply this to this file")
+    assert "ALREADY recorded" in context and RFP_RULE in context and QUEUED in context
+    # establish_pending shows the rule as committed, not gone.
+    listed = json.loads(mod._pending({"sender": ATTORNEY}, session_id="sess-1"))["pending"]
+    assert [(r["text"], r["state"]) for r in listed] == [(RFP_RULE, "committed")]
+    assert all("proposal_id" not in r for r in listed)
+    say = f"Got it. That is already recorded: {RFP_RULE}\n\n{QUEUED}"
+    for kinds in ({"doc_kinds": ["discovery_response"]}, {}):
+        held = _propose_gate(mod, RFP_RULE, **kinds)
+        assert held["action"] == "block" and say in held["message"]
+        assert "Refused" not in held["message"]
+        assert "ask them which documents the rule is for" not in held["message"]
+        assert mod._CONFIRMED_SAY["sess-1"] == say
+    assert _proposed(state) == []
+
+
+def test_a_reworded_copy_of_a_recorded_rule_is_never_proposed_again(seat):
+    """The 11:07 sequence: same sender, same reach, same property, a different
+    sentence. FALSIFIER: dedupe by the sentence's hash alone lets it through, and
+    his yes commits a second rule over the same documents."""
+    mod, state = seat
+    state["recent"] = [_recorded()]
+    _reply(
+        mod,
+        "Discovery responses and apply to all files. Please redo the responses in this "
+        "file per this rule, specifically #4",
+    )
+    held = _propose_gate(mod, REWORDED, doc_kinds=["discovery_response"])
+    assert held["action"] == "block"
+    assert f"Got it. That is already recorded: {RFP_RULE}" in held["message"]
+    assert _proposed(state) == []
+
+
+def test_a_new_rule_from_the_same_sender_after_a_commit_is_still_proposed(seat):
+    mod, state = seat
+    state["recent"] = [_recorded()]
+    new = "In discovery responses, put each objection on its own line."
+    _reply(mod, new)
+    verdict = _propose_gate(mod, new, doc_kinds=["discovery_response"])
+    assert verdict is None or "already recorded" not in verdict["message"]
+    out = _propose(mod, new, session="sess-1", subject=dict(RFP_SUBJECT))
+    assert out["readback"].startswith(new)
+
+
+def test_a_first_rule_naming_no_kind_still_asks_which_documents(seat):
+    mod, _state = seat
+    _reply(mod, "Make them shorter from now on.")
+    verdict = _propose_gate(mod, "Keep them shorter.")
+    assert verdict["action"] == "block"
+    assert "ask them which documents the rule is for" in verdict["message"]
+
+
+def test_no_open_job_on_those_documents_says_only_the_rule(seat):
+    """A job delivered, on another kind, or another sender's is not "queued"."""
+    mod, state = seat
+    state["recent"] = [_recorded()]
+    state["jobs"] = [
+        _revise_job(state="delivered"),
+        _revise_job(document_class="memo"),
+        _revise_job(requester=PARALEGAL),
+    ]
+    _reply(mod, "Please apply this to this file")
+    held = _propose_gate(mod, RFP_RULE)
+    assert mod._CONFIRMED_SAY["sess-1"] == f"Got it. That is already recorded: {RFP_RULE}"
+    assert "Received." not in held["message"]
+
+
+CHANGES_WITH_RULES = """Please make these changes:
+
+Response #3: drop the second sentence.
+Response #7: add that we will produce the pay stubs we have.
+The cover letter is fine as is.
+
+Anytime a request asks for wage loss documents, a privacy objection should be included
+that says tax returns are privileged. This should be a firm rule.
+"""
+WAGE_RULE = (
+    "When a request asks for wage loss documents, include a privacy objection that tax "
+    "returns are privileged."
+)
+
+
+def test_rules_in_changes_to_discovery_responses_reach_discovery_responses(seat):
+    """The 11:58 case: line-by-line changes to a delivered discovery response
+    plus standing rules, in an email that also mentions a letter. FALSIFIER:
+    the reach read the kind as "letter" only, refused the rules for discovery
+    responses, and the attorney was asked to restate them."""
+    mod, _state = seat
+    _reply(mod, CHANGES_WITH_RULES)
+    verdict = _propose_gate(mod, WAGE_RULE, doc_kinds=["discovery_response"])
+    assert verdict is None or "names only" not in verdict["message"]
+    assert verdict is None or "Refused" not in verdict["message"]
+    assert "discovery_response" in mod.rule_reach.kinds_named(CHANGES_WITH_RULES)

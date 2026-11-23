@@ -484,3 +484,42 @@ def test_a_committed_sentence_proposed_again_creates_nothing(tmp_path):
     )
     assert out["already_recorded"] is True and out["proposal_id"] == a
     assert _call(broker, action="establish_pending", sender=ATTORNEY)["pending"] == []
+
+
+# ---- 2026-11-23, the A&P seat: a follow-up turn after a rule was confirmed ----
+
+
+def test_pending_answers_the_senders_recently_committed_rules_when_asked(tmp_path):
+    """A follow-up turn ("apply this to this file") reads the rule an earlier
+    turn committed. FALSIFIER: without the opt-in the broker's open list is all
+    a later turn sees, and a confirmed rule reads as gone."""
+    broker = _broker(tmp_path)
+    a = _propose(broker, "Rule one sentence here.")
+    theirs = _propose(broker, "Their rule sentence here.", by=COLLEAGUE)
+    _commit(broker, a)
+    _commit(broker, theirs)
+    out = _call(broker, action="establish_pending", sender=ATTORNEY, include_recent_committed=True)
+    assert out["pending"] == []
+    assert [(r["proposal_id"], r["text"]) for r in out["recent_committed"]] == [(a, "Rule one sentence here.")]
+    # Opt-in: an older caller sees exactly what it saw before.
+    assert "recent_committed" not in _call(broker, action="establish_pending", sender=ATTORNEY)
+
+
+def test_the_install_watch_reads_a_result_another_reader_collected_as_installed(tmp_path, monkeypatch):
+    """A run's result is a one-shot read; when another reader collected it, the
+    proposal carries ``installed_at`` and the watch must not page "its run can no
+    longer be read". FALSIFIER: the watch reads only the run, and SMD is owed a
+    failed install of a rule that is in force."""
+    from workspace_broker import own_rule_verbs, smd_owed
+
+    broker = _broker(tmp_path)
+    a = _propose(broker, "Keep my memos to one page.")
+    _commit(broker, a)
+    _call(broker, action="establish_install_watch", proposal_id=a, run_id=f"run-{a}")
+    # Another reader saw it install (``status`` stamps the proposal), then the
+    # result file was gone.
+    assert broker.establishment._require_pending().mark_installed(f"run-{a}") == a
+    restarted = _broker(tmp_path)
+    monkeypatch.setattr(own_rule_verbs, "INSTALL_CHECK_AFTER_S", 0)
+    assert _call(restarted, action="establish_install_check")["failed"] == []
+    assert smd_owed.open_items(restarted.audit_db_path)["owed"] == []

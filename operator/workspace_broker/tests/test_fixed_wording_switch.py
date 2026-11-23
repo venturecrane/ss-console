@@ -281,6 +281,18 @@ def test_a_delivered_revision_says_new_versions_and_never_that_every_change_was_
     assert "ready for attorney review" not in text
 
 
+def test_a_delivered_revision_with_no_notes_file_never_says_notes_were_filed() -> None:
+    files = [{"role": "draft", "name": "Responses.docx"}, {"role": "draft", "name": "Index.docx"}]
+    for delivery in ({"files": files}, {"files": []}):
+        (text,) = fixed_wording.render("drafting_job", _revision(state="delivered", delivery_json=json.dumps(delivery)))
+        assert text.startswith("The document for matter 900201 is filed as new versions of the same files")
+        assert "attorney notes" not in text
+    (text,) = fixed_wording.render(
+        "drafting_job", _revision(state="delivered", delivery_json=json.dumps({"files": files}))
+    )
+    assert 'each named exactly as filed: "Responses.docx" and "Index.docx".' in text
+
+
 def test_a_revision_that_would_change_nothing_says_why_and_never_not_drafted() -> None:
     reason = (
         "revise_unchanged: no new version was filed, because nothing in the brief would change: "

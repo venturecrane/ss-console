@@ -53,6 +53,14 @@ _RESPONSE_WORDS = (
     r"|\b(?:rfp|rfa|rog|interrogatory|production|admissions?) (?:responses?|answers?)\b"
     r"|\b(?:responses?|answers?|respond(?:ing)?) to (?:the |our |their |his |her |any |all |each |every |"
     rf"these |those |opposing counsel s |defense |defendant s |plaintiff s )*{_SERVED}\b"
+    # 2026-11-23 (the A&P seat, 11:58): changes to a delivered discovery
+    # response, with standing rules, named it only in the words of the work
+    # ("Response #3", "anytime a request asks for", "a privacy objection",
+    # "we will produce"); the reach read "letter" from elsewhere in the email and
+    # refused the rules for discovery responses.
+    r"|\b(?:responses?|requests?|rfps?|rfas?|rogs?) (?:no\.? ?|number |# ?)\d+\b"
+    r"|\b(?:a|an|any|each|every|the|this|that) requests? (?:asks?|seeks?|calls?|demands?)\b"
+    r"|\bobjections?\b|\bobject(?:s|ed|ing)? to\b|\bproduc(?:e|es|ed|ing)\b"
 )
 
 #: Each kind's names, matched against the requester's words lowered with quotes

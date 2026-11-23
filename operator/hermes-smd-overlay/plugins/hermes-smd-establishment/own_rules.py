@@ -610,16 +610,24 @@ def without_ids(response: dict[str, Any]) -> dict[str, Any]:
 
 def pending_view(response: Any, args: dict[str, Any], session_id: str) -> Any:
     """``establish_pending`` as the model sees it (R2.2, R2.3): the rules this
-    turn committed appended as ``committed`` (the broker's open list no longer
-    carries them, and a just-confirmed rule must not read as gone), and no id
-    on a row of the person's own."""
+    turn committed, and the person's own rules committed in the last hour by an
+    earlier turn (2026-11-23), appended as ``committed`` (the broker's open list
+    no longer carries them, and a confirmed rule must not read as gone), and no
+    id on a row of the person's own."""
     if not isinstance(response, dict) or not isinstance(response.get("pending"), list):
         return response
     sender = _plugin()._normalize_address(args.get("sender"))
     rows = [r for r in response["pending"] if isinstance(r, dict)]
     seen = {str(r.get("proposal_id") or "") for r in rows}
-    for row in _plugin()._COMMITTED_TURN.get(session_id) or ():
+    # The broker answers recent rules for the sender named, so each is theirs.
+    earlier = (
+        [{**r, "instructed_by": sender} for r in already_recorded.recent(session_id, sender)]
+        if sender
+        else []
+    )
+    for row in [*(_plugin()._COMMITTED_TURN.get(session_id) or ()), *earlier]:
         if str(row.get("proposal_id") or "") not in seen:
+            seen.add(str(row.get("proposal_id") or ""))
             rows.append({**row, "state": "committed"})
     return {**response, "pending": [readback_confirm.for_model(r, sender) for r in rows]}
 

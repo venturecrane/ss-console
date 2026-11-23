@@ -4147,6 +4147,7 @@ def _clear_confirmation_stash(session_id: str) -> None:
         reg.pop(session_id, None)
     for reg in (_OWN_TURN, _TURN_HANDLES):
         reg.pop(session_id, None)
+    already_recorded.forget(session_id)
 
 
 def _confirmation_note(
@@ -4165,9 +4166,10 @@ def _confirmation_note(
     """
     _clear_confirmation_stash(session_id)
     if not (isinstance(user_message, str) and own_rules._could_answer(user_message)):
-        # Nothing that could be an answer (a blank one included). Skip the broker
-        # round trip entirely: this runs on every attributed turn.
-        return None
+        # Nothing that could be an answer (a blank one included): no read-back
+        # lookup. A follow-up of a rule confirmed in an earlier turn ("apply
+        # this to this file") is still told that rule is recorded (2026-11-23).
+        return already_recorded.follow_up_note(session_id, sender)
     # ss-console#2546. The SAME round trip now answers two questions: what can
     # this person still confirm, and has anything of theirs ended without them
     # being told. Terminal rows are split off immediately and never reach the
@@ -5121,9 +5123,8 @@ def _rule_gate(
             return {"action": "block", "message": _REFUSAL_MESSAGE}
         return None
 
-    if _turn_is_tainted(session_id) and not _quoted_from_requester(args, entry):
-        logger.info("hermes-smd-establishment: propose refused (tainted turn, no own-words quote)")
-        return {"action": "block", "message": _PROPOSE_TAINTED_MESSAGE.format(sender=sender)}
+    if (done := _already_recorded_gate(session_id, tool_name, args, entry, sender)) is not None:
+        return done
     if _normalize_address(args.get("instructed_by")) != sender:
         return {"action": "block", "message": _PROPOSE_SUBJECT_MESSAGE}
     subject = args.get("subject")
@@ -5159,6 +5160,26 @@ def _rule_gate(
         if args.get("for_admin"):
             return {"action": "block", "message": _FOR_ADMIN_ON_ADMIN_MESSAGE}
         return _possession_gate(sender, tool_name)
+    return None
+
+
+def _already_recorded_gate(
+    session_id: Any, tool_name: str, args: dict[str, Any], entry: dict[str, Any] | None, sender: str
+) -> dict[str, Any] | None:
+    """A rule this person recorded in the last hour, proposed again (their
+    follow-up "apply this to this file", or a rewording): code says it is
+    already recorded, and nothing is asked or proposed (2026-11-23). Then the
+    taint refusal, which came first before this check existed."""
+    if tool_name == TOOL_PROPOSE and _normalize_address(args.get("instructed_by")) == sender:
+        own = (entry or {}).get("own_text")
+        done = already_recorded.propose_gate(
+            str(session_id or ""), sender, args, own if isinstance(own, str) else ""
+        )
+        if done is not None:
+            return done
+    if _turn_is_tainted(session_id) and not _quoted_from_requester(args, entry):
+        logger.info("hermes-smd-establishment: propose refused (tainted turn, no own-words quote)")
+        return {"action": "block", "message": _PROPOSE_TAINTED_MESSAGE.format(sender=sender)}
     return None
 
 
