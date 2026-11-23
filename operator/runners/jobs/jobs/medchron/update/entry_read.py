@@ -140,17 +140,23 @@ def _own_lines(
     """(the chunk's cited pages, the labels that part judges), in order. A
     part judges each line resting on a page its chunk cites, and the date and
     provider lines; a line resting on no chunk's page (uncited, or citing a
-    page outside them all) goes to the first chunk. A chunk whose lines pass
+    page the entry's own cite list lacks: 229 such lines in job 01M84VVS's
+    longest entry) is judged by the part(s) of the line before it, so it is
+    read beside the pages of its own stretch of the record (the first part
+    when no line before it rests on a page). A chunk whose lines pass
     LABELS_PER_READ becomes several parts on the same pages, each keeping the
     date and provider lines."""
     rests = EL.label_pages(text, record_only)
     sets = [set(c) for c in chunks]
     head = [lb for lb in ("D", "P") if lb in lines]
     body: list[list[str]] = [[] for _ in chunks]
+    last = [0]
     for lb in lines:
         if lb in head:
             continue
-        for i in [i for i, s in enumerate(sets) if rests.get(lb, set()) & s] or [0]:
+        hit = [i for i, s in enumerate(sets) if rests.get(lb, set()) & s]
+        last = hit or last  # a line on no chunk's page is read beside the line before it
+        for i in last:
             body[i].append(lb)
     room = LABELS_PER_READ - len(head)
     return [

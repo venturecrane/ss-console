@@ -75,7 +75,7 @@ def test_a_chunk_with_more_lines_than_the_cap_becomes_several_parts_on_the_same_
     assert set(us[0].lines) & set(us[1].lines) == {"D", "P"}
 
 
-def test_an_uncited_line_goes_to_the_first_part_and_a_sentence_takes_its_paragraph_citation() -> None:
+def test_an_uncited_line_is_judged_beside_the_line_before_it_and_a_sentence_takes_its_paragraph_citation() -> None:
     extra = "The patient was ambulating. Pain was controlled with oral medication. (Exhibit 3 - p. 60)"
     uncited = "Family visited daily throughout the stay."
     us = parts(long_entry(60, 12, extra=extra + "\n\n" + uncited))
@@ -84,7 +84,15 @@ def test_an_uncited_line_goes_to_the_first_part_and_a_sentence_takes_its_paragra
     fam = next(lb for lb, t in labels.items() if t.startswith("Family visited"))
     assert EL.label_pages(us[0].text)[amb] == {(3, 60)}  # no citation of its own: the paragraph's
     assert amb in us[-1].lines and amb not in us[0].lines
-    assert fam in us[0].lines
+    assert fam in us[-1].lines and fam not in us[0].lines  # after p. 60's lines: the last part, not the first
+
+
+def test_a_line_citing_a_page_no_part_shows_is_judged_beside_the_line_before_it() -> None:
+    # Exhibit 9 is outside the plan's kept exhibits, so no chunk carries its page.
+    us = parts(long_entry(60, 12, extra="A late addendum was filed. (Exhibit 9 - p. 2)"))
+    labels = EL.numbered(us[0].text)[1]
+    late = next(lb for lb, t in labels.items() if t.startswith("A late addendum"))
+    assert late in us[-1].lines and late not in us[0].lines
 
 
 def test_a_sentence_whose_citation_sits_on_the_next_line_goes_to_the_part_showing_that_page() -> None:
