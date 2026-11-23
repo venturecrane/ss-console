@@ -27,32 +27,26 @@ his (the rule was committed in an earlier turn, and each email is its own
 session), the reach gate refused the re-proposal because his new email named no
 kind of document, and he was told nothing was applied and asked which documents
 the rule was for. At 11:07 a reworded copy of the same rule was proposed and
-committed as a second rule. Three more pieces, all code:
+committed as a second rule. One more piece, in code:
 
 * :func:`recent`: the sender's own rules committed in the last hour, read from
   the broker once per turn, so ``establish_pending`` shows them as committed and
   a turn that answers no read-back is told they are recorded
-  (:func:`follow_up_note`);
-* :func:`propose_gate`: a proposal with the reach of a rule he recorded in the
-  last hour (class, property, kinds, attorney, reader), whose sentence is like
-  that rule's and is not stated in his own email this turn, is answered with
-  the "already recorded" sentence by code, and nothing is proposed;
-* :func:`open_job_say`: when he has a drafting job open on a kind of document
-  that rule covers, that sentence is followed by the lane's own acknowledgment
-  of it (``shared.drafting_says``), so the reply says the work is queued.
+  (:func:`follow_up_note`).
+
+A gate that blocked a proposal like a recorded rule was built and removed the
+same day: word overlap could not tell a new rule from a restated one, and it
+could replace the yes-turn confirmation sentence (bug review, 2026-11-23).
 """
 
 from __future__ import annotations
 
 import logging
-import re
 import sys
-import time
-from datetime import datetime, timezone
 from types import ModuleType
 from typing import Any
 
-from shared import drafting_says, rule_confirm, rule_confirm_reply, rules_by_hand
+from shared import rule_confirm, rule_confirm_reply, rules_by_hand
 
 from . import readback_confirm, reply_reading
 
@@ -198,38 +192,6 @@ def propose_answer(response: dict[str, Any]) -> dict[str, Any] | None:
 #: session -> (email answered, sender, the sender's rules committed recently).
 _RECENT: dict[str, tuple[str, str, list[dict[str, Any]]]] = {}
 
-#: A drafting job counts as the work a follow-up is about only when it was
-#: created this recently: the rule's own hour, and the hour before it in which
-#: the request that prompted the rule was made.
-JOB_WINDOW_SECONDS = 2 * 3600
-_OPEN_JOB_STATES = ("submitted", "running")
-
-#: Words that carry no rule content, for comparing two sentences.
-_STOP = frozenset(
-    "that this these those with from when will each every their they them what which "
-    "there than then have been into only also such must shall should would could your "
-    "about under over more most some other make made does just very here were where "
-    "while after before always never please".split()
-)
-#: How much of a proposed sentence the person's own email must hold for it to be
-#: a rule they are stating now, and how like a recorded rule it must be to be
-#: that rule again.
-_STATED_SHARE = 0.5
-_SAME_SHARE = 0.3
-
-_FOLLOW_UP_GATE = (
-    "Not proposed: this rule is ALREADY recorded. The person confirmed it earlier, and "
-    "nothing is waiting on their yes. Do not call establish_propose for it again, do not "
-    "read it back, do not ask them which documents it covers or to confirm anything, and "
-    "never say it was not recorded or that nothing has been applied. Your reply must "
-    "contain this sentence exactly, as its own paragraph; answer anything else the email "
-    "asked in other paragraphs; never describe how the work is done:\n\n{say}"
-)
-_LOOSE_FOLLOW_UP_GATE = (
-    "Not proposed: this rule is ALREADY recorded ({rules}); nothing is waiting on their "
-    "yes. Tell them plainly it is already recorded. Do not call establish_propose for it "
-    "again, never ask which documents it covers, and never say nothing has been applied."
-)
 _FOLLOW_UP_NOTE = (
     "These rules of the person's own are ALREADY recorded (they confirmed them earlier): "
     "{rules}. Never say they were not recorded or that nothing has been applied, never ask "
@@ -278,124 +240,18 @@ def recent(session_id: str | None, sender: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _created(job: dict[str, Any]) -> float:
-    try:
-        when = datetime.fromisoformat(str(job.get("created_at") or "").replace("Z", "+00:00"))
-    except ValueError:
-        return 0.0
-    return (when if when.tzinfo else when.replace(tzinfo=timezone.utc)).timestamp()
-
-
-def _open(job: dict[str, Any]) -> bool:
-    state, reason = str(job.get("state") or ""), str(job.get("reason") or "")
-    return state in _OPEN_JOB_STATES or (state == "held" and reason.startswith("lane_unproven"))
-
-
-def open_job_say(sender: str, rows: list[dict[str, Any]]) -> str:
-    """The lane's acknowledgment of the newest drafting job this sender has open
-    on a kind of document these rules cover, or ``""``."""
-    kinds = {k for r in rows for k in (_subject(r).get("doc_kinds") or ()) if isinstance(k, str)}
-    if not kinds:
-        return ""
-    try:
-        answer = _plugin()._broker_request({"action": "drafting_job_status"})
-    except Exception:  # noqa: BLE001 - no job read: the rule sentence stands alone
-        logger.debug("hermes-smd-establishment: drafting job lookup failed", exc_info=True)
-        return ""
-    jobs = answer.get("jobs") if isinstance(answer, dict) else None
-    cutoff = time.time() - JOB_WINDOW_SECONDS
-    who = _fold(sender).lower()
-    mine = [j for j in jobs or () if isinstance(j, dict)]
-    for job in sorted(mine, key=_created, reverse=True):
-        if (
-            _fold(job.get("requester")).lower() == who
-            and job.get("document_class") in kinds
-            and _open(job)
-            and _created(job) >= cutoff
-            and job.get("matter_number")
-        ):
-            # The plain acknowledgment: true of a fresh draft and of a revision
-            # alike (the agent's view of a job does not say which).
-            return drafting_says.acknowledgment(
-                str(job["document_class"]), str(job["matter_number"])
-            )
-    return ""
-
-
-def _words(text: Any) -> set[str]:
-    out: set[str] = set()
-    for word in re.findall(r"[a-z0-9]+", str(text or "").lower()):
-        if len(word) < 4 or word in _STOP:
-            continue
-        out.add(word[:-1] if len(word) > 4 and word.endswith("s") else word)
-    return out
-
-
-def _share(part: set[str], whole: set[str]) -> float:
-    return len(part & whole) / len(part) if part else 0.0
-
-
-def same_reach(
-    args: dict[str, Any], rows: list[dict[str, Any]], own_text: str
-) -> list[dict[str, Any]]:
-    """The recorded rules this proposal restates: the same class and property,
-    kinds within theirs, the same attorney and reader when named, a sentence
-    like theirs, and words the person did NOT write in this email (a rule they
-    state now is proposed as before)."""
-    raw = args.get("subject")
-    subject: dict[str, Any] = raw if isinstance(raw, dict) else {}
-    proposed = _words(args.get("text"))
-    if not proposed or _share(proposed, _words(own_text)) >= _STATED_SHARE:
-        return []
-    kinds = {k for k in subject.get("doc_kinds") or () if isinstance(k, str)}
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        theirs = _subject(row)
-        if str(theirs.get("output_class") or "") != str(subject.get("output_class") or ""):
-            continue
-        if subject.get("property") and theirs.get("property") not in (None, subject["property"]):
-            continue
-        if kinds and not kinds <= set(theirs.get("doc_kinds") or ()):
-            continue
-        if any(subject.get(k) and subject.get(k) != theirs.get(k) for k in ("attorney", "reader")):
-            continue
-        if _share(proposed, _words(row.get("text"))) < _SAME_SHARE:
-            continue
-        out.append(row)
-    return out
-
-
-def _say_with_job(sender: str, rows: list[dict[str, Any]]) -> str:
-    job = open_job_say(sender, rows)
-    return say_for(rows) + (f"\n\n{job}" if job else "")
-
-
-def propose_gate(
-    session_id: str, sender: str, args: dict[str, Any], own_text: str
-) -> dict[str, Any] | None:
-    """``establish_propose`` of a rule the sender recorded in the last hour:
-    blocked, with the "already recorded" sentence rendered and registered by
-    code. ``None``: the proposal goes on to the other gates."""
-    if rules_by_hand.on():
-        return None
-    rows = same_reach(args, recent(session_id, sender), own_text)
-    if not rows:
-        return None
-    say = _say_with_job(sender, rows)
-    logger.info(
-        "hermes-smd-establishment: a proposal from %s restates rules already recorded (%s)",
-        sender,
-        ",".join(str(r.get("proposal_id")) for r in rows),
-    )
-    if readback_confirm.can_register(session_id) and readback_confirm.register_say(session_id, say):
-        _plugin()._CONFIRMED_SAY[session_id] = say
-        return {"action": "block", "message": _FOLLOW_UP_GATE.format(say=say)}
-    rules = "; ".join(f'"{_fold(r.get("text"))}"' for r in rows)
-    return {"action": "block", "message": _LOOSE_FOLLOW_UP_GATE.format(rules=rules)}
+def recent_as_own(session_id: str, sender: str) -> list[dict[str, Any]]:
+    """The sender's rules recorded in the last hour, each marked as theirs (the
+    broker answers recent rules for the sender named), for ``pending_view``."""
+    return [{**r, "instructed_by": sender} for r in recent(session_id, sender)] if sender else []
 
 
 def follow_up_note(session_id: str, sender: str) -> str | None:
-    """On a turn that answers no read-back: the sender's rules recorded in the
+    """Where a message could answer no read-back, so the broker read-back
+    lookup is skipped: a follow-up of a rule confirmed in an earlier turn
+    ("apply this to this file") is still told that rule is recorded
+    (2026-11-23). No job sentence here: that turn may be about another matter,
+    and nothing registers this text. On a turn that answers no read-back: the sender's rules recorded in the
     last hour, said to the model as recorded, with the words to use."""
     if rules_by_hand.on():
         return None
@@ -403,7 +259,7 @@ def follow_up_note(session_id: str, sender: str) -> str | None:
     if not rows:
         return None
     rules = "; ".join(f'"{_fold(r.get("text"))}"' for r in rows)
-    return _FOLLOW_UP_NOTE.format(rules=rules, say=_say_with_job(sender, rows))
+    return _FOLLOW_UP_NOTE.format(rules=rules, say=say_for(rows))
 
 
 __all__ = [
@@ -413,10 +269,8 @@ __all__ = [
     "follow_up_note",
     "forget",
     "note",
-    "open_job_say",
     "propose_answer",
-    "propose_gate",
     "recent",
-    "same_reach",
+    "recent_as_own",
     "say_for",
 ]

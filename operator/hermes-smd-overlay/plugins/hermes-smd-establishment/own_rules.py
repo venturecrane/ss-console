@@ -619,12 +619,7 @@ def pending_view(response: Any, args: dict[str, Any], session_id: str) -> Any:
     sender = _plugin()._normalize_address(args.get("sender"))
     rows = [r for r in response["pending"] if isinstance(r, dict)]
     seen = {str(r.get("proposal_id") or "") for r in rows}
-    # The broker answers recent rules for the sender named, so each is theirs.
-    earlier = (
-        [{**r, "instructed_by": sender} for r in already_recorded.recent(session_id, sender)]
-        if sender
-        else []
-    )
+    earlier = already_recorded.recent_as_own(session_id, sender)
     for row in [*(_plugin()._COMMITTED_TURN.get(session_id) or ()), *earlier]:
         if str(row.get("proposal_id") or "") not in seen:
             seen.add(str(row.get("proposal_id") or ""))

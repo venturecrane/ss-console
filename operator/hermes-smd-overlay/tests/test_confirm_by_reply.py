@@ -635,44 +635,22 @@ def _proposed(state):
     return [r for r in state["requests"] if r.get("action") == "establish_propose"]
 
 
-def test_apply_this_to_this_file_after_a_commit_says_recorded_and_queued(seat):
-    """The 11:03 sequence. FALSIFIER: without the follow-up lookup and gate, the
-    turn learns nothing of the rule, both proposals are refused with "ask them
-    which documents the rule is for", and the reply says nothing was applied."""
+def test_apply_this_to_this_file_after_a_commit_is_told_the_rule_is_recorded(seat):
+    """The 11:03 sequence. FALSIFIER: without the follow-up lookup the turn
+    learns nothing of the rule, establish_pending answers an empty list, and the
+    reply says nothing was applied and asks which documents the rule is for."""
     mod, state = seat
     state["recent"] = [_recorded()]
     state["jobs"] = [_revise_job()]
     context = _reply(mod, "Please apply this to this file")
-    assert "ALREADY recorded" in context and RFP_RULE in context and QUEUED in context
+    assert "ALREADY recorded" in context and RFP_RULE in context
+    assert "never ask which documents" in context.lower() or "never ask" in context
+    # The turn note carries no job sentence: that turn may be about another matter.
+    assert QUEUED not in context
     # establish_pending shows the rule as committed, not gone.
     listed = json.loads(mod._pending({"sender": ATTORNEY}, session_id="sess-1"))["pending"]
     assert [(r["text"], r["state"]) for r in listed] == [(RFP_RULE, "committed")]
     assert all("proposal_id" not in r for r in listed)
-    say = f"Got it. That is already recorded: {RFP_RULE}\n\n{QUEUED}"
-    for kinds in ({"doc_kinds": ["discovery_response"]}, {}):
-        held = _propose_gate(mod, RFP_RULE, **kinds)
-        assert held["action"] == "block" and say in held["message"]
-        assert "Refused" not in held["message"]
-        assert "ask them which documents the rule is for" not in held["message"]
-        assert mod._CONFIRMED_SAY["sess-1"] == say
-    assert _proposed(state) == []
-
-
-def test_a_reworded_copy_of_a_recorded_rule_is_never_proposed_again(seat):
-    """The 11:07 sequence: same sender, same reach, same property, a different
-    sentence. FALSIFIER: dedupe by the sentence's hash alone lets it through, and
-    his yes commits a second rule over the same documents."""
-    mod, state = seat
-    state["recent"] = [_recorded()]
-    _reply(
-        mod,
-        "Discovery responses and apply to all files. Please redo the responses in this "
-        "file per this rule, specifically #4",
-    )
-    held = _propose_gate(mod, REWORDED, doc_kinds=["discovery_response"])
-    assert held["action"] == "block"
-    assert f"Got it. That is already recorded: {RFP_RULE}" in held["message"]
-    assert _proposed(state) == []
 
 
 def test_a_new_rule_from_the_same_sender_after_a_commit_is_still_proposed(seat):
@@ -692,21 +670,6 @@ def test_a_first_rule_naming_no_kind_still_asks_which_documents(seat):
     verdict = _propose_gate(mod, "Keep them shorter.")
     assert verdict["action"] == "block"
     assert "ask them which documents the rule is for" in verdict["message"]
-
-
-def test_no_open_job_on_those_documents_says_only_the_rule(seat):
-    """A job delivered, on another kind, or another sender's is not "queued"."""
-    mod, state = seat
-    state["recent"] = [_recorded()]
-    state["jobs"] = [
-        _revise_job(state="delivered"),
-        _revise_job(document_class="memo"),
-        _revise_job(requester=PARALEGAL),
-    ]
-    _reply(mod, "Please apply this to this file")
-    held = _propose_gate(mod, RFP_RULE)
-    assert mod._CONFIRMED_SAY["sess-1"] == f"Got it. That is already recorded: {RFP_RULE}"
-    assert "Received." not in held["message"]
 
 
 CHANGES_WITH_RULES = """Please make these changes:
@@ -735,3 +698,15 @@ def test_rules_in_changes_to_discovery_responses_reach_discovery_responses(seat)
     assert verdict is None or "names only" not in verdict["message"]
     assert verdict is None or "Refused" not in verdict["message"]
     assert "discovery_response" in mod.rule_reach.kinds_named(CHANGES_WITH_RULES)
+
+
+def test_bare_objection_and_produce_words_do_not_name_discovery_responses(seat):
+    """A rule about letters that uses the words of discovery stays a rule about
+    letters. FALSIFIER: bare "produce"/"objection" patterns would add
+    discovery_response to its reach."""
+    mod, _state = seat
+    for text in (
+        "For letters to adjusters, always ask them to produce the declarations page.",
+        "In demand letters, say we object to the offer.",
+    ):
+        assert "discovery_response" not in mod.rule_reach.kinds_named(text)

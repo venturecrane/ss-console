@@ -55,13 +55,7 @@ import json
 import logging
 from typing import Any
 
-from shared import (
-    attachment_spool,
-    drafting_says,
-    email_adapter,
-    msgraph_attachments,
-    request_index,
-)
+from shared import attachment_spool, email_adapter, msgraph_attachments, request_index
 from shared.jobs_client import JobsBrokerClient, JobsBrokerError
 
 from .demand import STRING, _matter, _origin, _refuse, _schema
@@ -135,8 +129,15 @@ def _request_attachments(origin: Any) -> tuple[list[dict[str, str]], str]:
     return out, ""
 
 
-#: How a reply names a class to the firm: one home, ``shared.drafting_says``.
-_DOCUMENT = drafting_says.DOCUMENT
+#: How a reply names a class to the firm (ss-console drafting_ledger.CLASS_LABEL),
+#: also the acknowledgment's and the refusals' words.
+_DOCUMENT = {
+    "mediation_brief": "mediation brief",
+    "discovery_set": "propounded discovery",
+    "discovery_response": "discovery responses",
+    "memo": "memo",
+    "depo_outline": "deposition outline",
+}
 #: The broker waits up to 25 s for the runner's daemon; this outlasts that.
 ADD_TIMEOUT_SECONDS = 40.0
 _NOT_ADDED = (
@@ -196,13 +197,32 @@ NONE_INSTRUCTION = (
 )
 
 
+#: The document phrases that read as plural ("the discovery responses ... are").
+_PLURAL = frozenset({"discovery_response"})
 #: The document phrases a sentence counts with "a" ("drafting a memo").
 _COUNTED = frozenset({"mediation_brief", "memo", "depo_outline"})
 
 
-_doc = drafting_says.doc
-_is = drafting_says.is_
-acknowledgment = drafting_says.acknowledgment
+def _doc(klass: str, number: str) -> str:
+    return f"{_DOCUMENT.get(klass, 'document')} for matter {number}"
+
+
+def _is(klass: str) -> str:
+    return "are" if klass in _PLURAL else "is"
+
+
+def acknowledgment(klass: str, number: str, *, revising: bool = False) -> str:
+    """The sentence a received drafting request is answered with, true whoever
+    does the work: no time, no mechanics, nothing about who drafts it."""
+    if revising:
+        return (
+            f"Received. We'll make those changes to the {_doc(klass, number)} and reply in this thread "
+            "when the new version is filed."
+        )
+    return (
+        f"Received. The {_doc(klass, number)} {_is(klass)} with us, and you'll get a reply in this thread when "
+        "the draft is filed in the matter."
+    )
 
 
 def duplicate_say(klass: str, number: str, mode: str, state: str) -> str:
