@@ -45,6 +45,12 @@ CLASSES = ("value", "wrong_field", "unsupported", "pointer", "omitted", "date", 
 #: 2026-11-18 (fix round) a split came at 40 CITED pages, which let one
 #: request show up to 120.
 MAX_SHOWN = RP.FINISH_MAX_IMAGES
+#: The most lines one read is asked to judge. Each verdict costs about 8 output
+#: tokens (measured 11-23 on 206 replies), so 600 lines is about 5,000 of the
+#: read's 16,000, leaving room for findings and thinking; the largest entry
+#: read whole without trouble had 469 lines (6,200 to 8,200 tokens out). An
+#: entry at or under this is read exactly as before.
+LABELS_PER_READ = 600
 MAX_FINDINGS = 12
 MAX_OMITTED = 4
 VERDICTS = ("ok", "problem", "unreadable")
@@ -105,8 +111,7 @@ class Parsed:
     problem_without_finding: int = 0
 
 
-def _cites_of(text: str) -> set[tuple[int, int]]:
-    return {(int(m.group(1)), p) for m in CL.CITE.finditer(text) for p in CL.parse_pages(m.group(2)) or [1]}
+_cites_of = EL.cites_of
 
 
 def _shown(cited: list[tuple[int, int]], npages: Callable[[int], int]) -> list[tuple[int, int]]:
@@ -130,12 +135,48 @@ def _chunks(ps: list[tuple[int, int]], npages: Callable[[int], int]) -> list[lis
     return out + [cur] if cur else out or [[]]
 
 
+def _own_lines(
+    text: str, record_only: bool, lines: dict[str, str], chunks: list[list[tuple[int, int]]]
+) -> list[tuple[list[tuple[int, int]], list[str]]]:
+    """(the chunk's cited pages, the labels that part judges), in order. A
+    part judges each line resting on a page its chunk cites, and the date and
+    provider lines; a line resting on no chunk's page (uncited, or citing a
+    page outside them all) goes to the first chunk. A chunk whose lines pass
+    LABELS_PER_READ becomes several parts on the same pages, each keeping the
+    date and provider lines."""
+    rests = EL.label_pages(text, record_only)
+    sets = [set(c) for c in chunks]
+    head = [lb for lb in ("D", "P") if lb in lines]
+    body: list[list[str]] = [[] for _ in chunks]
+    for lb in lines:
+        if lb in head:
+            continue
+        for i in [i for i, s in enumerate(sets) if rests.get(lb, set()) & s] or [0]:
+            body[i].append(lb)
+    room = LABELS_PER_READ - len(head)
+    return [
+        (c, head + b[i : i + room])
+        for c, b in zip(chunks, body, strict=True)
+        for i in range(0, max(len(b), 1), room)
+    ]
+
+
 def _units(anchor: str, text: str, cited: set[tuple[int, int]], npages: Callable[[int], int], **kw: Any) -> list[Unit]:
     chunks = _chunks(sorted(cited), npages)
     lines = EL.numbered(text, bool(kw.get("record_only")))[1]
+    if len(lines) <= LABELS_PER_READ:
+        return [
+            Unit(anchor, text, _shown(c, npages), part=i, parts=len(chunks), cited=c, lines=lines, **kw)
+            for i, c in enumerate(chunks, 1)
+        ]
+    # 2026-11-23 (job 01M84VVS, entry N33: 1,947 lines, 329 cited pages): every
+    # part was told to judge EVERY line, so each reply ran out at 16,000 tokens
+    # after about 1,300 to 1,860 verdicts and before any finding, 206 times.
+    # An entry this long is read in parts that each judge only their own lines.
+    parts = _own_lines(text, bool(kw.get("record_only")), lines, chunks)
     return [
-        Unit(anchor, text, _shown(c, npages), part=i, parts=len(chunks), cited=c, lines=lines, **kw)
-        for i, c in enumerate(chunks, 1)
+        Unit(anchor, text, _shown(c, npages), part=i, parts=len(parts), cited=c, lines={lb: lines[lb] for lb in own}, **kw)
+        for i, (c, own) in enumerate(parts, 1)
     ]
 
 
@@ -168,14 +209,28 @@ def request(
     split = split or (" (only the pages below are shown)" if unit.sub else "")
     kind = "PRIOR HISTORY BLOCK" if unit.record_only else "ENTRY"
     out: list[dict[str, Any]] = [{"type": "text", "text": client}]
-    shown = EL.numbered(unit.text, unit.record_only)[0]
+    shown, every = EL.numbered(unit.text, unit.record_only)
     out.append({"type": "text", "text": f"{kind} {unit.anchor}{split}:\n{shown}"})
+    if len(unit.lines) < len(every):
+        out.append({"type": "text", "text": _only(unit)})
     out.append({"type": "text", "text": f"PAGES SHOWN: {_page_list(unit.pages)}"})
     cited = unit.cites()
     for ex, pg in unit.pages:
         label = " (cited by this entry)" if (ex, pg) in cited else " (a page next to a cited page)"
         out += RV.page_blocks(ex, pg, label, images, modes)
     return load(PROMPT, cfg), out
+
+
+def _only(unit: Unit) -> str:
+    """The instruction an entry too long for one read gets: the lines THIS
+    read judges (``_own_lines``); the others are judged by the parts that show
+    their pages. The labels and ``parse``'s check are the same list."""
+    return (
+        f"THIS READ JUDGES ONLY THESE {len(unit.lines)} LINES: {', '.join(unit.labels)}. The entry is too long "
+        "for one read, so its other lines are judged in other reads, each with its own pages. Give `lines` a "
+        "verdict for exactly these labels, and report findings only on them. Content stated in another line "
+        "of the entry is not omitted."
+    )
 
 
 _int = RR._int  # the review's own field reader (a bool or a non-digit is None)
