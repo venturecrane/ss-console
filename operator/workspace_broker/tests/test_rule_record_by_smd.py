@@ -317,6 +317,51 @@ def test_text_below_a_forwarded_header_is_not_the_senders(tmp_path: Path) -> Non
     assert _dry(broker)["accepted"] is False
 
 
+@pytest.mark.parametrize(
+    "quote_html",
+    [
+        f"<p>On Mon, Nov 23, 2026 at 9:00 AM Operator &lt;op@firm.example&gt; wrote:</p><p>{RULE}</p>",
+        f"<blockquote><p>{RULE}</p></blockquote>",
+        f"<p>&gt; {RULE}</p>",
+        f"<p>-----Original Message-----</p><p>{RULE}</p>",
+        f"<p>{'_' * 32}</p><p>Sent: today</p><p>{RULE}</p>",
+    ],
+)
+def test_a_rule_he_rejected_in_quoted_reply_text_is_refused(tmp_path: Path, quote_html: str) -> None:
+    """He answers "No, don't" above the Operator's read-back, quoted in his reply:
+    the quoted sentence is the Operator's, not his, and is never recorded."""
+    broker, _ = _seat(tmp_path, unique=f"<p>No, don't do that.</p>{quote_html}", subject="RE: Discovery")
+    out = _dry(broker)
+    assert out["accepted"] is False and "does not appear" in out["reason"]
+    _nothing_written(broker)
+
+
+def test_the_dry_run_reads_a_waiting_result_without_consuming_it(tmp_path: Path) -> None:
+    broker, _ = _seat(tmp_path)
+    first = _record(broker)
+    result = broker.establishment.results_dir / f"{first['run_id']}.json"
+    result.write_text(json.dumps({"status": "rejected"}))
+    before = rb._rows(broker, "ESTABLISHMENT_RESULT")
+    out = _dry(broker)
+    assert out["accepted"] is False and "failed to install" in out["reason"]
+    assert result.is_file() and rb._rows(broker, "ESTABLISHMENT_RESULT") == before
+    conn = sqlite3.connect(broker.audit_db_path)
+    try:
+        assert conn.execute("SELECT done_at FROM own_rule_install_watch").fetchall() == [(None,)]
+    finally:
+        conn.close()
+    # The live record settles it for good.
+    assert "failed to install" in _root(broker, **_request(confirm=_dry_digest(broker)))["reason"]
+    assert not result.is_file()
+
+
+def _dry_digest(broker) -> str:
+    """The digest a refused dry run would have printed: the request's own."""
+    from workspace_broker import rule_record_verbs
+
+    return rule_record_verbs.preview(broker, _request())["digest"]
+
+
 def test_an_unknown_message_id_is_refused(tmp_path: Path) -> None:
     broker, box = _seat(tmp_path)
     box.present = False

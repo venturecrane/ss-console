@@ -20,6 +20,7 @@
 
 import AuditEntryRow from './AuditEntryRow.astro'
 import type { AuditEntry } from '../../../lib/portal/operator/audit'
+import { isWithheldEntry } from '../../../lib/portal/operator/activity-language'
 
 interface Props {
   rows: readonly AuditEntry[]
@@ -58,7 +59,11 @@ const rangeEnd = Math.min(page * pageSize, totalCount)
 
 <section aria-label="Audit log">
   <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
-    {rows.map((entry) => <AuditEntryRow entry={entry} />)}
+    {
+      rows
+        .filter((entry) => !isWithheldEntry(entry))
+        .map((entry) => <AuditEntryRow entry={entry} />)
+    }
   </div>
 
   {

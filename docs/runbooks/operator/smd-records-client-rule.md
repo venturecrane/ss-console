@@ -16,9 +16,11 @@ and anything around the rule; you may not reword it.
 seat's roster (`scope.inbound_allow_from`); the email is a received message in
 the Operator's Inbox from that sender, and not a forward (an `FW:` or `Fwd:`
 subject is refused); the audit log recorded it arriving; and the rule's text is
-in what he wrote: the part of the email that is his (not mail quoted below it),
-cut at the first forwarded-message header (a `---- Forwarded` line or a `From:`
-line). Any miss is a refusal and nothing is written.
+in what he wrote: the part of the email that is his, cut at the first line
+where someone else's words begin (a `---- Forwarded` line, `From:`, `On ...
+wrote:`, `Original Message`, an underscore rule, or a `>` quote line), with any
+quoted block dropped. So a rule he turned down in a reply quoting the
+Operator's read-back is refused. Any miss is a refusal and nothing is written.
 
 **Find the email's Graph id** (the request index lists the seat's recent mail):
 
@@ -73,8 +75,8 @@ is refused untouched, and you end it with `workspace_broker.rule_close` first.
 **The record.** One `RULE_RECORDED_BY_SMD` audit row: the rule and run ids, who
 recorded it, who asked, the email's ids, and the rule's digest; never its words
 or the reason. The proposal and commit rows name SMD as the actor, so the firm's
-activity feed says SMD recorded a firm rule from a client's email, never that
-the rule was read back or confirmed. The installed rule names the attorney as
+activity feed hides them and shows one line, "SMD recorded a firm rule from an
+attorney's email", never that the rule was read back or confirmed. The installed rule names the attorney as
 who asked and the SMD address as who applied it (the intake requires no roster
 match for that field).
 

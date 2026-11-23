@@ -67,6 +67,7 @@ import time
 from typing import Any
 
 from . import msgraph_lookup, own_rule_verbs
+from .mailbox_keeper_classify import _QUOTE_START
 from .broker_context import BrokerContext
 from .establishment_validation import (
     EstablishmentValidationError,
@@ -89,7 +90,10 @@ RULE_RECORDED_BY_SMD_ACTION_TYPE = "RULE_RECORDED_BY_SMD"
 MIN_RULE_CHARS = 20
 _STOCK = ("this should be a firm rule", "should be a firm rule")
 _FORWARD_SUBJECT = re.compile(r"^\s*(fw|fwd)\s*:", re.IGNORECASE)
-_FORWARD_HEADER = re.compile(r"^\s*(-{2,}.*forwarded|from:\s)", re.IGNORECASE | re.MULTILINE)
+#: A line where someone else's words begin: a forwarded-message marker, or a
+#: reply's quote header (the mailbox keeper's pattern: "On ... wrote:",
+#: "Original Message", an underscore rule, "From: ..."), or a ">" quote line.
+_FORWARD_LINE = re.compile(r"^(?:-{2,}.*forwarded|from:\s|>)", re.IGNORECASE)
 SCOPE = "firm_adjust"
 _GRAPH_ID = re.compile(r"^[A-Za-z0-9=_-]{16,512}$")
 _SOURCE_SELECT = "id,subject,body,uniqueBody"
@@ -111,7 +115,7 @@ def _plain(body: Any) -> str:
         return ""
     content = str(body.get("content") or "")
     if str(body.get("contentType") or "").lower() == "html":
-        content = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", content)
+        content = re.sub(r"(?is)<(script|style|blockquote)\b.*?</\1>", " ", content)
         content = re.sub(r"(?i)<br\s*/?>|</p>|</div>", "\n", content)
         content = re.sub(r"<[^>]+>", " ", content)
     return html.unescape(content)
@@ -140,9 +144,15 @@ def _arrived(audit_db: str, graph_message_id: str) -> bool:
 
 
 def _own_words(body: str) -> str:
-    """What the sender wrote: the text before the first forwarded-message header."""
-    found = _FORWARD_HEADER.search(body)
-    return body[: found.start()] if found else body
+    """What the sender wrote: the lines before the first one where a quoted
+    reply or a forwarded message begins."""
+    own: list[str] = []
+    for line in body.splitlines():
+        bare = line.strip()
+        if _FORWARD_LINE.match(bare) or _QUOTE_START.match(bare):
+            break
+        own.append(line)
+    return "\n".join(own)
 
 
 def _rule_of(raw: Any) -> str:
@@ -240,24 +250,40 @@ def _canon(subject: dict[str, Any]) -> dict[str, Any]:
     return {**subject, **({"doc_kinds": sorted(kinds)} if kinds else {})}
 
 
-def _install_state(broker: BrokerContext, row: dict[str, Any]) -> str:
-    """``installed``, ``pending`` or ``failed`` for a committed row."""
+def _peek(broker: BrokerContext, run_id: str) -> str:
+    """A waiting result's status, read without consuming it (the dry run)."""
+    try:
+        result = json.loads((broker.establishment.results_dir / f"{run_id}.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return ""
+    return str(result.get("status") or "") if isinstance(result, dict) else ""
+
+
+def _install_state(broker: BrokerContext, row: dict[str, Any], *, settle: bool) -> str:
+    """``installed``, ``pending`` or ``failed`` for a committed row. With
+    ``settle`` a waiting result is read for good (the live record); without it
+    nothing is written (the dry run)."""
     pending = broker.establishment.pending
     run_id = str(row.get("consumed_run_id") or "")
-    if row.get("installed_at") is None and run_id and _settle(broker, row["proposal_id"], run_id):
-        return "failed"
+    if row.get("installed_at") is None and run_id:
+        if settle and _settle(broker, row["proposal_id"], run_id):
+            return "failed"
+        if not settle and (status := _peek(broker, run_id)):
+            return "installed" if status == "installed" else "failed"
     if (pending.get(row["proposal_id"]) or row).get("installed_at") is not None:
         return "installed"
-    conn = own_rule_verbs._connect(pending)
+    conn = pending._connect()
     try:
         done = conn.execute("SELECT done_at FROM own_rule_install_watch WHERE run_id=?", (run_id,)).fetchone()
+    except sqlite3.OperationalError:
+        done = None
     finally:
         conn.close()
     # A settled watch on a row never stamped installed is an install that failed.
     return "failed" if done is not None and done[0] is not None else "pending"
 
 
-def _existing(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any] | None:
+def _existing(broker: BrokerContext, p: dict[str, Any], *, settle: bool = True) -> dict[str, Any] | None:
     """The INSTALLED rule this would duplicate, or None. The same words
     committed under another subject, or committed and not installed, refuse."""
     pending = broker.establishment.pending if broker.establishment else None
@@ -271,7 +297,7 @@ def _existing(broker: BrokerContext, p: dict[str, Any]) -> dict[str, Any] | None
             f"these words are already committed as rule {done['proposal_id']} for {json.dumps(done['subject'])}; "
             "nothing was recorded"
         )
-    state = _install_state(broker, done)
+    state = _install_state(broker, done, settle=settle)
     run = done.get("consumed_run_id")
     if state == "pending":
         raise RecordRefused(
@@ -389,7 +415,7 @@ def record_verb(
     try:
         p = preview(broker, request)
         if dry_run:
-            done = _existing(broker, p)
+            done = _existing(broker, p, settle=False)
             return {
                 "ok": True,
                 "accepted": True,
