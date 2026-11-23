@@ -70,7 +70,8 @@
     "6.thinking",
     "6.tool_choice",
     "6.tools",
-    "6.tools_sha256"
+    "6.tools_sha256",
+    "16.args.projected_usd"
   ],
   "model-facts": [],
   "model-facts-disagreements": [],

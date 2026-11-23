@@ -282,6 +282,7 @@ class Driver:
         self._page_checked: set[str] = set()
         self._approved_pages = allowance_mod.approved_pages(self.job.path.parent)
         self.date_stamp = time.strftime("%m-%d-%y")
+        self.started = time.time()  # this attempt's start: a resume re-stamps its expected finish (``eta.stamp``)
         self.decided: dict[str, Any] = {}
         problems = dag.validate_dag()
         if problems:
@@ -316,43 +317,13 @@ class Driver:
         ).limits()
 
     def _projection(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> float | None:
-        """What this paid stage is projected to add, in dollars, from THIS
-        matter's own artifacts. None for a stage with no measured rate -- never
-        0.0, which a report would print as "$0" (the limits treat None as 0 and
-        still catch a run that already reached a line)."""
-        if stage.name == "vision":
-            return projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
-        if stage.name == "audit" and not self.job.update:  # the entries still to read (``stages/entry_audit_io``)
-            return projection.entry_audit_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
-        if stage.name == "audit":  # the claims still to verify (``projection``)
-            n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit, self.cfg)
-            return None if n is None else n * self.limits.usd_per_audit_claim
-        if stage.name == "update_review":
-            return projection.update_review_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
-        return None
+        """What this paid stage is projected to add (``projection.stage_usd``); None: no projection."""
+        return projection.stage_usd(self, stage, ctx, extracted)
 
-    def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
-        """Before a paid stage. Each unit's first paid stage in this process
-        also asks the page question, which costs nothing to answer."""
-        spent = self.budget.refresh()
-        projected = self._projection(stage, ctx, extracted) or 0.0
-        if ctx.unit.unit not in self._page_checked:
-            self._page_checked.add(ctx.unit.unit)
-            try:
-                self.limits.check_before_first_paid(
-                    pages=update_charged.question_pages(self.slug_dir, ctx.unit.unit, extracted, self.job.update),
-                    projected_usd=projected,
-                    spent_usd=spent,
-                    stage=stage.name,
-                    approved_pages=self._approved_pages,
-                )
-            except limits_mod.LimitHold as hold:
-                if hold.allowance is not None:
-                    usd = projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
-                    hold.allowance["projected_cents"] = int(round(usd * 100))
-                raise
-            return
-        self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
+    def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str] | None = None) -> None:
+        """Before a paid stage (``projection.check_limits``): a stage with no
+        projection is marked unprojected (``projection.checked_usd``)."""
+        projection.check_limits(self, stage, ctx, extracted, notes)
 
     def _before_request(self, stage: str) -> None:
         """The live-mode doorway hook: the cap and the month's budget re-read
@@ -387,6 +358,7 @@ class Driver:
         # document built by the old code -- cheaply, and with a green row.
         if self.redo:
             st.invalidate(list(self.redo))
+        projection.expected_finish(self, st, extracted)  # a resume or redo: this attempt's own finish
         update = self.job.update is not None
         seq = dag.stages_from(self.start, update=update)
         honor_done = self.start is None
@@ -472,7 +444,7 @@ class Driver:
                 # note, and the run carries on so every later hold is measured
                 # too (the same shape the decision hooks use).
                 try:
-                    self._check_limits(stage, ctx, extracted)
+                    self._check_limits(stage, ctx, extracted, notes)
                 except limits_mod.LimitHold as hold:
                     notes.append(f"WOULD HOLD at {stage.name}: {hold.reason}")
             self.log(f"[dry-run] would run {stage.name}: {stage.script} {' '.join(stage.argv(ctx))}")
@@ -487,7 +459,7 @@ class Driver:
         if stage.paid:
             rehearsal.probe_before_spend(self, stage, ctx, notes)
             try:
-                self._check_limits(stage, ctx, extracted)
+                self._check_limits(stage, ctx, extracted, notes)
             except limits_mod.LimitHold as hold:
                 return self._hold(hold, stage, unit, st, extracted, notes)
         if stage.runner is not None:
@@ -634,6 +606,8 @@ class Driver:
             return None
         if refusal is not None:
             outcome, reason = "refused", refusal
+        elif crash is not None:  # a raise is never the exit map's exit 1, whose sentence names one cause
+            outcome, reason = "failed", unit_proof.paged_line(lines) or unit_proof.crash_reason(stage.name, crash)
         else:
             outcome, reason = stage.exit_map.get(code, ("failed", f"exit {code}"))
             if outcome == dag.CURRENT:

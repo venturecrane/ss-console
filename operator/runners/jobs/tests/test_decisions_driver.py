@@ -866,7 +866,8 @@ def test_exit_code_map_yields_the_vocabulary(
 ) -> None:
     seed_folders(data_root, ["MEDICAL"])
     outs = _driver(job_dir, firm_config_path, pricing_path, break_at="build_units").run()
-    assert outs[0].outcome == "failed" and outs[0].stage == "build_units" and "boom" in outs[0].reason
+    assert outs[0].outcome == "failed" and outs[0].stage == "build_units"
+    assert "unexpected RuntimeError" in outs[0].reason and "boom" not in outs[0].reason, "the class, never the message"
 
 
 def test_unknown_model_in_ledger_refuses_the_run(

@@ -71,7 +71,12 @@ def already_pages(sr: StageRun) -> RP.Already:
     """exhibit -> {page: the delivered page it is a copy of}, from the page
     identity the update decided before vision (``update/pageid``): a new
     exhibit's page the delivery already read."""
-    ud = update_dir(sr)
+    return already_in(update_dir(sr))
+
+
+def already_in(ud: Path) -> RP.Already:
+    """``already_pages`` from the update's own directory (the projection reads
+    it before any StageRun exists)."""
     ident = (read_json(ud / "page_identity.json", {}) or {}).get("pages") or {}
     out: RP.Already = {}
     for r in read_json(ud / "new_exhibits.final.json", []):
