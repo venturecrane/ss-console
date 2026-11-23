@@ -243,6 +243,10 @@ const EXPECTED_VERBS = [
   'records_orders_placed',
   // Root only: SMD ends a stated rule with no letter (rules-by-hand stopgap).
   'rule_close_by_smd',
+  // Root only: SMD records a firm rule the client asked for in writing, checked
+  // against his own email, and reads where it stands (rule_record_verbs.py).
+  'rule_record_by_smd',
+  'rule_record_probe',
   // ADR 0089 staff send-as on the staff member's emailed approval.
   'send_as_decide',
   // The approve buttons (amendment 5a). Not gateway-only: the seat's web gate is

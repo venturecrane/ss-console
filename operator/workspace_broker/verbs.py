@@ -68,6 +68,7 @@ from . import (
     note_verbs,
     records_order_acts,
     records_verbs,
+    rule_record_verbs,
     smd_owed,
 )
 from .medchron_verbs import medchron_dispatch
@@ -189,6 +190,11 @@ VERBS: tuple[Verb, ...] = (
     Verb("ops_close_by_smd", _only(ROOT), establish_verbs.establish),
     # SMD ends a stated rule quietly (rules-by-hand stopgap). Root only.
     Verb("rule_close_by_smd", _only(ROOT), establish_verbs.establish),
+    # SMD records a firm rule the client asked for in writing, checked against
+    # the client's own email in the mailbox, and installed through the path a
+    # confirmed yes takes; and reads where it stands. Root only.
+    Verb("rule_record_by_smd", _only(ROOT), rule_record_verbs.record_verb),
+    Verb("rule_record_probe", _only(ROOT), rule_record_verbs.probe_verb),
     # Which own rules a sent read-back carried, and which one a reply answers.
     Verb("establish_readback_sent", _only(AGENT), establish_verbs.readback),
     Verb("establish_readback_for", _only(AGENT), establish_verbs.readback),

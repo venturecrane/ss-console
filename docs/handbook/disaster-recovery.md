@@ -81,6 +81,7 @@ first heading states its job; grouped by when an agent would reach for it:
 | | `operator/ops-close-by-smd.md`, `operator/medchron-deliver-by-smd.md` | Closing a request SMD already answered; recording a chronology SMD filed by hand |
 | | `operator/drafting-deliver-by-smd.md` | Recording a drafted document SMD filed by hand, so the attorney's next change revises it |
 | | `operator/drafting-rules-by-reply.md` | Seeding each attorney's signature block after a release, so his plain yes confirms his drafting rule |
+| | `operator/smd-records-client-rule.md` | Recording a firm rule an attorney asked for in writing, checked against his own email |
 | | `operator/drafting-served-sets.md` | Naming the discovery sets the other side served, so the Operator drafts the responses it can |
 | Something is wrong | `operator/sticky-stop-clear.md` | Seeing, investigating and resuming a stopped seat |
 | | `operator/msgraph-dead-letter.md` | Microsoft Graph dead letters: what pages, how to replay |

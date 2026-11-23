@@ -424,6 +424,9 @@ ACCEPTED_ACTION_TYPES = frozenset(
         # SMD closed a stated rule quietly (rule_close_by_smd, root only, the
         # rules-by-hand stopgap of 2026-11-20).
         "RULE_CLOSED_BY_SMD",
+        # SMD recorded a rule the client asked for in writing (rule_record_by_smd,
+        # root only, checked against the client's own email).
+        "RULE_RECORDED_BY_SMD",
         # ADR 0089 staff send-as, written by the workspace broker.
         "SEND_AS_PROPOSED",
         "SEND_AS_REVISED",
