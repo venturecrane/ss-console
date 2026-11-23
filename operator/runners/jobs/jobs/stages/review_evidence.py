@@ -10,10 +10,11 @@ by reading the page:
   record's wording: the finding becomes a NOTE (``verbatim_on_record``).
 * the model's check 1 ("another person's records") and check 3 ("the
   system's language") were never repaired, so a family-history line or a
-  shared form held the job. The cited page decides check 1 by its patient
-  identifiers (``whose``), the same labels the identity rule reads
-  (``gates/foreign_identity``): the client's page, or a page naming no one
-  else, makes the finding a NOTE; a page naming another person has the entry
+  shared form held the job. The cited page decides check 1: since
+  2026-11-22 by a model looking at its picture (``stages/whose_page``; the
+  text rules that decided it before caught none of nine delivered
+  other-person entries). The client's page, or a page naming no one, makes
+  the finding a NOTE; a page whose patient is another person has the entry
   LEFT OUT BY RULE (``leave_out``) and disclosed without a word about that
   person, as the identity rule merged 2026-10-24 does for a whole record.
 
@@ -201,29 +202,6 @@ def cited_pages(block: str, text: str) -> list[tuple[int, int]]:
     return out
 
 
-def whose(sr: StageRun, texts: list[str]) -> str:
-    """'other' when a cited page labels a patient who is not the client (a
-    date of birth or a patient name, read as the identity rule reads them,
-    or another client on the matter named where the client is not);
-    'client' when the pages name the client (surname or date of birth) and
-    no one else; 'unnamed' otherwise (no text, or no one named)."""
-    u = sr.unit
-    text = "\n".join(t for t in texts if t and t.strip())
-    if not text.strip():
-        return "unnamed"
-    sur = {u.surname} if u.surname else set()
-    dobs = {u.dob} if u.dob else set()
-    first = set(str(u.client_name).split()[:1])
-    if FI.findings(text, sur, dobs, first):
-        return "other"
-    mine = _count(str(u.client_name), text)
-    for o in sr.job.units:
-        if o.unit != u.unit and _count(str(o.client_name), text) and not mine:
-            return "other"
-    named = any(_count(x, text) for x in sur) or bool(u.dob and u.dob in text)
-    return "client" if named else "unnamed"
-
-
 def leave_out(
     sr: StageRun, doc: Path, block: tuple[int, int, str], pages: list[tuple[int, int]], reason: str = LEFT_OUT_REASON
 ) -> None:
@@ -284,14 +262,17 @@ def _reader_block(md: str, anchor: str, exhibit: int, page: int, trusted: bool) 
     return start, end, "".join(md.splitlines(keepends=True)[start:end])
 
 
-def reader_another_person(sr: StageRun, doc: Path, out: Any, pages: Any, stats: dict[str, int]) -> set[tuple[int, int]]:
+def reader_another_person(
+    sr: StageRun, doc: Path, out: Any, looker: Any, stats: dict[str, int]
+) -> set[tuple[int, int]]:
     """The entry reader's ``another_person`` findings, settled on the cited
     page (2026-11-22: the reader flagged 4 of 9 household entries a
     3,821-page chronology delivered, and its findings were only recorded).
-    Each is placed on its entry (``_reader_block``) and the page decides as
-    it does for the review's check 1 (``whose``): another
-    person's, the entry is left out by rule and disclosed; the client's or no
-    one's, it is kept (the reader's suspicion alone never drops it). A job
+    Each is placed on its entry (``_reader_block``) and the page's picture
+    decides as it does for the review's check 1 (``whose_page.Looker``):
+    another person's, the entry is left out by rule and disclosed; anything
+    else, it is kept and counted (the reader's suspicion alone never drops
+    it). A job
     with no ``entry_read.json`` (an older job) is untouched. Returns the
     pages of the entries left out."""
     from ..medchron.gates import claim_audit
@@ -319,8 +300,9 @@ def reader_another_person(sr: StageRun, doc: Path, out: Any, pages: Any, stats: 
             if block is None:
                 stats["identity_reader_unplaced"] += 1
                 continue
-            if whose(sr, [pages.text(ex, pg)]) != "other":
-                stats["identity_reader_kept"] += 1
+            subject = looker.subject(ex, pg)
+            if subject != "other":
+                stats[f"identity_page_{subject}"] += 1
                 continue
             cited = [(ex, pg)]
             leave_out(sr, doc, block, cited, LEFT_OUT_REASON)

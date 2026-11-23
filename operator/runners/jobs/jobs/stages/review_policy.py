@@ -31,9 +31,9 @@ delivery with no SMD touch. So, in order:
 BEFORE those (2026-10-24, the stop audit rows 11 to 13), on the cited page
 (``review_evidence``): a check 3 MUST-FIX whose quoted words the cited page
 prints verbatim is the record's own wording, a NOTE; a model check 1 MUST-FIX
-on one entry is decided by the cited page's patient identifiers: the
-client's, a NOTE; another person's, or no one's, the entry is left out by
-rule and disclosed (``review-left-out.json`` and the Review Notes), never
+on one entry is decided by a model looking at the cited page's picture
+(``whose_page``, since 2026-11-22): another person's, the entry is left out by
+rule and disclosed; anything else, a NOTE (the entry is kept) (``review-left-out.json`` and the Review Notes), never
 naming that person. Code's entry dated after today joins step 4, where the
 finisher re-reads the date on its page; it settles only when no entry is
 dated after today any more. ``review-policy.json`` counts every step (row 14:
@@ -78,8 +78,8 @@ left). Each settles by deletion or disclosure, never by a written word:
     no provider becomes the firm's "(provider not stated in the record)".
 
 Code integrity findings (an empty chronology, a cited exhibit not delivered,
-an entry dated after today) and a check 1 finding the page's identifiers did
-not settle (another person's records) are never touched: they hold.
+an entry dated after today) and a check 1 finding no single entry could be
+found for (another person's records) are never touched: they hold.
 Nothing here invents client text: every step only deletes or re-grades.
 """
 
@@ -225,20 +225,26 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
     * a check 3 MUST-FIX (code or model) whose every quoted phrase is printed
       verbatim on the page each sentence carrying it cites is the record's
       wording: a NOTE;
-    * a model check 1 MUST-FIX on one entry: the client's page, or a page
-      naming no one, makes it a NOTE and keeps the entry (a record the map
-      read is never dropped on the review's suspicion alone); only a page
-      naming another person has the entry left out by rule and disclosed
-      (never naming that person).
+    * a model check 1 MUST-FIX on one entry is decided by a model looking at
+      each cited page's picture (``whose_page``, 2026-11-22): "other" on any
+      of them has the entry left out by rule and disclosed (never naming that
+      person); anything else makes the finding a NOTE and keeps the entry (a
+      record the map read is never dropped on the review's suspicion alone).
 
-    First (2026-11-22) the entry reader's own ``another_person`` findings
-    are settled the same way (``review_evidence.reader_another_person``); a
-    model check 1 naming only pages of an entry that settle left out is a
-    NOTE, so one entry is left out once."""
-    from . import review_evidence as EV
+    First the entry reader's own ``another_person`` findings are settled the
+    same way (``review_evidence.reader_another_person``); a model check 1
+    naming only pages of an entry that settle left out is a NOTE, so one
+    entry is left out once. Every page either path will look at is looked at
+    BEFORE anything is edited, so a look that fails leaves the chronology as
+    it was."""
+    from . import review_evidence as EV, whose_page
 
-    before = doc.read_text(encoding="utf-8")
-    gone = EV.reader_another_person(sr, doc, out, pages, stats)
+    before = md = doc.read_text(encoding="utf-8")
+    looker = whose_page.Looker(sr)
+    flagged = sorted(whose_page.reader_pages(sr.slug_dir, sr.unit.unit) | set(_check1_pages(md, out.findings)))
+    for ex, pg in flagged:
+        looker.subject(ex, pg)
+    gone = EV.reader_another_person(sr, doc, out, looker, stats)
     md = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
         if f.grade != review.MUST:
@@ -264,15 +270,15 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
             if block is None:
                 continue
             cited = EV.cited_pages(block[2], _text(f))
-            kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
-            if kind != "other":
-                # The client's page, or a page naming no one: the entry is a
-                # record the map read, and suspicion alone never drops it.
-                whom = "which is the client's" if kind == "client" else "which names no other person; the entry is kept"
+            seen = [looker.subject(ex, pg) for ex, pg in cited]
+            if "other" not in seen:
+                # The client's page, both, no one's, or unreadable: the entry
+                # is a record the map read, and suspicion alone never drops it.
+                kind = next((s for s in ("both", "client", "none") if s in seen), whose_page.UNREADABLE)
                 out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"checked against the cited page, {whom}: {f.finding}"
+                    f, grade=review.NOTE, finding=f"checked against the cited page, {_WHOM[kind]}: {f.finding}"
                 )
-                stats["identity_client" if kind == "client" else "identity_unnamed"] += 1
+                stats[f"identity_page_{kind}"] += 1
                 continue
             reason = EV.LEFT_OUT_REASON
             EV.leave_out(sr, doc, block, cited, reason)
@@ -284,13 +290,35 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
             )
             stats["identity_left_out"] += 1
             out.left_out += 1
-            sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
+            sr.log(f"review: the {date_line} entry left out by rule (its cited page: another person's)")
     if stats["identity_left_out"]:
         # The summary tables count the entries: computed again from those left.
         from . import review_tables
 
         doc.write_text(review_tables.rederive(sr, before, md), encoding="utf-8")
         sr.log("review: Treatment Timeline and Diagnostic Highlights re-derived from the remaining entries")
+
+
+#: How a kept check 1 is noted, by what the cited page's picture showed.
+_WHOM = {
+    "client": "which is the client's",
+    "both": "which is the client's and also names someone else",
+    "none": "which names no patient; the entry is kept",
+    "unreadable": "which could not be read; the entry is kept",
+}
+
+
+def _check1_pages(md: str, found: list[review.Finding]) -> list[tuple[int, int]]:
+    """The pages the review's model check 1 MUST-FIX findings cite, on the
+    chronology as it stands before anything is edited."""
+    from . import review_evidence as EV
+
+    out: list[tuple[int, int]] = []
+    for f in found:
+        if f.grade == review.MUST and f.by == "model" and check_no(f) == 1:
+            block = EV.entry_for(md, _text(f))
+            out += EV.cited_pages(block[2], _text(f)) if block is not None else []
+    return out
 
 
 def _repairable(f: review.Finding) -> bool:
@@ -331,10 +359,11 @@ def settle(
     stats: dict[str, int] = dict.fromkeys(
         (
             "system_words_on_record",
-            "identity_client",
-            "identity_unnamed",
+            "identity_page_client",
+            "identity_page_both",
+            "identity_page_none",
+            "identity_page_unreadable",
             "identity_left_out",
-            "identity_reader_kept",
             "identity_reader_unplaced",
             "summary_deleted",
             "system_scrubbed",

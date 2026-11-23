@@ -33,6 +33,7 @@ from test_review_proof import (
     _manifest_names,
     _package,
     _settle_review,
+    _look,
     _verdict,
 )
 
@@ -98,9 +99,9 @@ def test_a_check1_on_the_clients_own_page_is_a_note(job_dir, firm_config_path, d
     client, so the finding is checked and noted, never a hold."""
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, "Patient: Alpha Example DOB: 01/01/1970. Mother has diabetes. Continue therapy.")
-    d = FakeDoorway(_verdict(CHECK1))
+    d = FakeDoorway(_verdict(CHECK1), _look("client"))
     assert _settle_review(sr, d) == 0, log
-    assert len(d.calls) == 1, "nothing is repaired"
+    assert len(d.calls) == 2, "the review and one look at the cited page; nothing is repaired"
     assert "Continue therapy." in _md(sr)
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert rec["must_fix"] == 0 and rec["findings"][0]["finding"].startswith("checked against the cited page")
@@ -109,7 +110,7 @@ def test_a_check1_on_the_clients_own_page_is_a_note(job_dir, firm_config_path, d
 def test_a_check1_on_another_persons_page_leaves_the_entry_out_and_discloses_it(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
-    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1), _look("other"))) == 0, log
     md = _md(sr)
     assert "03/30/2026\nExample Clinic" not in md and "Continue therapy." not in md and "Cervical strain." in md
     left = json.loads((sr.slug_dir / "out" / "alpha" / review_evidence.LEFT_OUT).read_text())
@@ -128,7 +129,7 @@ def test_the_left_out_disclosure_is_in_the_rendered_chronologys_limitations(job_
     delivered Word file itself says which entry was left out and why."""
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
-    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1), _look("other"))) == 0, log
     md = _md(sr)
     lim = md[md.index("## Records Reviewed and Limitations") :]
     assert "The entry dated 03/30/2026 (Example Clinic, Exhibit 1" in lim, lim
@@ -155,7 +156,7 @@ def test_leaving_an_entry_out_re_derives_the_summary_tables_from_the_entries_lef
     )
     _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
     assert "| Example Clinic | 01/20/2026 - 03/30/2026 | 2 |" in _md(sr)
-    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1), _look("other"))) == 0, log
     md = _md(sr)
     assert "| Example Clinic | 01/20/2026 | 1 | Exhibit 1 - p. 2 |" in md, md
     assert "03/30/2026 | 2" not in md
@@ -172,15 +173,15 @@ def test_a_check1_on_a_page_that_names_no_one_keeps_the_entry_as_a_note(job_dir,
     drops it (the 08-27 rule). The finding is a NOTE and nothing is left out."""
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, "Plan: continue therapy.")
-    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1), _look("none", "none"))) == 0, log
     md = _md(sr)
     assert "03/30/2026\nExample Clinic" in md and "Continue therapy." in md, "the entry is kept"
     assert not (sr.slug_dir / "out" / "alpha" / review_evidence.LEFT_OUT).exists(), "no left-out row for it"
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert rec["must_fix"] == 0
-    assert rec["findings"][0]["finding"].startswith("checked against the cited page, which names no other person")
+    assert rec["findings"][0]["finding"].startswith("checked against the cited page, which names no patient")
     pol = json.loads((sr.slug_dir / "runs" / "alpha" / review_policy.POLICY_RECORD).read_text())
-    assert pol["identity_left_out"] == 0 and pol["identity_unnamed"] == 1
+    assert pol["identity_left_out"] == 0 and pol["identity_page_none"] == 1
     assert "left out" not in _notes(sr)
 
 

@@ -18,7 +18,7 @@ from jobs.stages import billing_chart, billing_docx
 from jobs.stages.base import StageRun
 from test_final_stages import DOC
 from test_finish_doc import _doc, _sr
-from test_review_proof import FakeDoorway, _package, _settle_review, _verdict
+from test_review_proof import FakeDoorway, _look, _package, _settle_review, _verdict
 from test_review_stop_rules import CHECK1, _pages
 
 
@@ -145,7 +145,7 @@ def test_an_entry_left_out_takes_its_providers_row_out_of_the_worksheet(job_dir,
         "grand_total"
     ] == 2700.0
     _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
-    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1), _look("other"))) == 0, log
     chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
     assert [r["provider"] for r in chart["rows"]] == ["Example Clinic"], chart["rows"]
     assert chart["grand_total"] == 1800.0, "the left-out provider's bill is not in the grand total"
