@@ -14,6 +14,7 @@ Per document, one model call reads the responses and returns VALUES only::
     {"values": [{"request": "4", "rule": "<rule id>", "action": "replace" | "start" | "end" | "conflict",
                  "phrase": <1-based number of the rule's phrase>,
                  "sentence": "<replace only: the response's own sentence, copied exactly>",
+                 "exhibits": ["<a phrase ending at 'Exhibit' only: each exhibit's title as the index lists it>"],
                  "why": "<conflict only: what in the response the rule would contradict>"}]}
 
 Code keeps a value only when its request is one of the document's responses,
@@ -22,6 +23,13 @@ response's own paragraphs exactly once (:func:`check`). A refused answer is
 asked for once more, told what failed; failing again, nothing is filed. A
 ``conflict`` is never applied: the response as staff wrote it stands, and the
 job's notes name it.
+
+EXHIBIT LETTERS ARE CODE'S (2026-11-23). The firm's production phrase ends
+"which can be found at Exhibit", and it was written with no letter at all. The
+model now names the exhibit by its TITLE as the document's own index lists it,
+never by letter (a lone letter is refused), and code fills the letter from that
+index when the response is made (``responses.fill``); a title the index does not
+hold exactly once leaves that response as filed, named in the notes.
 """
 
 from __future__ import annotations
@@ -70,7 +78,9 @@ SYSTEM = (
     'phrase before the response\'s first paragraph (an objection), "end" after its last. Use "conflict" when the '
     "phrase would contradict what the response says (for example, it says documents will be produced and the "
     "phrase says none exist): code then leaves the response as written. Leave out a response no rule touches and "
-    "one that already says what the rule says. Never name a request that is not in the document."
+    "one that already says what the rule says. Never name a request that is not in the document. When the phrase "
+    'you choose ends at "Exhibit", add "exhibits": [<the title of each exhibit the response\'s documents are in, '
+    "copied from the document's index of exhibits>]; never a letter, code fills the letter from the index."
 )
 
 
@@ -79,6 +89,9 @@ def user(rules: list[dict[str, Any]], doc: rs.Document, problems: list[str] | No
     for r in rules:
         lines.append(f"\n[rule {r['rule_id']}] " + " ".join(str(w).strip() for w in r["wording"]))
         lines += [f"  phrase {n}: {p}" for n, p in enumerate(phrases(r), 1)]
+    titles = doc.exhibit_titles()
+    lines.append("\nTHE DOCUMENT'S INDEX OF EXHIBITS (titles):")
+    lines += [f"- {t}" for t in titles] or ["(the document has no index of exhibits)"]
     lines.append("\nTHE DOCUMENT'S RESPONSES:")
     for resp in doc.responses:
         lines.append(f"\n=== REQUEST {resp.number} ===\n{doc.request_of(resp)}")
@@ -125,12 +138,31 @@ def check(raw: Any, rules: list[dict[str, Any]], doc: rs.Document) -> tuple[list
             problems.append(f"{where}: phrase is a number from 1 to {len(by_rule[rid])}")
             continue
         sentence = str(v.get("sentence") or "") if act == "replace" else ""
-        value = rs.Value(req, rid, str(act), by_rule[rid][k - 1], sentence)
+        exhibits, bad = _exhibits(v.get("exhibits"), by_rule[rid][k - 1])
+        if bad:
+            problems.append(f"{where}: {bad}")
+            continue
+        value = rs.Value(req, rid, str(act), by_rule[rid][k - 1], sentence, exhibits)
         if act == "replace" and len(rs.holds(doc, value)) != 1:
             problems.append(f"{where}: the sentence is not copied exactly from that response's own paragraphs")
             continue
         values.append(value)
     return values, conflicts, problems
+
+
+_LETTER = re.compile(r"^(?:exhibits?\s+)?[A-Z]$", re.I)
+
+
+def _exhibits(raw: Any, phrase: str) -> tuple[tuple[str, ...], str]:
+    """(the exhibit titles a value names, "") or ((), what is wrong). Only a
+    phrase that ends at "Exhibit" takes titles; a letter is never accepted."""
+    if not rs.has_slot(phrase):
+        return (), ""
+    if not (isinstance(raw, list) and raw and all(isinstance(t, str) and t.strip() for t in raw)):
+        return (), 'the phrase ends at "Exhibit": "exhibits" is a list of the exhibits\' titles from the index'
+    if any(_LETTER.match(t.strip()) for t in raw):
+        return (), "name each exhibit by its title as the index lists it, never by its letter"
+    return tuple(" ".join(t.split()) for t in raw), ""
 
 
 def ask_values(rules: list[dict[str, Any]], doc: rs.Document, ask: Ask) -> tuple[list[rs.Value], list[Conflict]]:

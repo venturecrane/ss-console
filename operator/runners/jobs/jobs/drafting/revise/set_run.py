@@ -102,7 +102,11 @@ class ReviseSetRun(ReviseRun):
         return [k for k in range(len(self.units)) if (self._ujson(k, "base.json") or {}).get("in_scope")]
 
     def _doc(self, k: int) -> rs.Document:
-        return rs.read((self._udir(k) / "base.md").read_text(encoding="utf-8"))
+        return rs.read((self._udir(k) / "base.md").read_text(encoding="utf-8"), self._hint(k))
+
+    def _hint(self, k: int) -> str | None:
+        """The kind unit ``k`` was delivered as: read only for a bare interrogatory heading."""
+        return self.units[k].get("set_type") or None
 
     def _version(self, file_id: str) -> str:
         return str((self.seat.file_meta(self.job.file_to_id, file_id) or {}).get("versionId") or "")
@@ -140,7 +144,7 @@ class ReviseSetRun(ReviseRun):
         else:
             raise DraftingFailed(f"stage_unfinished: revise-base: {u['name']} kept changing while it was read")
         try:
-            md, doc = su.read_base(d / "filed.docx", d)
+            md, doc = su.read_base(d / "filed.docx", d, self._hint(k))
         except su.BaseUnproven as exc:
             raise DraftingFailed(f"revise_base_unproven: {u['name']}: {exc}; nothing was edited or filed") from None
         if u["set_type"] and doc.set_type != u["set_type"]:
@@ -219,6 +223,7 @@ class ReviseSetRun(ReviseRun):
                 d / "out" / self.units[k]["name"],
                 self.cls,
                 self._fmt(),
+                self._hint(k),
             )
         except su.Refused as exc:
             raise DraftingFailed(f"{exc.code}: {self.units[k]['name']}: {exc.why}; nothing was filed") from None

@@ -40,8 +40,10 @@ fall back to, and a document with no word of a confirmed rule is not.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +79,48 @@ def switched_on() -> bool:
     return logic_in_code.load_switch(SWITCH).enforcing
 
 
+def _text_key(rule: dict[str, Any]) -> str:
+    """A rule's words as two rows are compared: spacing, case and curly quotes folded."""
+    text = str(rule.get("text") or "").translate(_QUOTES)
+    return hashlib.sha256(" ".join(text.split()).casefold().encode("utf-8")).hexdigest()
+
+
+_QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
+_NEVER = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _when(rule: dict[str, Any]) -> datetime:
+    """When the rule was stated; a missing or unreadable ``at`` reads as oldest."""
+    try:
+        got = datetime.fromisoformat(str(rule.get("at") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return _NEVER
+    return got if got.tzinfo else got.replace(tzinfo=timezone.utc)
+
+
+def fold(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rules whose words are the same, folded to one (2026-11-23: the firm's
+    rule store held the same rule twice, and every rule was asked about and
+    applied twice). The folded rule keeps the OLDEST row's id, so a job's notes
+    name the rule as first stated, and carries the NEWEST row's ``at``, so a
+    later rule's precedence over an earlier one is by the last time it was said;
+    it stands where its newest row stood. The other ids are kept as ``aliases``.
+    A list with no repeated words is returned as it came."""
+    groups: dict[str, list[int]] = {}
+    for i, rule in enumerate(rules):
+        groups.setdefault(_text_key(rule), []).append(i)
+    out: list[tuple[int, dict[str, Any]]] = []
+    for idx in groups.values():
+        if len(idx) == 1:
+            out.append((idx[0], rules[idx[0]]))
+            continue
+        oldest = min(idx, key=lambda i: (_when(rules[i]), i))
+        newest = max(idx, key=lambda i: (_when(rules[i]), i))
+        aliases = [str(rules[i]["rule_id"]) for i in idx if i != oldest]
+        out.append((newest, {**rules[oldest], "at": rules[newest].get("at", ""), "aliases": aliases}))
+    return [rule for _i, rule in sorted(out, key=lambda pair: pair[0])]
+
+
 def freeze(data: Path, kind: str, attorney: Any, reader: str | None = None) -> list[dict[str, Any]]:
     """Select this job's rules once and write them to ``data/FILE``.
 
@@ -90,7 +134,7 @@ def freeze(data: Path, kind: str, attorney: Any, reader: str | None = None) -> l
     store = wording_rules_store.read(_spec_dir())
     if store.status == wording_rules_store.UNUSABLE:
         raise StoreUnusable(store.reason)
-    rules = wording_rules_store.applicable(store.rules, kind, attorney, reader)
+    rules = fold(wording_rules_store.applicable(store.rules, kind, attorney, reader))
     record = {"kind": kind, "attorney": attorney or None, "reader": reader, "rules": rules}
     tmp = path.with_name(f".{FILE}.tmp")
     tmp.write_text(json.dumps(record, indent=1, sort_keys=True), encoding="utf-8")
@@ -159,6 +203,7 @@ __all__ = [
     "alert_unusable",
     "attach",
     "block_for",
+    "fold",
     "freeze",
     "demand_kind",
     "freeze_or_hold",
