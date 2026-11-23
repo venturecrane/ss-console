@@ -164,7 +164,7 @@ def test_a_co_plaintiffs_visit_is_left_out_by_rule_not_held(job_dir, firm_config
     sr, log = _package(job_dir, firm_config_path, data_root)
     _three_pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
     row = "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff's | entry 03/30/2026 Example Clinic |"
-    assert _review(sr, FakeDoorway(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE")) == 0, log
+    assert _review(sr, FakeDoorway(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE", _look("other"))) == 0, log
     assert "03/30/2026\nExample Clinic" not in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
 
 
@@ -180,6 +180,11 @@ def test_a_model_must_fix_on_a_non_hold_check_is_downgraded_into_the_notes(job_d
 
 
 # ---- the review's own policy (2026-10-23: stages/review_policy.py) ---------------
+def _look(subject: str, basis: str = "dob") -> str:
+    """The picture check's reply for one page (``stages/whose_page``)."""
+    return json.dumps({"subject": subject, "basis": basis})
+
+
 def _verdict(*rows: str) -> str:
     must = sum("| MUST-FIX |" in r for r in rows)
     return "\n".join([*rows, f"VERDICT: {must} MUST-FIX, 0 SHOULD-FIX, 0 NOTE"])

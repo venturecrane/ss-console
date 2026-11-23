@@ -31,9 +31,9 @@ delivery with no SMD touch. So, in order:
 BEFORE those (2026-10-24, the stop audit rows 11 to 13), on the cited page
 (``review_evidence``): a check 3 MUST-FIX whose quoted words the cited page
 prints verbatim is the record's own wording, a NOTE; a model check 1 MUST-FIX
-on one entry is decided by the cited page's patient identifiers: the
-client's, a NOTE; another person's, or no one's, the entry is left out by
-rule and disclosed (``review-left-out.json`` and the Review Notes), never
+on one entry is decided by a model looking at the cited page's picture
+(``whose_page``, since 2026-11-22): another person's, the entry is left out by
+rule and disclosed; anything else, a NOTE (the entry is kept) (``review-left-out.json`` and the Review Notes), never
 naming that person. Code's entry dated after today joins step 4, where the
 finisher re-reads the date on its page; it settles only when no entry is
 dated after today any more. ``review-policy.json`` counts every step (row 14:
@@ -78,8 +78,8 @@ left). Each settles by deletion or disclosure, never by a written word:
     no provider becomes the firm's "(provider not stated in the record)".
 
 Code integrity findings (an empty chronology, a cited exhibit not delivered,
-an entry dated after today) and a check 1 finding the page's identifiers did
-not settle (another person's records) are never touched: they hold.
+an entry dated after today) and a check 1 finding no page could be
+found for (another person's records) are never touched: they hold.
 Nothing here invents client text: every step only deletes or re-grades.
 """
 
@@ -222,54 +222,32 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
     """Steps 0a and 0b (2026-10-24, the stop audit rows 11 and 12), on the
     cited pages (``review_evidence``):
 
+    * check 1, another person's records (2026-11-23), is decided by page
+      (``review_evidence.settle_identity``): the pages the entry reader
+      recorded as another person's and the pages each model check 1 MUST-FIX
+      is about are looked at (``whose_page``: a model reads each picture),
+      and every entry citing a page judged another person's is left out by
+      rule and disclosed in code's words, never the model's (they named the
+      person). A check 1 on pages not judged so is a NOTE and the entry is
+      kept: a record the map read is never dropped on suspicion alone;
     * a check 3 MUST-FIX (code or model) whose every quoted phrase is printed
       verbatim on the page each sentence carrying it cites is the record's
-      wording: a NOTE;
-    * a model check 1 MUST-FIX on one entry: the client's page, or a page
-      naming no one, makes it a NOTE and keeps the entry (a record the map
-      read is never dropped on the review's suspicion alone); only a page
-      naming another person has the entry left out by rule and disclosed
-      (never naming that person)."""
-    from . import review_evidence as EV
+      wording: a NOTE."""
+    from . import review_evidence as EV, whose_page
 
-    md = before = doc.read_text(encoding="utf-8")
+    before = doc.read_text(encoding="utf-8")
+    check1 = [k for k, f in enumerate(out.findings) if f.grade == review.MUST and f.by == "model" and check_no(f) == 1]
+    reader = set() if sr.job.update else whose_page.reader_pages(sr.slug_dir, sr.unit.unit)
+    EV.settle_identity(sr, doc, out, whose_page.Looker(sr).subject, stats, check1, reader)
+    md = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
-        if f.grade != review.MUST:
-            continue
-        n = check_no(f)
-        if n == 3 and (f.by == "model" or f.cite == "the chronology"):
+        if f.grade == review.MUST and check_no(f) == 3 and (f.by == "model" or f.cite == "the chronology"):
             ph = _phrases(f)
             if ph and all(EV.verbatim_on_record(md, p, pages) for p in ph):
                 out.findings[k] = replace(
                     f, grade=review.NOTE, finding=f"the record's own wording, printed on the cited page: {f.finding}"
                 )
                 stats["system_words_on_record"] += 1
-        elif n == 1 and f.by == "model":
-            block = EV.entry_for(md, _text(f))
-            if block is None:
-                continue
-            cited = EV.cited_pages(block[2], _text(f))
-            kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
-            if kind != "other":
-                # The client's page, or a page naming no one: the entry is a
-                # record the map read, and suspicion alone never drops it.
-                whom = "which is the client's" if kind == "client" else "which names no other person; the entry is kept"
-                out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"checked against the cited page, {whom}: {f.finding}"
-                )
-                stats["identity_client" if kind == "client" else "identity_unnamed"] += 1
-                continue
-            reason = EV.LEFT_OUT_REASON
-            EV.leave_out(sr, doc, block, cited, reason)
-            md = doc.read_text(encoding="utf-8")
-            out.changed = True
-            date_line = block[2].split("\n", 1)[0].strip()
-            out.findings[k] = replace(
-                f, grade=review.NOTE, finding=f"left out before delivery by rule: the entry dated {date_line} {reason}"
-            )
-            stats["identity_left_out"] += 1
-            out.left_out += 1
-            sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
     if stats["identity_left_out"]:
         # The summary tables count the entries: computed again from those left.
         from . import review_tables
@@ -316,8 +294,12 @@ def settle(
     stats: dict[str, int] = dict.fromkeys(
         (
             "system_words_on_record",
-            "identity_client",
-            "identity_unnamed",
+            "identity_page_client",
+            "identity_page_both",
+            "identity_page_none",
+            "identity_page_unreadable",
+            "identity_page_not_shown",
+            "identity_prior_left_out",
             "identity_left_out",
             "summary_deleted",
             "system_scrubbed",
@@ -523,3 +505,28 @@ def gate_drops(out: Path) -> list[str]:
             f'"{str(r.get("claim") or "").strip()}"'
         )
     return lines
+
+
+def paid(rd: Path, sha: str) -> list[review.Finding] | None:
+    """The paid review's findings kept for this package (``proof.review.PAID``),
+    or None when there are none to reuse: a resume after the stage stopped
+    between the call and the saved review settles from these at $0."""
+    p = rd / review.PAID
+    try:
+        rec = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    except ValueError:
+        return None
+    if not isinstance(rec, dict) or rec.get("input_sha") != sha or not isinstance(rec.get("findings"), list):
+        return None
+    keys = ("grade", "check", "finding", "cite", "by")
+    return [review.Finding(**{k: str(f.get(k) or "") for k in keys}) for f in rec["findings"] if isinstance(f, dict)]
+
+
+def keep(rd: Path, sha: str, found: list[review.Finding]) -> list[review.Finding]:
+    """`found` (the paid review's findings) written down before anything is
+    settled from them; returned unchanged."""
+    from dataclasses import asdict
+
+    rec = {"input_sha": sha, "findings": [asdict(f) for f in found]}
+    (rd / review.PAID).write_text(json.dumps(rec, indent=1), encoding="utf-8")
+    return found

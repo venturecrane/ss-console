@@ -108,15 +108,23 @@ def _update_review(drv: Any, ctx: Any) -> float | None:
     return b
 
 
-def bound_usd(drv: Any, stage: Any, extracted: Path) -> float | None:
+def bound_usd(drv: Any, stage: Any, ctx: Any, extracted: Path) -> float | None:
     """A conservative figure for a paid stage that has no projection yet,
     where one can be computed: the update review before ``update_collect``
     has named the new exhibits is bounded by every page the update read,
-    reviewed as a picture (``update_review_cost.bound_usd``). None elsewhere."""
+    reviewed as a picture (``update_review_cost.bound_usd``); the full
+    build's review by the page looks it already knows it needs (the entry
+    reader's flagged pages, ``whose_page.projected_usd``; its own call and the
+    pages its check 1 names are not known before it runs, and the doorway's
+    per-call check bounds those). None elsewhere."""
     if stage.name == "update_review" and extracted.is_file():
         from ..stages import update_review_cost
 
         return update_review_cost.bound_usd(budget.pages_read(extracted), drv.cfg, drv.pricing)
+    if stage.name == "review" and not drv.job.update:
+        from ..stages import whose_page
+
+        return whose_page.projected_usd(drv.slug_dir, ctx.unit.unit, drv.cfg, drv.pricing) or None
     return None
 
 
@@ -135,7 +143,7 @@ def checked_usd(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[str
     usd = stage_usd(drv, stage, ctx, extracted)
     if usd is not None:
         return usd, True
-    bound = bound_usd(drv, stage, extracted)
+    bound = bound_usd(drv, stage, ctx, extracted)
     how = f"checked at a bound of {bound:.2f} USD" if bound else "no bound computable; checked against what is spent"
     line = f"{stage.name}: {UNPROJECTED} ({how})"
     drv.log(f"[limits] {line}")

@@ -90,7 +90,7 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         "worksheet_glob": ("str", True),
     },
     "models": {
-        "tiers": ("map", True),  # {transcription, mechanical, composition, audit, judgment[, review]}
+        "tiers": ("map", True),  # {transcription, mechanical, composition, audit, judgment[, review, identity]}
     },
     "levers": {
         # `audit` is never a legal member: its cache design needs live calls
@@ -166,6 +166,9 @@ DOS_CHECK_MODES = {"report", "hold"}
 # family from 5.1 on ("claude-fable-5-"), so a new point release is covered
 # without an edit; bare "claude-fable-5" (5.0) accepts a forced call and does
 # not match. The 5.1-only list missed Fable 5.2 (released 2026-11-10).
+#: The model that looks at a flagged page's picture (stages/whose_page.py) when
+#: models.tiers.identity is absent: the one the 2026-11-23 proof ran on.
+IDENTITY_MODEL = "claude-opus-5-5"
 NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-", "claude-mythos-5-")
 PRE_INCIDENT_ITEMIZE_ALL = "itemize_all"
 PRE_INCIDENT_POLICIES = {"include", "summarize_only", PRE_INCIDENT_ITEMIZE_ALL}
@@ -289,6 +292,11 @@ def _model_tier_checks(data: dict[str, Any]) -> list[str]:
     # it must name a model, since an empty row would silently mean the default.
     if "review" in tiers and not (isinstance(tiers["review"], str) and tiers["review"].strip()):
         out.append("models.tiers.review: when present, must name a model")
+    # `identity` is OPTIONAL (2026-11-22): the model that looks at a flagged
+    # page's picture and says whose record it is (stages/whose_page.py);
+    # absent, claude-opus-5-5, the model the proof ran on.
+    if "identity" in tiers and not (isinstance(tiers["identity"], str) and tiers["identity"].strip()):
+        out.append("models.tiers.identity: when present, must name a model")
     # The audit forces its verdict tool (audit/verify.py TOOL_CHOICE); these
     # models answer a forced tool_choice with HTTP 400, so the audit - the gate
     # every chronology passes - would fail on every claim.

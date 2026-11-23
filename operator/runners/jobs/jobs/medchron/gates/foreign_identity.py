@@ -79,12 +79,25 @@ WITHHELD_REASONS = frozenset({WITHHELD_REASON, *RULE_REASONS.values()})
 
 
 def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
+    """MM/DD/YYYY. Only a two-digit year is expanded: "0000" is year 0, never
+    2000 (2026-11-22)."""
     y = int(yr)
-    y = y + (1900 if y > 30 else 2000) if y < 100 else y
+    if len(yr) <= 2:
+        y += 1900 if y > 30 else 2000
     try:
         return f"{int(mo):02d}/{int(dy):02d}/{y:04d}"
     except ValueError:
         return None
+
+
+def placeholder_dob(mo: str, dy: str, yr: str) -> bool:
+    """True when a labelled date of birth is a registration placeholder, not
+    anyone's birthday (2026-11-22: a hospital's 01/01/1900 and 00/00/0000 on
+    144 of a client's own pages read as "a date of birth that is not the
+    client's"): a year at or before 1900 (0000 included), or a 00 month or
+    day. Any other date, an impossible one too (06/31/2014), still counts."""
+    d = _norm_dob(mo, dy, yr)
+    return d is None or int(d[-4:]) <= 1900 or d.startswith("00/") or d[3:5] == "00"
 
 
 def full_name(name: str, after: str) -> bool:
@@ -136,7 +149,7 @@ def findings(
             continue
         for m in DOB_LABEL.finditer(line):
             d = _norm_dob(*m.groups())
-            if d and dobs and d not in dobs:
+            if d and dobs and d not in dobs and not placeholder_dob(*m.groups()):
                 out.append(f"a date of birth {d} that is not the client's")
         for m in PATIENT_LABEL.finditer(line):
             if full_name(m.group(1), line[m.end() :]) and _conflicts(
