@@ -103,6 +103,9 @@ REASON_CODES = (
     "form_unconfirmed",
     "policy_missing",
     "rule_unplaced",
+    # A model request too large for its model, never sent and never billed (request_size.py):
+    # failed, resumable, SMD alerted with the stage, size and limit, the firm told nothing.
+    "request_too_large",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

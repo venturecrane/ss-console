@@ -803,3 +803,122 @@ def test_the_probe_finds_a_starting_gateway_process_and_not_its_forked_child(tmp
     assert [p["pid"] for p in facts["gateway_processes"]] == [700]
     assert 290 <= facts["gateway_processes"][0]["age_s"] <= 310
     assert busy.decide(facts).busy
+
+
+# --- the marker stands before the verdict (2026-11-19 and 11-22) -----------------------
+#
+# Both release interruptions on record began with a first probe that read idle:
+# wait_idle returned before writing any marker, so a queued or between-retry job
+# (idle by design) was claimed between the check and the restart.
+
+
+class _OrderedFly(FakeFly):
+    """A FakeFly that records, in order, each marker write and each busy probe."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.events: list[str] = []
+
+    def run_python(self, app: str, source: str, timeout: float = 90) -> Result:
+        if "SMD_QUIESCE" in source and "ARGS = json.loads" in source:
+            self.events.append("quiesce-set" if '\\"action\\": \\"set\\"' in source else "quiesce-clear")
+        elif "SMD_SELFTEST_PLANT" not in source:
+            self.events.append("probe")
+        return super().run_python(app, source, timeout)
+
+
+def test_a_first_probe_that_reads_idle_still_follows_the_marker() -> None:
+    # FALSIFIER: return on the first idle probe before quiesce() (the pre-fix
+    # shape) and events reads ["probe"]: no marker stood when the restart came.
+    fly = _OrderedFly()
+    verdict = _gate(fly).wait_idle("captain-mark", 3600, lambda _: None)
+    assert not verdict.busy
+    assert fly.events == ["quiesce-set", "probe"]
+
+
+def test_a_seat_that_turns_busy_after_the_marker_is_busy() -> None:
+    # The marker stops new claims, not a job claimed a moment before it: the
+    # probe after the marker is what decides, and it reads the child.
+    fly = _OrderedFly()
+    fly.probe_facts["captain-mark"] = [_facts(children=[{"file": "child.pid", "pid": "77", "alive": True}])]
+    verdict = _gate(fly).wait_idle("captain-mark", 60, lambda _: None)
+    assert verdict.busy and "child.pid: job child pid 77 alive" in verdict.reasons
+    assert fly.events[:2] == ["quiesce-set", "probe"]
+    # Every poll renews the marker before it probes: no probe ever runs unmarked.
+    assert all(fly.events[i - 1] == "quiesce-set" for i, e in enumerate(fly.events) if e == "probe")
+    assert fly.events.count("probe") > 1
+
+
+def test_a_seat_with_no_machine_is_idle_with_no_marker_written() -> None:
+    fly = _OrderedFly()
+    fly.no_machine.add("hermes-captain-mark")
+    verdict = _gate(fly).wait_idle("captain-mark", 60, lambda _: None)
+    assert not verdict.busy and verdict.reasons == [busy.NO_MACHINE_REASON]
+    assert fly.events == []
+
+
+def test_the_rollback_judgement_defers_only_for_work_a_restart_would_cut_off() -> None:
+    symptoms = _facts(
+        lanes=[{"file": "heartbeat.json", "age_s": 4000, "running": None, "wakes_pending": 0, "daemon_alive": True}],
+        crons=[{"name": "slot", "next_in_s": 30}],
+        gateway_processes=[{"pid": 914, "age_s": 10}],
+        errors=["state.db unreadable"],
+    )
+    assert busy.decide(symptoms).busy and not busy.decide_rollback(symptoms).busy
+    for work in (
+        _facts(children=[{"file": "child.pid", "pid": "7", "alive": True}]),
+        _facts(gateways=[{"file": "g", "alive": True, "live": {"active_agents": 1, "active_work": ["chat"]}}]),
+        _facts(turns=[{"file": "t", "reply_open": True, "sent_ago_s": 30}]),
+    ):
+        assert busy.decide_rollback(work).busy, work
+
+
+def test_a_rollback_gate_that_cannot_read_the_seat_lets_the_rollback_go() -> None:
+    fly = _OrderedFly()
+    fly.ssh_raises.add("captain-mark")
+    log: list[str] = []
+    verdict = _gate(fly).wait_rollback("captain-mark", 60, log.append)
+    assert not verdict.busy and "seat unreadable at the rollback" in verdict.reasons[0]
+    # The forward gate still halts on the same seat: only the rollback proceeds.
+    with pytest.raises(ToolingError):
+        _gate(fly).wait_idle("captain-mark", 60, lambda _: None)
+
+
+def _probe_children(tmp_path: Path, btime: float) -> list[dict]:
+    """Run the shipped probe with its /proc/stat pointed at a planted one."""
+    stat = tmp_path / "proc-stat"
+    stat.write_text(f"cpu 1 2 3\nbtime {int(btime)}\n")
+    src = _run_remote_source("remote_busy_probe.py", tmp_path).replace('"/proc/stat"', json.dumps(str(stat)))
+    proc = subprocess.run(
+        [sys.executable, "-I", "-"], input=src, capture_output=True, text=True, timeout=30, check=False
+    )
+    assert proc.returncode == 0, proc.stderr
+    return busy.parse_probe(proc.stdout)["children"]
+
+
+def test_a_pidfile_from_before_this_boot_naming_a_live_pid_is_stale_not_busy(tmp_path: Path) -> None:
+    # Re-review 2026-11-22: a daemon killed mid-job leaves child.pid, and after a
+    # reboot its pid can belong to any process. FALSIFIER (fails on 1bfdc755b):
+    # the probe believed any live pid, so the forward gate held for its whole
+    # wait and a rollback was deferred.
+    run, _ = _seat(tmp_path)
+    pidfile = run / "child.pid"
+    pidfile.write_text(str(os.getpid()))  # alive, and not our job child
+    os.utime(pidfile, (1_000_000_000, 1_000_000_000))
+    kids = _probe_children(tmp_path, time.time() - 60)
+    assert kids == [{"file": "child.pid", "pid": str(os.getpid()), "alive": False, "stale": True, "before_boot": True}]
+    facts = _facts(children=kids)
+    for judge in (busy.decide, busy.decide_rollback):
+        verdict = judge(facts)
+        assert not verdict.busy, (judge, verdict)
+        assert verdict.notes and "stale pidfile" in verdict.notes[0] and "written before this boot" in verdict.notes[0]
+    fly = _OrderedFly()
+    fly.probe_facts["captain-mark"] = [facts]
+    log: list[str] = []
+    assert not _gate(fly).wait_idle("captain-mark", 60, log.append).busy
+    assert not _gate(fly).wait_rollback("captain-mark", 60, log.append).busy
+    assert any("stale pidfile" in line for line in log)
+    # Written this boot, the same live pid is a job child: busy, as before.
+    os.utime(pidfile, None)
+    fresh = _probe_children(tmp_path, time.time() - 60)
+    assert fresh[0]["alive"] is True and busy.decide(_facts(children=fresh)).busy

@@ -214,7 +214,7 @@ def _classify_batch(
             timeout=300.0,
             custom_id=f"classify-{labels[0][0]}",
         )
-    except RequestTooLargeError:
+    except (RequestTooLargeError, llm.RequestTooLarge):  # refused by the API, or stopped by the doorway before sending
         if len(labels) == 1:
             sr.log(f"  page {labels[0][0]} is too large for one request even alone; left unclassifiable")
             return

@@ -95,9 +95,9 @@ class ModelError(Exception):
         self.cause = cause
 
     def too_large(self) -> bool:
-        """The API refused the request for its size (HTTP 413, or a 400 saying so)."""
-        status, msg = getattr(self.cause, "status_code", None), str(self.cause).lower()
-        return status == 413 or (status == 400 and any(w in msg for w in ("too large", "too long", "too many")))
+        """The request was too large for the model: stopped by the doorway before
+        it was sent, or refused by the API for its size (``llm.is_size_refusal``)."""
+        return llm.is_size_refusal(self.cause)
 
 
 def replaying() -> bool:

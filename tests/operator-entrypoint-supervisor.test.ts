@@ -300,6 +300,23 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the Machine stop drains before 
     expect(r.log).toMatch(/jobs daemon drained/)
   }, 30000)
 
+  it('a stop during a fleet release keeps the release marker and still drains', async () => {
+    const until = Math.floor(Date.now() / 1000) + 1800
+    const marker = `{"until": ${until}, "by": "fleet:ops@laptop", "reason": "fleet release"}`
+    const r = await runStop(
+      `printf '%s\\n' '${marker}' > "\${JOBS_RUN_DIR}/quiesce"\n${NEW_SHAPE()}`
+    )
+    expect(r.code, r.log).toBe(0)
+    const q = JSON.parse(readFileSync(`${r.dir}/run/quiesce`, 'utf8'))
+    // FALSIFIER: drop smd_quiesce_held_by_other from smd_quiesce_write and this reads machine-stop.
+    expect(q.by).toBe('fleet:ops@laptop')
+    expect(q.until).toBe(until)
+    expect(r.log).toMatch(/live quiesce stands/)
+    expect(r.log).toMatch(/jobs daemon drained/)
+    const jobPid = Number(readFileSync(`${r.dir}/job.pid`, 'utf8'))
+    if (alive(jobPid)) process.kill(jobPid, 'SIGKILL')
+  }, 30000)
+
   it('runs the gateway as the held pid, in its own session, with the FINAL environment', async () => {
     const r = await runStop(NEW_SHAPE())
     const g = r.gateway!
@@ -425,6 +442,46 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesc
       )
       expect(r.status, r.stderr).toBe(0)
       expect(existsSync(`${dir}/run/quiesce`)).toBe(kept)
+    }
+  })
+
+  // 2026-11-19 and 11-22: a release's marker overwritten by machine-stop at the
+  // stop, then deleted by the next boot, so the lanes claimed mid-release.
+  it('a Machine stop leaves a live fleet marker standing, and the next boot keeps it', () => {
+    const now = Math.floor(Date.now() / 1000)
+    for (const [by, until, kept] of [
+      ['fleet:ops@laptop', now + 1800, true],
+      ['fleet:ops@laptop', now - 60, false], // expired: the stop writes its own
+      ['machine-stop', now + 1800, false], // the previous stop's own: replaced
+      [null, 0, false], // none: written
+    ] as const) {
+      const dir = mkdtempSync(join(tmpdir(), 'smd-quiesce-'))
+      mkdirSync(`${dir}/run`)
+      const before = by ? `{"until": ${until}.5, "by": "${by}", "reason": "fleet release"}\n` : ''
+      if (by) writeFileSync(`${dir}/run/quiesce`, before)
+      const r = spawnSync(
+        'bash',
+        [
+          '-c',
+          `set -euo pipefail\nlog() { :; }\nJOBS_RUN_DIR="${dir}/run"\n. "${SUPERVISOR}"\n` +
+            `smd_quiesce_write machine-stop "Machine stop (SIGTERM)" 600\ncp run/quiesce run/after-stop\nsmd_quiesce_clear_stale`,
+        ],
+        { encoding: 'utf8', cwd: dir }
+      )
+      expect(r.status, r.stderr).toBe(0)
+      const afterStop = JSON.parse(readFileSync(`${dir}/run/after-stop`, 'utf8'))
+      if (kept) {
+        expect(readFileSync(`${dir}/run/after-stop`, 'utf8')).toBe(before)
+        expect(readFileSync(`${dir}/run/quiesce`, 'utf8'), 'the boot keeps a fleet marker').toBe(
+          before
+        )
+      } else {
+        expect(afterStop.by).toBe('machine-stop')
+        expect(afterStop.until).toBeGreaterThan(now + 500)
+        expect(existsSync(`${dir}/run/quiesce`), 'the boot clears the stop’s own marker').toBe(
+          false
+        )
+      }
     }
   })
 

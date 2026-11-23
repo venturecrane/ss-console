@@ -49,7 +49,7 @@ from typing import Any, Callable
 
 from operator_connector_sdk.library import readers
 
-from .. import firm_wording, limits as limits_mod, paid, proof_mode
+from .. import firm_wording, limits as limits_mod, paid, proof_mode, request_size
 from ..matter import store as page_store_mod
 from ..proof import review as proof_review
 from . import (
@@ -614,6 +614,8 @@ class DemandRun:
             v = self._walk()
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=hold.setting, reason=hold.reason)
+        except request_size.RequestTooLarge as exc:  # our machinery's: failed, resumable, SMD told, the firm not
+            v = Verdict("failed", stage=self._current(), reason=str(exc))
         except GateQuotesLeft as exc:
             v = Verdict("failed", stage="gate", reason=str(exc))
         except review_mod.ReviewHeld as exc:

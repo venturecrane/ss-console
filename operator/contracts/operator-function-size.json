@@ -71,7 +71,7 @@
     "hermes-smd-overlay/webhook_gate.py::_Handler.do_POST": 119,
     "rehearsal/drivers.py::drive_leg": 90,
     "rehearsal/run.py::run_suite": 91,
-    "runners/jobs/jobs/llm.py::Doorway._round": 105,
+    "runners/jobs/jobs/llm.py::Doorway._round": 101,
     "runners/jobs/jobs/llm.py::Doorway.batch_call": 87,
     "runners/jobs/jobs/medchron/audit/repair.py::run": 80,
     "runners/jobs/jobs/medchron/audit/run.py::Round.execute": 85,

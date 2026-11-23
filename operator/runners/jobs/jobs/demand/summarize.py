@@ -234,21 +234,31 @@ class Summarizer:
 
 
 CONDENSE_MAX_TOKENS = 96_000
+#: The longest answer a condense group is asked for, in characters: nine tenths
+#: of the output ceiling at 2 characters a token (measured 2.17 on real
+#: records, 2026-11-22). A group whose target is longer would be cut off at
+#: its tail, cites included.
+TARGET_MAX_CHARS = int(0.9 * CONDENSE_MAX_TOKENS * 2)
+#: Halvings of one group before a reply that still runs out ends the stage: at
+#: most 2 + 4 + 8 extra calls for a group.
+SPLIT_DEPTH_MAX = 3
+GROUP_CHARS = 300_000
 
 
-def _condense_queued(
+def _queued(
     doorway: Any, model: str, system: str, asks: list[tuple[str, str]], batch_dir: Path | None
-) -> list[str]:
-    """Every group through the batch queue, answers in group order. A group
-    that did not come back stops the job resumably: the queue's record under
-    ``batch_dir`` lets a resume collect the same answers unpaid."""
+) -> list[tuple[str, str]]:
+    """Every group through the batch queue: (text, stop reason) in group
+    order. A group that did not come back stops the job resumably: the
+    queue's record under ``batch_dir`` lets a resume collect the same answers
+    unpaid."""
     if batch_dir is None:
         raise RuntimeError("condense through the batch queue needs a place to keep the queue's record")
-    got: dict[str, str] = {}
+    got: dict[str, tuple[str, str]] = {}
 
     def landed(it: Item, r: Any, _err: str | None) -> None:
         if r is not None:
-            got[it.custom_id] = str(r.text)
+            got[it.custom_id] = (str(r.text), str(getattr(r, "stop_reason", "") or ""))
 
     doorway.batch_call(
         "condense",
@@ -267,6 +277,41 @@ def _condense_queued(
     return [got[cid] for cid, _ in asks]
 
 
+def halves(g: list[str]) -> tuple[list[str], list[str]]:
+    """A group in two, each strictly smaller: its digests split between the
+    halves, or one digest split at the paragraph break nearest its middle (a
+    line break, else the middle character, when it has none)."""
+    if len(g) > 1:
+        return g[: len(g) // 2], g[len(g) // 2 :]
+    t = g[0]
+    if len(t) < 2:
+        raise RuntimeError("a condense group of one character reached the output ceiling")
+    mid = len(t) // 2
+    for sep in ("\n\n", "\n"):
+        cuts = [i for i in (t.rfind(sep, 0, mid), t.find(sep, mid)) if 0 < i < len(t) - len(sep)]
+        if cuts:
+            i = min(cuts, key=lambda c: abs(c - mid))
+            return [t[:i]], [t[i + len(sep) :]]
+    return [t[:mid]], [t[mid:]]
+
+
+def groups_for(digests: list[str], ratio: float) -> list[list[str]]:
+    """Digests in order, grouped so a group's target fits ``TARGET_MAX_CHARS``
+    (and never past ``GROUP_CHARS``): the same groups as always while the
+    target of a full group fits."""
+    cap = min(GROUP_CHARS, int(TARGET_MAX_CHARS / ratio))
+    groups, cur, size = [], [], 0
+    for t in digests:
+        if size + len(t) > cap and cur:
+            groups.append(cur)
+            cur, size = [], 0
+        cur.append(t)
+        size += len(t)
+    if cur:
+        groups.append(cur)
+    return groups
+
+
 def condense(
     digests: list[str],
     budget: int,
@@ -277,28 +322,38 @@ def condense(
     log: Callable[[str], None],
     batch_dir: Path | None = None,
 ) -> str:
-    """Bring the digests under ``budget`` characters; concatenation when they fit."""
+    """Bring the digests under ``budget`` characters; concatenation when they
+    fit. A group whose answer reaches the output ceiling is never kept cut
+    off: it is split in two and each half condensed (live), until every
+    answer finishes."""
     joined = "\n\n".join(digests)
     if len(joined) <= budget:
         return joined
     ratio = budget / len(joined)
-    groups, cur, size = [], [], 0
-    for t in digests:
-        if size + len(t) > 300_000 and cur:
-            groups.append(cur)
-            cur, size = [], 0
-        cur.append(t)
-        size += len(t)
-    if cur:
-        groups.append(cur)
-
+    groups = groups_for(digests, ratio)
     system = prompt.replace("{{WINDOW}}", "none stated")
 
     def ask(g: list[str]) -> tuple[str, str]:
         body = "\n\n".join(g)
         return f"condense-{sha(body)[:8]}", f"TARGET LENGTH: about {int(len(body) * ratio):,} characters.\n\n{body}"
 
-    def one(g: list[str]) -> str:
+    def whole(g: list[str], text: str, stop: str, depth: int = 0) -> str:
+        if stop != "max_tokens":
+            return text
+        size = sum(map(len, g)) + 2 * (len(g) - 1)
+        if depth >= SPLIT_DEPTH_MAX:
+            # A reply that still runs out after this many halvings is not running
+            # out for size (a loop, a target ignored); splitting on would double
+            # the calls each level (review 11-22). The stage ends failed, resumable.
+            raise RuntimeError(
+                f"a condense group of {size:,} characters still reached its ceiling after "
+                f"{SPLIT_DEPTH_MAX} splits; nothing was kept cut off"
+            )
+        a, b = halves(g)
+        log(f"  a condense group of {size:,} characters reached its ceiling; condensed in two halves")
+        return one(a, depth + 1) + "\n\n" + one(b, depth + 1)
+
+    def one(g: list[str], depth: int = 0) -> str:
         cid, user = ask(g)
         r = doorway.call(
             "condense",
@@ -309,10 +364,11 @@ def condense(
             stream=True,
             custom_id=cid,
         )
-        return r.text
+        return whole(g, r.text, str(getattr(r, "stop_reason", "") or ""), depth)
 
     if "condense" in getattr(doorway, "batch_stages", ()):
-        out = _condense_queued(doorway, model, system, [ask(g) for g in groups], batch_dir)
+        got = _queued(doorway, model, system, [ask(g) for g in groups], batch_dir)
+        out = [whole(g, text, stop) for g, (text, stop) in zip(groups, got)]
     else:
         with ThreadPoolExecutor(max_workers=workers) as ex:
             out = list(ex.map(one, groups))

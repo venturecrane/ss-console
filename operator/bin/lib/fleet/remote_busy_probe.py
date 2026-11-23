@@ -42,6 +42,7 @@ MANAGED_PREFIX = "op-managed:"
 TURN_SCAN_S = 1800
 GATEWAY_STATES = ("/opt/data/gateway_state.json", "/opt/data/profiles/*/gateway_state.json")
 PROC = "/proc"
+PROC_STAT = "/proc/stat"
 
 
 def pid_alive(pid):
@@ -118,16 +119,39 @@ def lanes(now, errors):
     return out
 
 
+def boot_time():
+    """This boot's start (``btime`` in /proc/stat), or None when it cannot be read."""
+    try:
+        with open(PROC_STAT) as fh:
+            for line in fh:
+                if line.startswith("btime "):
+                    return float(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
 def children(errors):
+    """Each lane's job-child pidfile. Believed only when its pid is alive AND it
+    was written this boot, the same test as seat-checks.sh lane_idle_cmd: a
+    daemon SIGKILLed mid-job leaves one behind, and a reused pid is not our
+    child. Such a file is reported stale, and stale is not busy."""
     out = []
+    booted = boot_time()
     for path in sorted(glob.glob(RUN + "/*child.pid")):
         try:
             with open(path) as fh:
                 raw = fh.read().strip()
+            written = os.stat(path).st_mtime
         except OSError as exc:
             errors.append("%s unreadable: %s" % (path, exc))
             continue
-        out.append({"file": os.path.basename(path), "pid": raw, "alive": pid_alive(raw)})
+        alive = pid_alive(raw)
+        before_boot = booted is not None and written < booted
+        out.append(
+            {"file": os.path.basename(path), "pid": raw, "alive": alive and not before_boot,
+             "stale": not alive or before_boot, "before_boot": before_boot}
+        )  # fmt: skip
     return out
 
 

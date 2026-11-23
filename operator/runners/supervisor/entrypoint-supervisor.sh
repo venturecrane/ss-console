@@ -15,7 +15,8 @@
 # exited and the container went with it. Now the entrypoint stays tini's child,
 # runs the gateway as ITS child in a session of its own, and on SIGTERM:
 #   1. writes the quiesce file (until now+600 s, by "machine-stop") so no lane
-#      starts new work;
+#      starts new work, unless another writer's live one stands (a fleet
+#      release's, which must outlive this stop and the next boot);
 #   2. signals the jobs daemon and waits up to 240 s for it to exit (it
 #      asks each running job to checkpoint, waits up to 220 s, terminates what
 #      is left, and exits 130);
@@ -46,10 +47,28 @@ SMD_SUPERVISOR_GATEWAY_WAIT_SECONDS="${SMD_SUPERVISOR_GATEWAY_WAIT_SECONDS:-45}"
 SMD_SUPERVISOR_QUIESCE_SECONDS="${SMD_SUPERVISOR_QUIESCE_SECONDS:-600}"
 _SMD_RELEASE_SENTINEL="__SMD_GATEWAY_RELEASE__"
 
-# The quiesce file the daemon and every lane read (jobs/quiesce.py).
+# smd_quiesce_held_by_other: the quiesce file is someone else's (not a Machine
+# stop's) and has not expired. A fleet release writes its marker before it
+# restarts the seat and needs it to stand at the new boot; overwriting it with
+# machine-stop let the boot delete it (smd_quiesce_clear_stale), and the lanes
+# claimed mid-release (2026-11-19, 11-22). An unreadable expiry is not live.
+smd_quiesce_held_by_other() {
+  local _f="${JOBS_RUN_DIR:-}/quiesce" _until
+  [ -f "${_f}" ] || return 1
+  if grep -q '"by": "machine-stop"' "${_f}"; then return 1; fi
+  _until="$(sed -n 's/.*"until": *\([0-9][0-9]*\).*/\1/p' "${_f}" | head -n 1)"
+  [ -n "${_until}" ] && [ "${_until}" -gt "$(date +%s)" ]
+}
+
+# The quiesce file the daemon and every lane read (jobs/quiesce.py). A live
+# marker another writer holds is left standing: it already stops new work.
 smd_quiesce_write() { # by reason seconds
   local _f="${JOBS_RUN_DIR:-}/quiesce" _until
   [ -d "${JOBS_RUN_DIR:-}" ] || return 0
+  if smd_quiesce_held_by_other; then
+    log "Supervisor: a live quiesce stands (${_f}); kept, not overwritten: $(head -c 300 "${_f}")"
+    return 0
+  fi
   _until=$(( $(date +%s) + $3 ))
   if printf '{"until": %s, "by": "%s", "reason": "%s"}\n' "${_until}" "$1" "$2" > "${_f}.tmp" \
      && chmod 0644 "${_f}.tmp" && mv -f "${_f}.tmp" "${_f}"; then

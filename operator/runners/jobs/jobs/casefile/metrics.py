@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..ledger import read_rows
+from ..ledger import read_rows, unsent
 
 _UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 FIELDS = ("in", "out", "cache_read", "cache_write")
@@ -34,6 +34,8 @@ def summarize(ledger: Path, pricing: Any) -> dict[str, Any]:
     stages: dict[str, dict[str, Any]] = {}
     matters: dict[str, dict[str, Any]] = {}
     for row in read_rows(ledger):
+        if unsent(row):  # a request stopped for its size: never sent, never a paid call
+            continue
         try:
             dollars = pricing.price_row(row)
         except Exception:  # noqa: BLE001 - an unpriceable row is counted at zero here; the cap prices it itself

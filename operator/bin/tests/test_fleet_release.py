@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from bin.lib.fleet import ids
+from bin.lib.fleet import busy, ids
+from bin.lib.fleet import smoke as smoke_mod
 from bin.lib.fleet.busy import BusyGate
 from bin.lib.fleet.preflight import PreflightChecker
 from bin.lib.fleet.r2 import image_key
@@ -818,3 +819,234 @@ def test_every_seat_a_run_decided_is_named_for_the_spec_republish(tmp_path, monk
     sink.unlink()
     w.release_all()
     assert not sink.exists(), "a seat already done on the release was not redeployed and is not named"
+
+
+# -- a release or its rollback never restarts a seat unmarked (2026-11-19, 11-22) ----------
+#
+# On record twice: the marker was cleared in a `finally` before the rollback, and
+# the rollback deploy (and the deploy retry) restarted the seat with no gate, so a
+# job that started in the gap was killed by the rollback.
+
+_IDLE = {"lanes": [], "children": [], "crons": [], "errors": []}
+_RUNNING = {"lanes": [], "children": [{"file": "child.pid", "pid": "77", "alive": True}], "crons": [], "errors": []}
+
+
+def _ordered(w: World) -> list[str]:
+    """Record every marker write, marker clear, busy probe and deploy on w.fly, in order."""
+    events: list[str] = []
+    run_python, deploy = w.fly.run_python, w.fly.deploy
+
+    def recording_run_python(app: str, source: str, timeout: float = 90) -> Result:
+        if "SMD_QUIESCE" in source and "ARGS = json.loads" in source:
+            events.append("set" if '\\"action\\": \\"set\\"' in source else "clear")
+        elif "SMD_BUSY_PROBE" in source:
+            events.append("probe")
+        return run_python(app, source, timeout)
+
+    def recording_deploy(app: str, image: str, config_path: str) -> Result:
+        events.append("deploy-old" if image.endswith("deployment-OLD") else "deploy")
+        return deploy(app, image, config_path)
+
+    w.fly.run_python = recording_run_python  # type: ignore[method-assign]
+    w.fly.deploy = recording_deploy  # type: ignore[method-assign]
+    return events
+
+
+def _gated_before(events: list[str], deploy: str) -> bool:
+    """The deploy is preceded by a marker write and then a probe, with no clear in between."""
+    at = events.index(deploy)
+    return events[at - 2 : at] == ["set", "probe"]
+
+
+def test_a_rollback_keeps_the_marker_and_passes_the_gate_before_its_deploy() -> None:
+    # FALSIFIER: put gate.clear back in _deploy_and_verify's finally and a "clear"
+    # lands between the forward deploy and the rollback deploy; drop the
+    # wait_idle before _deploy(from_image) and the rollback deploy follows the
+    # re-smoke's work unprobed.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    events = _ordered(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back"
+    assert events.count("deploy") == 1 and events.count("deploy-old") == 1
+    between = events[events.index("deploy") : events.index("deploy-old")]
+    assert "clear" not in between, events
+    assert _gated_before(events, "deploy") and _gated_before(events, "deploy-old"), events
+    # Cleared once, at the release's end: after the rollback and its re-smoke.
+    assert events[-1] == "clear" and events.count("clear") == 1, events
+
+
+def test_a_seat_busy_at_the_rollback_is_not_rolled_back() -> None:
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "never reached"))
+    w.fly.probe_facts["ap-staging"] = [_IDLE, _RUNNING]
+    events = _ordered(w)
+    result = w.release_all(only="ap-staging", max_idle_wait=120)
+    assert w.store.states()["ap-staging"] == "failed" and result.halted
+    assert events.count("deploy") == 1 and "deploy-old" not in events
+    assert _details(w)["ap-staging"].startswith("rollback deferred, seat busy")
+    assert events[-1] == "clear"
+
+
+def test_a_deploy_retry_passes_the_gate_again() -> None:
+    w = World()
+    w.fly.deploy_results = [Result(1, "", "Error: context deadline exceeded")]
+    events = _ordered(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "done"
+    first = events.index("deploy")
+    second = events.index("deploy", first + 1)
+    # FALSIFIER: drop the wait_idle before the retry and nothing is probed between the deploys.
+    assert events[first + 1 : second] == ["set", "probe"], events
+
+
+def test_a_seat_busy_at_the_deploy_retry_is_not_deployed_again() -> None:
+    w = World()
+    w.fly.deploy_results = [Result(1, "", "Error: context deadline exceeded")]
+    w.fly.probe_facts["ap-staging"] = [_IDLE, _RUNNING]
+    events = _ordered(w)
+    w.release_all(only="ap-staging", max_idle_wait=120)
+    assert w.store.states()["ap-staging"] == "tooling_error"
+    assert events.count("deploy") == 1 and "deploy-old" not in events
+    assert "retry deferred, seat busy" in _details(w)["ap-staging"]
+    assert events[-1] == "clear"
+
+
+# -- review of the branch (bug review, 2026-11-22) -------------------------------------
+
+
+def _exec_breaks_after_the_first_deploy(w: World) -> None:
+    """From the first deploy on, every `fly machine exec` to the seat raises (a broken image)."""
+    deploy = w.fly.deploy
+
+    def breaking_deploy(app: str, image: str, config_path: str) -> Result:
+        res = deploy(app, image, config_path)
+        w.fly.ssh_raises.add(app.removeprefix("hermes-"))
+        return res
+
+    w.fly.deploy = breaking_deploy  # type: ignore[method-assign]
+
+
+def test_a_seat_whose_exec_is_broken_after_the_deploy_is_still_rolled_back() -> None:
+    # FALSIFIER (fails on ff4e5898c): the rollback gate's exec raised, the
+    # rollback deploy was skipped, and the seat was left on the broken image as
+    # tooling_error.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    _exec_breaks_after_the_first_deploy(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back", _details(w)["ap-staging"]
+    assert [img for _, img in deployed_images(w)][-1].endswith("deployment-OLD")
+
+
+def test_a_machine_that_is_not_started_is_rolled_back_without_the_gate() -> None:
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    events = _ordered(w)
+    deploy = w.fly.deploy
+
+    def stopping_deploy(app: str, image: str, config_path: str) -> Result:
+        res = deploy(app, image, config_path)
+        w.fly.machine_state = "stopped"
+        return res
+
+    w.fly.deploy = stopping_deploy  # type: ignore[method-assign]
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back"
+    at = events.index("deploy-old")
+    assert "probe" not in events[events.index("deploy") : at], events
+    assert any("rolling back ungated" in line for line in w.logs)
+
+
+def test_a_broken_releases_own_symptoms_never_defer_its_rollback() -> None:
+    # FALSIFIER (fails on ff4e5898c): a crash-looping gateway reads "still
+    # starting", a dead daemon's beat reads stale, a store reads unreadable; the
+    # full busy judgement deferred the rollback and left the seat broken.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    broken = {
+        "lanes": [{"file": "heartbeat.json", "age_s": 4000, "running": None, "wakes_pending": 0, "daemon_alive": True}],
+        "children": [],
+        "crons": [{"name": "slot", "next_in_s": 60}],
+        "gateways": [],
+        "gateway_processes": [{"pid": 912, "age_s": 30}],
+        "errors": ["state.db unreadable"],
+    }
+    w.fly.probe_facts["ap-staging"] = [_IDLE, broken]
+    w.release_all(only="ap-staging", max_idle_wait=120)
+    assert w.store.states()["ap-staging"] == "rolled_back", _details(w)["ap-staging"]
+    assert busy.decide(broken).busy and not busy.decide_rollback(broken).busy
+
+
+def test_the_marker_and_the_lease_are_renewed_before_the_verify_and_the_re_smoke() -> None:
+    # FALSIFIER (fails on ff4e5898c): the marker was written once, at the gate,
+    # with a 30 minute expiry, and the verify and re-smoke windows can pass it.
+    w = World(Check("fail", "FAILED: x - command failed"), Check("pass", "re-smoke green"))
+    w.roll.holder = "tester"
+    renewed: list[str] = []
+    renew = w.store.renew_lease
+
+    def recording_renew(holder: str, name: str = "rollout") -> bool:
+        renewed.append(name)
+        return renew(holder, name)
+
+    w.store.renew_lease = recording_renew  # type: ignore[method-assign]
+    events = _ordered(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "rolled_back"
+    forward, back = events.index("deploy"), events.index("deploy-old")
+    assert events[forward + 1] == "set", events  # before the verify
+    assert "set" in events[back + 1 : -1], events  # before the re-smoke
+    assert renewed.count("seat:ap-staging") >= 2, renewed
+
+
+def test_a_deploy_retry_whose_gate_cannot_read_the_seat_still_restores_the_pointer() -> None:
+    # FALSIFIER (fails on ff4e5898c): the gate's ToolingError escaped
+    # _deploy_saying, skipping the branch that restores the bundle pointer.
+    w = World()
+    w.fly.deploy_results = [Result(1, "", "Error: context deadline exceeded")]
+    _exec_breaks_after_the_first_deploy(w)
+    w.release_all(only="ap-staging")
+    detail = _details(w)["ap-staging"]
+    assert w.store.states()["ap-staging"] == "tooling_error"
+    assert "retry not made, the busy gate could not read the seat" in detail
+    assert "bundle pointer untouched" in detail  # the branch that calls _unpoint ran
+    assert len(w.fly.deploys) == 1
+
+
+def _marker_expiries_at_each_smoke(w: World) -> list[float]:
+    """At each boot smoke call: how long the newest marker written before it still had to live."""
+    import json as _json
+
+    newest: list[float] = []
+    at_smoke: list[float] = []
+    run_python, smoke_run = w.fly.run_python, w.smoke.run
+
+    def recording_run_python(app: str, source: str, timeout: float = 90) -> Result:
+        if "SMD_QUIESCE" in source and '\\"action\\": \\"set\\"' in source:
+            args = _json.loads(_json.loads(source.split("json.loads(", 1)[1].split(")\n", 1)[0]))
+            newest.append(float(args["until"]))
+        return run_python(app, source, timeout)
+
+    def recording_smoke(seat: str, expected: str | None) -> Check:
+        at_smoke.append(newest[-1] - w.clock())
+        return smoke_run(seat, expected)
+
+    w.fly.run_python = recording_run_python  # type: ignore[method-assign]
+    w.smoke.run = recording_smoke  # type: ignore[method-assign]
+    return at_smoke
+
+
+def test_the_marker_outlives_the_ssh_smoke_after_a_selftest_window(tmp_path) -> None:
+    # Re-review 2026-11-22: the 20 minute self-test window, then the ssh smoke
+    # (up to 45 minutes, one call) ran on a marker written for 30 minutes.
+    # FALSIFIER (fails on 1bfdc755b): the marker had less left than the smoke's budget.
+    w = _selftest_world(tmp_path, None, Check("fail", "x: command failed"), Check("pass", "re-smoke green"))
+    left = _marker_expiries_at_each_smoke(w)
+    w.release_all(only="ap-staging", verify="selftest", selftest_capable=True)
+    assert "boot smoke fallback" in _details(w)["ap-staging"]
+    assert len(left) == 2, left  # the fallback smoke, then the re-smoke
+    assert all(s >= smoke_mod.SMOKE_TIMEOUT_S + smoke_mod.READBACK_WINDOW_S for s in left), left
+
+
+def test_the_marker_outlives_the_bash_verify_smoke() -> None:
+    w = World()
+    left = _marker_expiries_at_each_smoke(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "done"
+    assert left and left[0] >= smoke_mod.SMOKE_TIMEOUT_S + smoke_mod.READBACK_WINDOW_S, left

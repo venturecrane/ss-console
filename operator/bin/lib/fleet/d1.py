@@ -287,6 +287,24 @@ def seat_lease_name(seat: str) -> str:
     return f"seat:{ids.slug(seat)}"
 
 
+def renew_seat_lease(store: Any, holder: str | None, seat: str, log: Any) -> None:
+    """Renew one seat's lease (LEASE_TTL) for a step that can run past it.
+
+    Best effort, as the status rows are: a lost or unrenewable lease is
+    logged, and the step finishes what it began on the seat. None: nothing
+    to renew (a test, or a dry run).
+    """
+    if holder is None:
+        return
+    try:
+        kept = store.renew_lease(holder, seat_lease_name(seat))
+    except ToolingError as exc:
+        log(f"{seat}: could not renew the seat lease ({exc}); carrying on")
+        return
+    if not kept:
+        log(f"{seat}: the seat lease is no longer ours; finishing what this step began on the seat")
+
+
 def decode_json_list(text: str | None) -> list[str]:
     if not text:
         return []
