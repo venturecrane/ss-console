@@ -60,7 +60,7 @@ _RESPONSE_WORDS = (
     # responses. Bare "objection" and "produce" stay out: letters and outlines
     # use them too.
     r"|\b(?:responses?|requests?|rfps?|rfas?|rogs?) (?:no\.? ?|number |# ?)\d+\b"
-    r"|\b(?:a|an|any|each|every|the|this|that) requests? (?:asks?|seeks?|calls?|demands?)\b"
+    r"|\b(?:a|an|any|each|every) requests? (?:asks?|seeks?|calls?|demands?)\b"
 )
 
 #: Each kind's names, matched against the requester's words lowered with quotes

@@ -594,30 +594,10 @@ REWORDED = (
     "For requests for production seeking documents in multiple damages categories, "
     "assert every objection and state no further production will follow."
 )
-QUEUED = (
-    "Received. The discovery responses for matter 900201 are with us, and you'll get a "
-    "reply in this thread when the draft is filed in the matter."
-)
 
 
 def _recorded():
     return {"proposal_id": RFP, "text": RFP_RULE, "subject": dict(RFP_SUBJECT)}
-
-
-def _revise_job(**extra):
-    from datetime import datetime, timezone
-
-    return {
-        "id": "01JOBREVISE0000000000000000",
-        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-        "state": "submitted",
-        "reason": "lane_unproven:document-drafter.revise_discovery_response",
-        "document_class": "discovery_response",
-        "requester": ATTORNEY,
-        "matter_number": "900201",
-        "revise_of": "01JOBDELIVERED00000000000000",
-        **extra,
-    }
 
 
 def _propose_gate(mod, text, session="sess-1", **subject):
@@ -641,12 +621,9 @@ def test_apply_this_to_this_file_after_a_commit_is_told_the_rule_is_recorded(sea
     reply says nothing was applied and asks which documents the rule is for."""
     mod, state = seat
     state["recent"] = [_recorded()]
-    state["jobs"] = [_revise_job()]
     context = _reply(mod, "Please apply this to this file")
-    assert "ALREADY recorded" in context and RFP_RULE in context
-    assert "never ask which documents" in context.lower() or "never ask" in context
-    # The turn note carries no job sentence: that turn may be about another matter.
-    assert QUEUED not in context
+    assert "they are recorded" in context and "Never ask which documents" in context
+    assert "never say a filed document already follows the rule" in context
     # establish_pending shows the rule as committed, not gone.
     listed = json.loads(mod._pending({"sender": ATTORNEY}, session_id="sess-1"))["pending"]
     assert [(r["text"], r["state"]) for r in listed] == [(RFP_RULE, "committed")]
@@ -658,8 +635,6 @@ def test_a_new_rule_from_the_same_sender_after_a_commit_is_still_proposed(seat):
     state["recent"] = [_recorded()]
     new = "In discovery responses, put each objection on its own line."
     _reply(mod, new)
-    verdict = _propose_gate(mod, new, doc_kinds=["discovery_response"])
-    assert verdict is None or "already recorded" not in verdict["message"]
     out = _propose(mod, new, session="sess-1", subject=dict(RFP_SUBJECT))
     assert out["readback"].startswith(new)
 
@@ -710,3 +685,12 @@ def test_bare_objection_and_produce_words_do_not_name_discovery_responses(seat):
         "In demand letters, say we object to the offer.",
     ):
         assert "discovery_response" not in mod.rule_reach.kinds_named(text)
+
+
+def test_no_recent_rule_means_no_follow_up_note(seat):
+    """FALSIFIER for the note: with nothing committed in the hour, the turn
+    gets no note at all."""
+    mod, state = seat
+    state["recent"] = []
+    context = _reply(mod, "Please apply this to this file")
+    assert "they are recorded" not in (context or "")

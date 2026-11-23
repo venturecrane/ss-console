@@ -193,21 +193,18 @@ def propose_answer(response: dict[str, Any]) -> dict[str, Any] | None:
 _RECENT: dict[str, tuple[str, str, list[dict[str, Any]]]] = {}
 
 _FOLLOW_UP_NOTE = (
-    "These rules of the person's own are ALREADY recorded (they confirmed them earlier): "
-    "{rules}. Never say they were not recorded or that nothing has been applied, never ask "
-    "which documents they cover, and do not call establish_propose to record them again. "
-    'If your reply mentions them, use these words exactly: "{say}"'
+    "This person confirmed standing rules within the last hour; they are recorded and "
+    "apply to drafts from now on (establish_pending lists them as committed). Never ask "
+    "which documents they cover, never ask the person to restate or confirm them, do not "
+    "call establish_propose to record them again, and never say they were not recorded. "
+    "Recording a rule changes no document already filed: changing a filed document is a "
+    "revision request, so never say a filed document already follows the rule."
 )
 
 
 def _subject(row: dict[str, Any]) -> dict[str, Any]:
     subject = row.get("subject")
     return subject if isinstance(subject, dict) else {}
-
-
-def forget(session_id: str) -> None:
-    """A new turn: nothing read for the last one carries into this one."""
-    _RECENT.pop(session_id, None)
 
 
 def recent(session_id: str | None, sender: str) -> list[dict[str, Any]]:
@@ -249,17 +246,13 @@ def recent_as_own(session_id: str, sender: str) -> list[dict[str, Any]]:
 def follow_up_note(session_id: str, sender: str) -> str | None:
     """Where a message could answer no read-back, so the broker read-back
     lookup is skipped: a follow-up of a rule confirmed in an earlier turn
-    ("apply this to this file") is still told that rule is recorded
-    (2026-11-23). No job sentence here: that turn may be about another matter,
-    and nothing registers this text. On a turn that answers no read-back: the sender's rules recorded in the
-    last hour, said to the model as recorded, with the words to use."""
-    if rules_by_hand.on():
+    ("apply this to this file") is told such rules are recorded (2026-11-23).
+    The rules are not listed: a later rule can replace an earlier one within
+    the hour, and listing both would read back a contradiction as recorded.
+    No job sentence: the turn may be about another matter."""
+    if rules_by_hand.on() or not recent(session_id, sender):
         return None
-    rows = recent(session_id, sender)
-    if not rows:
-        return None
-    rules = "; ".join(f'"{_fold(r.get("text"))}"' for r in rows)
-    return _FOLLOW_UP_NOTE.format(rules=rules, say=say_for(rows))
+    return _FOLLOW_UP_NOTE
 
 
 __all__ = [
@@ -267,7 +260,6 @@ __all__ = [
     "binding",
     "first",
     "follow_up_note",
-    "forget",
     "note",
     "propose_answer",
     "recent",
