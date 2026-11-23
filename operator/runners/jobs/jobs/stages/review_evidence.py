@@ -30,6 +30,7 @@ from typing import Any
 from ..medchron.audit import claims as CL
 from ..medchron.audit.page_text import PageIndex, exhibit_paths
 from ..medchron.gates import foreign_identity as FI
+from ..proof import review as proof_review
 from .base import StageRun
 from ..text_rules import EXHIBIT_PAGE_MENTION as _EXHIBIT_PAGE, US_DATE as _DATE
 
@@ -199,7 +200,9 @@ def cited_pages(block: str, text: str) -> list[tuple[int, int]]:
 def whose(sr: StageRun, texts: list[str]) -> str:
     """'other' when a cited page labels a patient who is not the client (a
     date of birth or a patient name, read as the identity rule reads them,
-    or another client on the matter named where the client is not);
+    a patient with the client's surname and another given name and nothing
+    labelling the client, ``FI.household``, or another client on the matter
+    named where the client is not);
     'client' when the pages name the client (surname or date of birth) and
     no one else; 'unnamed' otherwise (no text, or no one named)."""
     u = sr.unit
@@ -209,7 +212,7 @@ def whose(sr: StageRun, texts: list[str]) -> str:
     sur = {u.surname} if u.surname else set()
     dobs = {u.dob} if u.dob else set()
     first = set(str(u.client_name).split()[:1])
-    if FI.findings(text, sur, dobs, first):
+    if FI.findings(text, sur, dobs, first) or FI.household(text, u.surname or "", str(u.client_name), u.dob or ""):
         return "other"
     mine = _count(str(u.client_name), text)
     for o in sr.job.units:
@@ -252,3 +255,88 @@ def leave_out(
     )
     out.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(rec, indent=1), encoding="utf-8")
+
+
+# ---- the entry reader's another_person findings --------------------------------------
+def _reader_block(md: str, anchor: str, exhibit: int, page: int, trusted: bool) -> tuple[int, int, str] | None:
+    """The entry block (first line, end line, text) the entry reader's
+    `anchor` names, when the chronology is still the one it read (`trusted`:
+    its ``doc_sha`` matches), else the one entry citing (exhibit, page);
+    None unless exactly one entry is found and it cites that page."""
+    from ..medchron.update import body as B
+
+    try:
+        ents = B.entries_of(md)[1]
+    except ValueError:
+        return None
+    if trusted:
+        m = re.fullmatch(r"N(\d+)", anchor)
+        i = int(m.group(1)) if m else 0
+        cands = [ents[i - 1]] if 1 <= i <= len(ents) else []
+    else:
+        cands = [e for e in ents if _cites(e, exhibit, page)]
+    if len(cands) != 1 or md.count(cands[0]) != 1 or not _cites(cands[0], exhibit, page):
+        return None
+    start = md[: md.index(cands[0])].count("\n")
+    end = start + cands[0].count("\n") + 1
+    return start, end, "".join(md.splitlines(keepends=True)[start:end])
+
+
+def reader_another_person(sr: StageRun, doc: Path, out: Any, pages: Any, stats: dict[str, int]) -> set[tuple[int, int]]:
+    """The entry reader's ``another_person`` findings, settled on the cited
+    page (2026-11-22: the reader flagged 4 of 9 household entries a
+    3,821-page chronology delivered, and its findings were only recorded).
+    Each is placed on its entry (``_reader_block``) and the page decides as
+    it does for the review's check 1 (``whose``): another
+    person's, the entry is left out by rule and disclosed; the client's or no
+    one's, it is kept (the reader's suspicion alone never drops it). A job
+    with no ``entry_read.json`` (an older job) is untouched. Returns the
+    pages of the entries left out."""
+    from ..medchron.gates import claim_audit
+    from .entry_audit_apply import doc_sha
+
+    rec = claim_audit.entry_read(sr.slug_dir, sr.unit.unit) or {}
+    gone: set[tuple[int, int]] = set()
+    done: set[str] = set()  # anchors left out: a second finding on one entry is not counted again
+    trusted = rec.get("doc_sha") == doc_sha(doc.read_text(encoding="utf-8"))
+    for row in rec.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        anchor = str(row.get("key") or "").split("-")[0]
+        for item in row.get("recorded") or []:
+            if not isinstance(item, dict) or item.get("class") != "another_person" or anchor in done:
+                continue
+            ex, pg = item.get("exhibit"), item.get("page")
+            if not (type(ex) is int and type(pg) is int):
+                stats["identity_reader_unplaced"] += 1
+                continue
+            md = doc.read_text(encoding="utf-8")
+            block = _reader_block(md, anchor, ex, pg, trusted and not gone)
+            if block is None:
+                stats["identity_reader_unplaced"] += 1
+                continue
+            if whose(sr, [pages.text(ex, pg)]) != "other":
+                stats["identity_reader_kept"] += 1
+                continue
+            cited = [(ex, pg)]
+            leave_out(sr, doc, block, cited, LEFT_OUT_REASON)
+            gone |= {(x, p) for x, ps in _block_cites(block[2]) for p in ps} | {(ex, pg)}
+            done.add(anchor)
+            out.changed = True
+            out.left_out += 1
+            stats["identity_left_out"] += 1
+            date_line = block[2].split("\n", 1)[0].strip()
+            out.findings.append(
+                proof_review.code(
+                    proof_review.NOTE,
+                    "1 another person's records",
+                    f"left out before delivery by rule: the entry dated {date_line} {LEFT_OUT_REASON}",
+                    f"Exhibit {ex} p. {pg}",
+                )
+            )
+            sr.log(f"review: the {date_line} entry left out by rule (the entry reader's another_person finding)")
+    return gone
+
+
+def _block_cites(block: str) -> list[tuple[int, list[int]]]:
+    return [(int(c.group(1)), CL.parse_pages(c.group(2)) or [1]) for c in CL.CITE.finditer(block)]

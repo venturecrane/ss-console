@@ -229,14 +229,29 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
       naming no one, makes it a NOTE and keeps the entry (a record the map
       read is never dropped on the review's suspicion alone); only a page
       naming another person has the entry left out by rule and disclosed
-      (never naming that person)."""
+      (never naming that person).
+
+    First (2026-11-22) the entry reader's own ``another_person`` findings
+    are settled the same way (``review_evidence.reader_another_person``); a
+    model check 1 naming only pages of an entry that settle left out is a
+    NOTE, so one entry is left out once."""
     from . import review_evidence as EV
 
-    md = before = doc.read_text(encoding="utf-8")
+    before = doc.read_text(encoding="utf-8")
+    gone = EV.reader_another_person(sr, doc, out, pages, stats)
+    md = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
         if f.grade != review.MUST:
             continue
         n = check_no(f)
+        named = EV._named_pages(_text(f))
+        if n == 1 and f.by == "model" and named and set(named) <= gone:
+            if not any(EV._cites(b[2], ex, pg) for b in EV.entry_blocks(md) for ex, pg in named):
+                # The entry reader's finding on the same page already left it out.
+                out.findings[k] = replace(
+                    f, grade=review.NOTE, finding=f"left out before delivery by rule: {f.finding}"
+                )
+                continue
         if n == 3 and (f.by == "model" or f.cite == "the chronology"):
             ph = _phrases(f)
             if ph and all(EV.verbatim_on_record(md, p, pages) for p in ph):
@@ -319,6 +334,8 @@ def settle(
             "identity_client",
             "identity_unnamed",
             "identity_left_out",
+            "identity_reader_kept",
+            "identity_reader_unplaced",
             "summary_deleted",
             "system_scrubbed",
             "differ_disclosed",
