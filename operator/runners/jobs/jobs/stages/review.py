@@ -90,12 +90,13 @@ INPUT_SHA = "review-input.sha"
 #: under a reason promising "a rerun reviews again". The first is now the
 #: infrastructure exit the daemon retries (compose.INFRA_EXIT); a lossy split,
 #: a truncation that cannot split, and a failed re-render are defects.
-EXIT_INCOMPLETE, EXIT_HELD, EXIT_RERENDER, EXIT_INFRA = 1, 2, 3, 75
+EXIT_INCOMPLETE, EXIT_HELD, EXIT_RERENDER, EXIT_INFRA, EXIT_LOOK = 1, 2, 3, 75, 4
 EXITS = {
     EXIT_INCOMPLETE: ("failed", "review: the pre-delivery review could not read the whole package (a defect)"),
     EXIT_HELD: ("held", "review_held: the pre-delivery review found a must-fix; nothing was filed"),
     EXIT_RERENDER: ("failed", "review: the settled chronology did not re-render (a defect); nothing was filed"),
     EXIT_INFRA: ("failed", "review incomplete (infrastructure): the model returned no verdict; a later rerun reviews"),
+    EXIT_LOOK: ("failed", "review: the page check could not read a cited page; nothing was filed"),
 }
 REDO_SEEN = "review-redo.seen"
 NOTES_TEMPLATE = "{CLIENT} - Chronology Review Notes {MM-DD-YY}.docx"
@@ -636,8 +637,8 @@ def run(
                 today=today or date.today(),
             )
         except whose_page.LookFailed as exc:
-            sr.log(f"review: {exc}; nothing was edited or filed; a later rerun settles again")
-            return EXIT_INFRA
+            sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun looks again" if exc.transient else ""))
+            return EXIT_INFRA if exc.transient else EXIT_LOOK
         if again is None:
             return EXIT_RERENDER
         if again[1] is not rows:
@@ -673,8 +674,8 @@ def run(
             sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun reviews again" if exc.retry else ""))
             return EXIT_INFRA if exc.retry else EXIT_INCOMPLETE
         except whose_page.LookFailed as exc:
-            sr.log(f"review: {exc}; nothing was edited or filed; a later rerun looks again")
-            return EXIT_INFRA
+            sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun looks again" if exc.transient else ""))
+            return EXIT_INFRA if exc.transient else EXIT_LOOK
         if settled is None:
             return EXIT_RERENDER
         rows = settled

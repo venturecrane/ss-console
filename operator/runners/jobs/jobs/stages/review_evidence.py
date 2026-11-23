@@ -383,14 +383,17 @@ def settle_identity(
         stats["identity_prior_left_out"] += len(prior)
         sr.log(f"review: {len(prior)} prior-history paragraph(s) left out by rule")
     noted: set[str] = set()
+    told: set[int] = set()  # the prior-history paragraphs a check 1 already discloses
     for k in check1:
         f, ps = out.findings[k], about[k]
         mine = [t for t, _hp in gone if _all_cites(t) & set(ps)]
+        para = [i for i, hp in enumerate(prior) if set(hp) & set(ps)]
         if mine:
             noted.update(mine)
             text = left_out_note(_date(mine[0]))
-        elif any(p in other for p in ps):
-            text = prior_note(sorted(p for p in ps if p in other))
+        elif para:
+            told.update(para)
+            text = prior_note(prior[para[0]])
         elif any(seen.get(p) not in (None, whose_page.NOT_SHOWN) for p in ps):
             text = KEPT_NOTE
         elif ps:
@@ -401,5 +404,6 @@ def settle_identity(
     for t, hp in gone:
         if t not in noted:
             out.findings.append(proof_review.code(proof_review.NOTE, CHECK1, left_out_note(_date(t)), _cite(hp)))
-    for hp in prior:
-        out.findings.append(proof_review.code(proof_review.NOTE, CHECK1, prior_note(hp), _cite(hp)))
+    for i, hp in enumerate(prior):
+        if i not in told:
+            out.findings.append(proof_review.code(proof_review.NOTE, CHECK1, prior_note(hp), _cite(hp)))

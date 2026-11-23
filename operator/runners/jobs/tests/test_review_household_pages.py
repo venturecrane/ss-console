@@ -385,23 +385,12 @@ class _Down(FakeDoorway):
         return super().call(stage, **kw)
 
 
-@pytest.mark.parametrize(
-    "down",
-    [
-        {"error": CallDeadlineError("the call ran past its deadline")},
-        {"error": ValueError("400: the request was refused as malformed")},
-        {"refuse": True},
-    ],
-    ids=["transient", "400", "refusal"],
-)
-def test_p4_a_failed_reader_look_exits_75_unedited_and_the_resume_pays_no_review(
-    job_dir, firm_config_path, data_root, down
-):
+def test_p4_a_network_failed_look_exits_75_unedited_and_the_resume_pays_no_review(job_dir, firm_config_path, data_root):
     sr, _log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, PAGE)
     _reader(sr)
     before = _md(sr)
-    d1 = _Down(CLEAN, **down)
+    d1 = _Down(CLEAN, error=CallDeadlineError("the call ran past its deadline"))
     assert _settle_review(sr, d1) == review.EXIT_INFRA
     assert _md(sr) == before and _left(sr) == [], "nothing edited"
     assert (sr.slug_dir / "runs" / "alpha" / proof_review.PAID).is_file(), "the paid findings are kept"
@@ -410,6 +399,57 @@ def test_p4_a_failed_reader_look_exits_75_unedited_and_the_resume_pays_no_review
     assert _settle_review(sr, d2) == 0
     assert _main(d2.calls) == [] and len(d2.calls) == 1, "the resume makes only the missing look"
     assert len(_main(d1.calls + d2.calls)) == 1 and "Continue therapy." not in _md(sr)
+
+
+@pytest.mark.parametrize(
+    ("down", "why"),
+    [({"error": ValueError("400: the request was malformed")}, "rejected"), ({"refuse": True}, "refused")],
+    ids=["400", "refusal"],
+)
+def test_f2_a_look_refused_or_rejected_ends_the_review_failed_once_not_retried(
+    job_dir, firm_config_path, data_root, down, why
+):
+    """The same request would fail the same way: one attempt, the page
+    check's own exit and reason, never the retry exit the daemon requeues."""
+    from jobs import requeue
+
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    _pages(sr, PAGE)
+    _reader(sr)
+    before = _md(sr)
+    d = _Down(CLEAN, **down)
+    code = _settle_review(sr, d)
+    assert code == review.EXIT_LOOK != requeue.INFRA_EXIT
+    outcome, reason = review.EXITS[code]
+    assert outcome == "failed" and not requeue.MODEL_API.search(reason)
+    line = f"review: the page check could not read Exhibit 1 p. 3 ({why}); nothing was filed"
+    assert log[-1] == line and not requeue.MODEL_API.search(line)
+    assert len(_main(d.calls)) == 1 and _md(sr) == before and _left(sr) == []
+
+
+#: A check 1 naming p. 4, which no entry cites; its 03/30 entry cites p. 3.
+CHECK1_P4 = (
+    "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is another patient's "
+    "| entry 03/30/2026 Example Clinic, Exhibit 1 p. 4 |"
+)
+
+
+def test_f1_a_page_judged_other_that_nothing_cites_removes_nothing_and_says_kept(job_dir, firm_config_path, data_root):
+    from jobs.stages import manifest
+    from jobs_testkit import make_pdf
+
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    out = sr.slug_dir / "out" / "alpha"
+    pdf = make_pdf(["Patient: Alpha Example p1", "Patient: Alpha Example p2", "Patient: Alpha Example p3", PAGE])
+    (out / "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf").write_bytes(pdf)
+    assert manifest.run(sr) == 0
+    d = FakeDoorway(_verdict(CHECK1_P4), _look("other"), _look("client"))  # p. 4, then the entry's p. 3
+    assert _settle_review(sr, d) == 0, log
+    md, notes = _md(sr), _notes(sr)
+    assert "chronic pain before the incident" in md and "Continue therapy." in md and _left(sr) == []
+    assert "prior-history paragraph" not in notes and review_evidence.KEPT_NOTE in notes
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert [f["finding"] for f in rec["findings"]] == [review_evidence.KEPT_NOTE]
 
 
 def test_n1_a_failed_check1_look_after_the_review_exits_75_and_never_notes_it_checked(

@@ -55,9 +55,16 @@ Ask = Callable[[int, int, int, list[dict[str, Any]]], str]
 
 
 class LookFailed(RuntimeError):
-    """A look that did not come back (2026-11-23): the review exits through
-    its retry exit with the chronology unedited, and a resume settles again
-    from the saved review findings, looking only at what is still missing."""
+    """A look that did not come back (2026-11-23), with the chronology
+    unedited. `transient` (the network, past the doorway's retries): the
+    review's retry exit, and a resume settles again from the saved review
+    findings, looking only at what is still missing. Otherwise (a refusal, a
+    400): the same request would fail the same way, so the review ends
+    failed and is never requeued. The message names the page, nothing else."""
+
+    def __init__(self, exhibit: int, page: int, why: str, *, transient: bool) -> None:
+        super().__init__(f"the page check could not read Exhibit {exhibit} p. {page} ({why})")
+        self.transient = transient
 
 
 def model(cfg: Any) -> str:
@@ -116,7 +123,7 @@ class Looker:
             custom_id=f"whose-page-ex{exhibit}-p{page}-{attempt}",
         )
         if str(getattr(r, "stop_reason", "") or "") == "refusal":
-            raise LookFailed(f"the look at Exhibit {exhibit} p. {page} was refused")
+            raise LookFailed(exhibit, page, "refused", transient=False)
         return str(r.text or "")
 
     def subject(self, exhibit: int, page: int) -> str:
@@ -125,6 +132,7 @@ class Looker:
         A page with no picture is ``NOT_SHOWN`` and never sent. A look that
         fails (the doorway gave up past its retries, a 400, a refusal) raises
         ``LookFailed`` and saves nothing; a cost or stop hold raises as itself."""
+        from ..deadline import is_transient
         from ..limits import LimitHold
 
         img = self.images(exhibit, page)
@@ -145,8 +153,9 @@ class Looker:
                     break
         except (LimitHold, LookFailed):
             raise
-        except Exception as exc:  # every failed look is the review's retry exit, never a kept entry
-            raise LookFailed(f"the look at Exhibit {exhibit} p. {page} failed ({type(exc).__name__})") from exc
+        except Exception as exc:  # every failed look ends the review, never a kept entry
+            gone = is_transient(exc)
+            raise LookFailed(exhibit, page, "network" if gone else "rejected", transient=gone) from exc
         subject = got or UNREADABLE
         self.cache[key] = {"subject": subject, "exhibit": exhibit, "page": page}
         self.path.parent.mkdir(parents=True, exist_ok=True)
