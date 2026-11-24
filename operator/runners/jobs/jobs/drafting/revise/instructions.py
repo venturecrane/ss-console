@@ -250,7 +250,11 @@ def _spans(quote: str, text: str) -> list[tuple[int, int]]:
     out = []
     for i in range(len(words) - len(want) + 1):
         if want and [w[2] for w in words[i : i + len(want)]] == want:
-            out.append((words[i][0], words[i + len(want) - 1][1]))
+            start = words[i][0]
+            # "#22" is one mention starting at the "#"; a quote's words start at the digits.
+            while start and text[start - 1] == "#":
+                start -= 1
+            out.append((start, words[i + len(want) - 1][1]))
     return out
 
 

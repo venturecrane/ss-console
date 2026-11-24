@@ -152,4 +152,23 @@ lanes:
       interrogatory sets stay SMD's (served.FORM_SETS_BY_OPERATOR False).
       Gates probed on the seat, 0 jobs waiting (vfy_01M7XWCXSP3RSHZZ1E3VSS1XR6).
       Measured $2-$11 a job. Opened on the Captain's go, 2026-11-20 MST.
+  document-drafter.revise_discovery_response:
+    proven_at: '2026-11-24'
+    evidence: >-
+      $0 replay in the client ops workspace on the seat's code (722a67863) of
+      the 7 real revision requests of 11-23 against SMD's filed finals: no
+      response changed wrongly (extra 0), no crash, every hold names its
+      reason; index lines 22 made, 22 correct. The one defect found (an email
+      opening "#22:" refused) is fixed by fix/revise-hash-number-span
+      (vfy_01M87142HGPTD39444JMZX4MN2). Opened on the Captain's go, 2026-11-23
+      MST.
+  document-drafter.amended_discovery_response:
+    proven_at: '2026-11-24'
+    evidence: >-
+      $0 replay in the client ops workspace of the one real meet-and-confer
+      case: the three letters found by code, the challenged numbers equal the
+      answer key for all three sets with nothing extra, one memo entry per
+      challenged item; the first-draft rule stage changed no response away
+      from the key (vfy_01M87142HGPTD39444JMZX4MN2). Opened on the Captain's
+      go, 2026-11-23 MST.
 revoked: []
