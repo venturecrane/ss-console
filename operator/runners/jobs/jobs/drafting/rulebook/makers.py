@@ -87,13 +87,22 @@ def add(blocks: list[str], own: tuple[Part, ...], sentence: str, book: Book) -> 
     return out, ""
 
 
+#: A placeholder left for the attorney in a filed answer: "[ATTORNEY TO CONFIRM]" or "{{ATTORNEY: ...}}".
+_ATTORNEY_MARK = re.compile(r"(?:\[|\{\{)\s*ATTORNEY\b")
+
+
 def put(blocks: list[str], own: tuple[Part, ...], sentence: str, sentences: tuple[str, ...]) -> tuple[list[str], str]:
     if parts_mod.holds(own, sentence):
         return blocks, ALREADY
     if not own:
         return blocks, NO_PARAGRAPH
     out = list(blocks)
-    old = [h for s in sentences for h in parts_mod.holds(own, s)] or [p for p in own if p.role == "disposition"]
+    old = (
+        [h for s in sentences for h in parts_mod.holds(own, s)]
+        or [p for p in own if p.role == "disposition"]
+        # The answer is still a placeholder for the attorney: the firm's phrase is the answer.
+        or [p for p in own if p.role == "other" and _ATTORNEY_MARK.search(p.text)]
+    )
     if not old:
         last = own[-1]
         end = last.at + len(last.text)

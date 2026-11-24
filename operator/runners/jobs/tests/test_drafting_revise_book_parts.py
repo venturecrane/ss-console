@@ -193,10 +193,19 @@ def test_the_index_follows_what_the_revision_changed() -> None:
     ch = index_fix.recompute(doc, index_fix.produced(doc), index_fix.produced(after))
     lines = [ch.edits.get(i, doc.blocks[i]) for i in doc.index.blocks]
     assert lines[1] == "1. Records of Example Clinic (Request No. 2)"
+    # Exhibit B holds two files: which answer Request 1 is the attorney's call, so its lines stay and are named.
+    # FALSIFIER: tag every line and a 96-file exhibit gets 96 numbers where the firm's final put one (2026-11-24).
     assert lines[3:] == [
-        "1. Bills of Example Clinic (Request Nos. 1, 2)",
-        "2. Bills of Example Lab (Request Nos. 1, 2)",
+        "1. Bills of Example Clinic (Request No. 2)",
+        "2. Bills of Example Lab (Request No. 2)",
     ]
+    assert ("1", "index_which_files", "Exhibit B") in ch.left
+    one = rs.read(INDEX_MD.replace("2. Bills of Example Lab (Request No. 2)\n", ""))
+    after = rs.read(blocks.build(one, {"1": ["Responsive documents can be found at Exhibit B."]}))
+    ch = index_fix.recompute(one, index_fix.produced(one), index_fix.produced(after))
+    assert [ch.edits.get(i, one.blocks[i]) for i in one.index.blocks][
+        3
+    ] == "1. Bills of Example Clinic (Request Nos. 1, 2)"
 
 
 def test_a_line_left_with_no_request_and_an_unlisted_letter_are_named_not_written() -> None:

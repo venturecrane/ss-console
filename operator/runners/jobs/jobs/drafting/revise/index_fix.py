@@ -6,8 +6,11 @@ which exhibits a production response points to, the lines follow:
 
 * a request number comes off every line of an exhibit its response no longer
   produces;
-* a request number goes onto every line of an exhibit its response now
-  produces, when it is on none of that exhibit's lines yet.
+* a request number goes onto the line of an exhibit its response now
+  produces, when that exhibit has one line and the number is not on it yet.
+  An exhibit of several files is left as filed and named: which of its files
+  answer the request is the attorney's call (2026-11-24: tagging every line
+  put a number on 96 lines where the firm's final put it on one).
 
 Only what the revision changed moves a number: a line the filed responses
 already disagreed with stays as filed (the revision did not make it so). A line
@@ -101,6 +104,10 @@ def recompute(index_doc: rs.Document, before: dict[str, set[str]], after: dict[s
         listed = [(i, line, line_numbers(line)) for i, line in lines]
         on_any = {n for _i, _l, nums in listed for n in nums or []}
         add = sorted(new - on_any, key=_key)
+        numbered = [x for x in listed if x[2] is not None]
+        if add and len(numbered) > 1:
+            left += [(n, "index_which_files", f"Exhibit {ex.letter}") for n in add]
+            add = []
         for i, _line, nums in listed:
             if nums is None:
                 continue

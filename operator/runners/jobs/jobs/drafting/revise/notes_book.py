@@ -20,6 +20,7 @@ from ..outcome import DraftingFailed
 REASONS: dict[str, str] = {
     "ground_not_named": "{item}: the proposed objection ({what}) is left marked for you; no firm rule and nothing "
     "in your request asks for it",
+    "index_which_files": "{item}: it now produces {what}; add its number to the index lines of the files that answer it",
     "index_line_kept": "{item}: the index line ({what}) is kept as filed; no request would still produce it",
     "already": "{item}: already reads as the firm's wording; left as filed",
     "conflict": "{item}: left as filed; the firm's wording would contradict it ({what})",
