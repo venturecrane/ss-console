@@ -303,15 +303,28 @@ def test_to_the_defendants_with_no_court_paper_and_no_other_party_drafts_as_main
 # ---- 3b. a request naming no kind of set ------------------------------------------------------
 
 
-def test_no_set_named_and_no_firm_default_drafts_the_one_set_as_main_did(tmp_path, pricing, monkeypatch):
+def test_no_set_named_and_no_firm_default_drafts_the_standard_package(tmp_path, pricing, monkeypatch):
     """FALSIFIER (final review, 11-19): with no default sets authored (the firm
-    seat today), a request naming no set stopped request_incomplete; main drafts it."""
+    seat today), a request naming no set stopped request_incomplete. Since
+    2026-11-23 "discovery" naming no kind is the standard package, to the party
+    it names (``set_package.py``), never a question to the attorney."""
     seen: dict = {}
     _stop_at_finish(monkeypatch, seen)
     client, seat = _two_defendants()
     r = _runner(
         tmp_path, pricing, "Please draft discovery to Delta Example Corporation.", "discovery_set", client, seat
     )
+    v = r.run()
+    assert "request_incomplete" not in (v.reason or ""), v.reason
+    assert [(p["label"], p["party"]) for p in seen["units"]] == [(k, DELTA) for k in (SROG, RFA, RFP)]
+
+
+def test_a_request_naming_no_kind_and_not_discovery_drafts_the_one_set_as_main_did(tmp_path, pricing, monkeypatch):
+    seen: dict = {}
+    _stop_at_finish(monkeypatch, seen)
+    client, seat = _two_defendants()
+    request = "Please draft a set to Delta Example Corporation about the brake records."
+    r = _runner(tmp_path, pricing, request, "discovery_set", client, seat)
     v = r.run()
     assert "request_incomplete" not in (v.reason or ""), v.reason
     assert seen["units"] == [{"key": "", "variant": None, "label": ""}]

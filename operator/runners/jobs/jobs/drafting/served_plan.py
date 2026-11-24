@@ -3,7 +3,9 @@
 Split from ``served.py`` at the module-size ceiling. A propounded set plans
 exactly where it always did, after the transcription and the caption stage
 (``finish.units``): the sets the request names, the firm's default sets when
-it authored them and the request names none or asks for "the usual", one unit
+it authored them and the request names none or asks for "the usual", the
+standard package when it asks for "sets of discovery" naming no kind
+(``set_package.py``), one unit
 per (party, set) when it serves several (``parties.py``). A response job plans
 from SMD's served sets (``served.py``), and only that check runs before
 anything is paid (``_plan_before_spend``): it reads the hand file alone, never
@@ -15,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import amended, challenge, parties, served_find, sets
+from . import amended, challenge, parties, served_find, set_package, sets
 from .forms import lane_hook, read_stage
 from .outcome import DraftingFailed
 from .served import PLAN_STOPS, PLANNED_CLASSES, clients_of, frozen, has_plan, outcomes, plan_units, review_map
@@ -130,6 +132,12 @@ class DiscoveryPlan:
         defaults = sets.default_variants(self.firm.data) or []
         if defaults and (sets.wants_defaults(req) or not (found or sets.names_any_set(req))):
             found = [*found, *(u for u in defaults if u.key not in {f.key for f in found})]
+            keyed = True
+        elif not found and set_package.wants_package(req):
+            # "Sets of discovery" with no kind named: the earlier request's kinds
+            # ("also"), else the standard package; never a question (set_package.py).
+            found, basis = set_package.plan(req, self.job)
+            self._put(set_package.BASIS_KEY, basis)
             keyed = True
         return parties.plan_units(found, self._served_on() if found else [], keyed=keyed)
 

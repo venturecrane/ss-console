@@ -32,7 +32,7 @@ STEPS: dict[str, str] = {
 
 #: Reason code -> triage class.
 TRIAGE: dict[str, str] = {
-    "request_incomplete": "firm_told",
+    "request_incomplete": "smd_check",
     "gate_refused": "smd_check",
     "format_check": "smd_resume",
     "record_unreadable": "smd_resume",

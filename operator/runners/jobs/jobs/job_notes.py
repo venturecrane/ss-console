@@ -182,7 +182,7 @@ DRAFTING_NEXT = {
 def _drafting_next(d: Any, job_id: str, row: dict[str, Any]) -> str:
     """What SMD does next for a drafting stop before spend, about 80
     characters with the rule count in the job dir's smd-needs.json; "" for
-    every other stop (a held ``request_incomplete`` is the firm's and keeps its page)."""
+    every other stop (a held ``request_incomplete`` pages SMD with its reason; the firm is told nothing)."""
     code = str(row.get("reason") or "").split(":", 1)[0].strip()
     if row.get("state") != "failed" or code not in DRAFTING_NEXT:
         return ""
