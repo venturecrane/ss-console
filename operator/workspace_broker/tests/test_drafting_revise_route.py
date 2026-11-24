@@ -190,6 +190,28 @@ def test_a_delivery_of_several_drafts_is_revised_in_every_document(tmp_path) -> 
     assert all(u["prior_job_id"] == prior and u["folder_id"] == "folder-0001" for u in rev["units"])
 
 
+def test_the_threads_attorney_notes_ride_with_the_revision_and_another_threads_never(tmp_path) -> None:
+    """The runner files a new version of the delivery's notes (2026-11-23).
+    FALSIFIER: drop notes_from and the revision's notes start from nothing."""
+    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=FIRST, document_class=RESPONSE))
+    jid = out["job_id"]
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="running", fields={})
+    files = [
+        {"name": "Responses to Form Interrogatories, Set One.docx", "size": 1000, "role": "draft"},
+        {"name": "Attorney Notes.docx", "size": 500, "role": "attorney_notes"},
+    ]
+    fields = {"cents": 300, "folder_id": "folder-0001", "delivery": {"files": files, "cents": 300}}
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="delivered", fields=fields)
+    meta = {"lane": "drafting", "job_id": jid, "files": [{"file_id": "d-0", "size": 1000, "sha256": "0" * 64},
+                                                         {"file_id": "n-0", "size": 500, "sha256": "0" * 64}]}  # fmt: skip
+    writer.append({"action_type": "DELIVERY_PROVEN", "actor": "workspace-broker", "actor_role": "broker",
+                   "metadata": json.dumps(meta)})  # fmt: skip
+    reply = _envelope(request_ref=REPLY, document_class=RESPONSE)
+    rev = _queued(queue, call(broker, "drafting_job_submit", envelope=reply)["job_id"])["revise"]
+    assert rev["notes"]["file_id"] == "n-0" and [u["file_id"] for u in rev["units"]] == ["d-0"]
+
+
 def test_a_file_refiled_by_a_later_job_is_one_unit_from_the_newest_proof(tmp_path) -> None:
     """On the seat 7 jobs map to 8 file ids: a later job re-filed into the same
     ids. FALSIFIER: keep the oldest proof (or both) and the stale bytes win, or
