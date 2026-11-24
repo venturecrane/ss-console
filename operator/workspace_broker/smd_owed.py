@@ -181,13 +181,18 @@ def record(
     return bool(row_id)
 
 
-def owe_drafting(db_path: str | None, append: Callable[[dict[str, Any]], Any] | None, raw: Any, code: str) -> bool:
-    """Record a drafting request refused on our side, with its envelope."""
+def owe_drafting(
+    db_path: str | None, append: Callable[[dict[str, Any]], Any] | None, raw: Any, code: str, *, note: str = ""
+) -> bool:
+    """Record a drafting request refused on our side, with its envelope.
+    ``note``: the broker's own sentence for SMD (ids only, never client text)."""
     env = raw if isinstance(raw, dict) else {}
     found = env.get("matter")
     matter: dict[str, Any] = found if isinstance(found, dict) else {}
     klass, number = _text(env.get("document_class")), _text(matter.get("number"))
     detail = f"{klass or 'a document'} for matter {number or '(none named)'} refused on our side: {code}"
+    if note:
+        detail += f" ({note})"
     return record(
         db_path,
         append,

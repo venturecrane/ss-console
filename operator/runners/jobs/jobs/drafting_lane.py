@@ -56,7 +56,7 @@ from . import (
     verdict as verdict_mod,
 )
 from .broker_client import BrokerClient, BrokerError
-from .drafting import firm_rules, layout_into_library, repair_budget
+from .drafting import firm_rules, layout_into_library, progress as progress_mod, repair_budget
 from .drafting.forms import saved as form_saved
 from .firm_inputs import pin_env
 from .matter import store as page_store_mod
@@ -158,9 +158,19 @@ class DraftingLane(Daemon):
     #: library hand-overs once it ended. The lanes built on this one have none.
     DRAFTING_STEPS = True
 
+    #: The progress note last sent per job (``drafting/progress.py``).
+    progress_sent: dict[str, dict[str, Any]] = field(default_factory=dict)
+
     @property
     def queue(self) -> Path:
         return self.queue_dir
+
+    def heartbeat(self, *, running: str | None) -> None:
+        """The beat, and while a drafting child runs, its stage and pull
+        progress noted on its ledger row (``drafting/progress.py``)."""
+        super().heartbeat(running=running)
+        if running and self.DRAFTING_STEPS:
+            progress_mod.report(self, running, self.progress_sent, self.clock)
 
     # -- one job (the host runs it: ``Daemon.run_job``) ---------------------------
     def _write_job(self, job_id: str) -> Path:
@@ -336,6 +346,9 @@ class DraftingLane(Daemon):
             if edit is not None:
                 fields["delivery"]["library_edit"] = edit
         fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
+        if self.DRAFTING_STEPS:
+            # Its stage timings and expected finish outlive the run dir (``drafting/progress.py``).
+            fields.update(progress_mod.final_fields(self.job_dir(job_id)))
         state, fields = proof_watch.settle(self, job_id, outcomes or [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)

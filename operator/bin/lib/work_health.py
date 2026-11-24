@@ -48,6 +48,8 @@ LANE_PREFIXES = dict(job_lanes.AUDIT_PREFIX_LANE)
 #: job and why: decided work, not open work (triage, 2026-11-06).
 _CLOSED_REASONS = frozenset({"superseded", "closed", "cancelled", "canceled", "stopped_by_smd"})
 IN_FLIGHT = {"SUBMITTED": "queued", "QUEUED": "queued", "RUNNING": "running"}
+#: A running job's progress row: not a state, the instant it last moved (``Job.moved``).
+PROGRESS = "PROGRESS"
 ENDED_BAD = {"HELD": "held", "FAILED": "failed"}
 #: A state that is neither in flight nor ended: the records lane's reply waiting
 #: on SMD's review (``RECORDS_JOB_REVIEW``). Not graded as stuck; the lane's own
@@ -288,6 +290,10 @@ class Job:
     #: Not a state, so it never enters ``events``; it is how a delivered job is
     #: known to have needed a hand.
     resumes: list[datetime] = field(default_factory=list)
+    #: When a running job last MOVED (``*_JOB_PROGRESS``: its stage or its
+    #: files-pulled count changed, 2026-11-24). A long pull that keeps moving is
+    #: not stuck; one whose count froze is, from the last move. Not a state.
+    moved: Optional[datetime] = None
 
     @property
     def submitted_at(self) -> datetime:
@@ -327,11 +333,18 @@ def jobs_from_rows(rows: list[dict]) -> list[Job]:
     A resume note (``*_JOB_RESUME_REQUESTED``) is not a state: it goes to
     ``resumes``, never ``events``."""
     jobs: dict[tuple[str, str], Job] = {}
+    moved: dict[tuple[str, str], datetime] = {}
     for ts, row in stamped(rows):
         match = _JOB_TYPE.match(str(row.get("action_type") or ""))
         if not match:
             continue
         state = match.group(2)
+        if state == PROGRESS:
+            md = meta(row)
+            if isinstance(md.get("job_id"), str) and md["job_id"]:
+                key = (LANE_PREFIXES[match.group(1)], md["job_id"])
+                moved[key] = max(ts, moved.get(key, ts))
+            continue
         if (
             state not in IN_FLIGHT
             and state not in ENDED_BAD
@@ -353,6 +366,9 @@ def jobs_from_rows(rows: list[dict]) -> list[Job]:
             job.matter = md["matter_number"][:40]
         if md.get("trigger") == "scheduled" or str(md.get("request_ref") or "").startswith("scheduled:"):
             job.scheduled = True
+    for key, at in moved.items():
+        if key in jobs:
+            jobs[key].moved = at
     # A resume whose job's state rows fell outside the window has no state to judge.
     return [job for job in jobs.values() if job.events]
 
@@ -511,7 +527,7 @@ def job_items(
         if state in IN_FLIGHT:
             phase = IN_FLIGHT[state]
             limit = lane.queue_minutes if phase == "queued" else lane.run_minutes
-            clock = _queue_clock(job, jobs, cfg, now) if phase == "queued" else ts
+            clock = _queue_clock(job, jobs, cfg, now) if phase == "queued" else max(ts, job.moved or ts)
             if clock is None or now - clock < timedelta(minutes=limit):
                 continue
             out.append(
@@ -520,7 +536,8 @@ def job_items(
                     "job_stuck",
                     f"{job.lane}:{job.job_id}:{state}",
                     clock + timedelta(minutes=limit),
-                    f"The {name} has been {phase} for {span(now - ts)}; it should take under {span(timedelta(minutes=limit))}.",
+                    f"The {name} has been {phase} for {span(now - ts)}; it should take under {span(timedelta(minutes=limit))}."
+                    + (f" It last moved {span(now - job.moved)} ago." if job.moved and phase == "running" else ""),
                     "Check the job on the seat: a hung runner looks like work in progress forever.",
                     job=job.job_id,
                 )

@@ -43,6 +43,11 @@ model relayed mechanics, or promised what the job would do. The sentences:
   recorded the addition as work SMD owes, ``drafting_addition``), else
   ``none``; never a word that anything broke.
 
+* an email about documents ALREADY FILED on the matter (2026-11-24,
+  ``drafting_filed.py``): revised, or held for SMD's hand with "Let me look
+  into that. I'll reply in this thread.", and carried to any draft of the same
+  class still running on the matter.
+
 No job id reaches the model from these tools; the id stays in the logs and the
 broker's rows.
 """
@@ -58,6 +63,7 @@ from typing import Any
 from shared import attachment_spool, email_adapter, msgraph_attachments, request_index
 from shared.jobs_client import JobsBrokerClient, JobsBrokerError
 
+from . import drafting_filed
 from .demand import STRING, _matter, _origin, _refuse, _schema
 
 logger = logging.getLogger(__name__)
@@ -252,6 +258,9 @@ def refusal_say(code: str, klass: str, number: str, *, smd_told: bool = False) -
     """A refused submit's say: a firm cause's own sentence; on SMD's side (every
     other code, an unknown one included) the normal acknowledgment when the
     broker recorded the request as owed, else ``none``."""
+    hand = drafting_filed.hand_say(code, smd_told, SAY_NONE)
+    if hand is not None:
+        return hand  # SMD revises the filed documents: the Operator owns the follow-up
     template = FIRM_SAY.get(code)
     if template is None:
         return acknowledgment(klass, number) if smd_told else SAY_NONE
@@ -338,10 +347,14 @@ def _added_result(result: str, resp: dict[str, Any]) -> str:
     return json.dumps(out, ensure_ascii=False)
 
 
-def _add_to_request(origin: Any, job_id: str) -> str:
+def _add_to_request(
+    origin: Any, job_id: str, *, about_filed: bool = False, then: Any = None
+) -> str:
     """The verified email's own words, by code, to the job they are about. The
     words and the thread come from the seat's request index row for this email;
-    the model names at most which job, and the broker checks that."""
+    the model names at most which job, and the broker checks that.
+    ``about_filed``: the email is about documents already filed on the matter
+    (``drafting_filed``). ``then(added, resp)``: what the answer becomes after."""
     try:
         row = request_index.read_request(origin.message_id or "", origin.internet_message_id)
         thread = request_index.read_thread_message_ids(str((row or {}).get("thread_ref") or ""))
@@ -364,11 +377,15 @@ def _add_to_request(origin: Any, job_id: str) -> str:
             requested_by=origin.sender_address,
             thread_refs=thread,
             words=words,
+            **({"about_filed": True} if about_filed else {}),
         )
     except JobsBrokerError:
         logger.exception("drafting_job_add_to_request: the broker did not answer")
         return _added_result("not_confirmed", {})
-    return _added_result(str(resp.get("result") or "not_confirmed"), resp)
+    added = _added_result(str(resp.get("result") or "not_confirmed"), resp)
+    if then is None:
+        return added
+    return json.dumps(then(json.loads(added), resp), ensure_ascii=False)
 
 
 def drafting_job_add_to_request(args: dict[str, Any], session_id: str = "", **_: Any) -> str:
@@ -376,7 +393,15 @@ def drafting_job_add_to_request(args: dict[str, Any], session_id: str = "", **_:
     if origin is None or not origin.sender_address or not origin.internet_message_id:
         return _added_result("no_email_this_turn", {})
     job_id = str(args.get("job_id") or "").strip()
-    return _add_to_request(origin, job_id) if job_id else _added_result("no_such_job", {})
+    if not job_id:
+        return _added_result("no_such_job", {})
+
+    def filed_too(added: dict[str, Any], resp: dict[str, Any]) -> dict[str, Any]:
+        # The thread also holds this class's filed documents: submit the email
+        # too, so they are revised or held for SMD (``drafting_filed``).
+        return drafting_filed.also_submit(added, resp, lambda a: _submit(origin, a, carry=False))
+
+    return _add_to_request(origin, job_id, then=filed_too)
 
 
 def _duplicate(resp: dict[str, Any], klass: str, number: str) -> str:
@@ -408,6 +433,13 @@ def drafting_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) ->
             "a draft is submitted only from the turn of the email that asked for it; "
             "this turn was not opened by one, so nothing was queued"
         )
+    return _submit(origin, args)
+
+
+def _submit(origin: Any, args: dict[str, Any], *, carry: bool = True) -> str:
+    """The submit from a verified origin. ``carry``: an email about filed
+    documents is also carried to a draft of the class still running (False when
+    the caller already carried it there)."""
     # The model's own arguments first: a call it can correct is told how, and
     # says nothing to the firm.
     klass = str(args.get("document_class") or "").strip()
@@ -446,8 +478,10 @@ def drafting_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) ->
     except JobsBrokerError:
         logger.exception("drafting_job_submit: the broker did not answer")
         return _refused_say("broker_unanswered", klass, number)
+    if carry and resp.get("underway_job_id"):
+        drafting_filed.reach_underway(resp, lambda j, **kw: _add_to_request(origin, j, **kw))
     if not resp.get("accepted"):
-        if resp.get("underway") and resp.get("job_id"):
+        if resp.get("underway") and resp.get("job_id") and carry:
             # This email collided with a draft still running: it is about that
             # draft, and the reply must say whether its words got there. The
             # job's id stays here; the model is never handed it.

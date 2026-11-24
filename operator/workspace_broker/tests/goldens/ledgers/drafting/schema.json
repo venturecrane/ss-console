@@ -31,7 +31,7 @@
             [
               "table",
               "drafting_jobs",
-              "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT)"
+              "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT, stage TEXT, progress TEXT, expected_finish TEXT, stage_seconds_json TEXT, request_words TEXT)"
             ]
           ],
           "table_info": [
@@ -53,7 +53,12 @@
             [15, "reply_sent_at", "TEXT", 0, null, 0],
             [16, "attempt", "INTEGER", 1, "1", 0],
             [17, "reply_key", "TEXT", 0, null, 0],
-            [18, "revise_of", "TEXT", 0, null, 0]
+            [18, "revise_of", "TEXT", 0, null, 0],
+            [19, "stage", "TEXT", 0, null, 0],
+            [20, "progress", "TEXT", 0, null, 0],
+            [21, "expected_finish", "TEXT", 0, null, 0],
+            [22, "stage_seconds_json", "TEXT", 0, null, 0],
+            [23, "request_words", "TEXT", 0, null, 0]
           ]
         },
         "drafting_spend": {
@@ -110,7 +115,7 @@
             [
               "table",
               "drafting_jobs",
-              "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT)"
+              "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT, stage TEXT, progress TEXT, expected_finish TEXT, stage_seconds_json TEXT, request_words TEXT)"
             ]
           ],
           "table_info": [
@@ -132,7 +137,12 @@
             [15, "reply_sent_at", "TEXT", 0, null, 0],
             [16, "attempt", "INTEGER", 1, "1", 0],
             [17, "reply_key", "TEXT", 0, null, 0],
-            [18, "revise_of", "TEXT", 0, null, 0]
+            [18, "revise_of", "TEXT", 0, null, 0],
+            [19, "stage", "TEXT", 0, null, 0],
+            [20, "progress", "TEXT", 0, null, 0],
+            [21, "expected_finish", "TEXT", 0, null, 0],
+            [22, "stage_seconds_json", "TEXT", 0, null, 0],
+            [23, "request_words", "TEXT", 0, null, 0]
           ]
         },
         "drafting_spend": {
@@ -189,7 +199,7 @@
             [
               "table",
               "drafting_jobs",
-              "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT)"
+              "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT, stage TEXT, progress TEXT, expected_finish TEXT, stage_seconds_json TEXT, request_words TEXT)"
             ]
           ],
           "table_info": [
@@ -211,7 +221,12 @@
             [15, "reply_sent_at", "TEXT", 0, null, 0],
             [16, "attempt", "INTEGER", 1, "1", 0],
             [17, "reply_key", "TEXT", 0, null, 0],
-            [18, "revise_of", "TEXT", 0, null, 0]
+            [18, "revise_of", "TEXT", 0, null, 0],
+            [19, "stage", "TEXT", 0, null, 0],
+            [20, "progress", "TEXT", 0, null, 0],
+            [21, "expected_finish", "TEXT", 0, null, 0],
+            [22, "stage_seconds_json", "TEXT", 0, null, 0],
+            [23, "request_words", "TEXT", 0, null, 0]
           ]
         },
         "drafting_spend": {
@@ -268,7 +283,7 @@
         [
           "table",
           "drafting_jobs",
-          "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT)"
+          "CREATE TABLE drafting_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, document_class TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, revise_of TEXT, stage TEXT, progress TEXT, expected_finish TEXT, stage_seconds_json TEXT, request_words TEXT)"
         ]
       ],
       "table_info": [
@@ -290,7 +305,12 @@
         [15, "reply_sent_at", "TEXT", 0, null, 0],
         [16, "attempt", "INTEGER", 1, "1", 0],
         [17, "reply_key", "TEXT", 0, null, 0],
-        [18, "revise_of", "TEXT", 0, null, 0]
+        [18, "revise_of", "TEXT", 0, null, 0],
+        [19, "stage", "TEXT", 0, null, 0],
+        [20, "progress", "TEXT", 0, null, 0],
+        [21, "expected_finish", "TEXT", 0, null, 0],
+        [22, "stage_seconds_json", "TEXT", 0, null, 0],
+        [23, "request_words", "TEXT", 0, null, 0]
       ]
     },
     "drafting_spend": {
