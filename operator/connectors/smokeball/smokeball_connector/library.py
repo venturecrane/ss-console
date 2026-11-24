@@ -29,7 +29,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
-from . import seat_config
+from . import draft_budget, seat_config
 
 DEFAULT_CUSTOMER_YAML = "/var/lib/smd-config/customer.yaml"
 CUSTOMER_YAML_ENV = "SMD_CUSTOMER_YAML_PATH"
@@ -337,6 +337,8 @@ def find_folder_id(client: Any, matter_id: str, folder_name: str) -> str | None:
     2026-10-01: invoices go in Accounting/Invoices)."""
     try:
         resp = client.get(f"/matters/{matter_id}/documents/folders", Limit=500, Offset=0)
+    except draft_budget.OutOfTime:
+        raise  # a render's stopped stage, never "no such folder"
     except Exception:  # noqa: BLE001 - any transport or auth failure listing folders reads as "no such folder"; the caller falls back to the root
         return None
     parts = [_norm(p) for p in str(folder_name or "").split("/") if p.strip()]
@@ -394,6 +396,8 @@ def list_matter_files(client: Any, matter_id: str) -> list[dict[str, Any]]:
     while True:
         try:
             resp = client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=offset)
+        except draft_budget.OutOfTime:
+            raise  # a render's stopped stage, never a failed read
         except Exception as exc:  # any transport error is a failed read, surfaced as ListingFailed
             raise ListingFailed(matter_id, offset, exc, files) from exc
         items = _listing(resp)

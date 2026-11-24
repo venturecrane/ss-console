@@ -219,25 +219,84 @@ def test_a_listed_folder_count_that_never_returns_is_a_refusal(monkeypatch, shor
     assert out["reason"] == "out_of_time"
 
 
-def test_a_rate_limit_is_not_slept_out_past_the_deadline(monkeypatch) -> None:
+class _Limited:
+    """Smokeball answering every request with a 30 s rate limit."""
+
+    timeout = httpx.Timeout(30.0)
+
+    def request(self, *_a: Any, **_k: Any) -> Any:
+        return httpx.Response(429, headers={"retry-after": "30"}, text="slow down")
+
+
+def _limited_client(monkeypatch: pytest.MonkeyPatch, sleeps: list[float]) -> Any:
     from smokeball_connector import client as client_mod
-    from smokeball_connector.client import SmokeballApiError
 
-    class Limited:
-        timeout = httpx.Timeout(30.0)
-
-        def request(self, *_a: Any, **_k: Any) -> Any:
-            return httpx.Response(429, headers={"retry-after": "30"}, text="slow down")
-
-    sleeps: list[float] = []
     monkeypatch.setattr(client_mod.time, "sleep", sleeps.append)
     client = _client([])
-    client._http = Limited()
+    client._http = _Limited()
     client._token, client._token_deadline = "tok", float("inf")
+    return client
 
-    with pytest.raises(SmokeballApiError):
+
+def test_a_rate_limit_is_not_slept_out_past_the_deadline(monkeypatch) -> None:
+    """A 429 that would outlast the stage is the stage stopping (OutOfTime),
+    never an API error a caller would read as an unreadable document."""
+    sleeps: list[float] = []
+    client = _limited_client(monkeypatch, sleeps)
+
+    with pytest.raises(draft_budget.OutOfTime):
         draft_budget.Clock().run("reading", 5.0, client.get, "/matters/x/documents/files")
     assert sleeps == []
+
+
+def test_a_rate_limit_out_of_attempts_is_still_an_api_error(monkeypatch) -> None:
+    """Outside a render there is no deadline: the attempts run out as before."""
+    from smokeball_connector.client import SmokeballApiError
+
+    sleeps: list[float] = []
+    client = _limited_client(monkeypatch, sleeps)
+
+    with pytest.raises(SmokeballApiError):
+        client.get("/matters/x/documents/files")
+    assert len(sleeps) == 5
+
+
+def test_a_rate_limit_on_a_document_is_out_of_time_never_an_unreadable_record(monkeypatch) -> None:
+    """Review of #4223 (the reviewer's probe): the budget-cut 429 used to land
+    the file in ``unextractable`` and refuse the draft as source_unextractable."""
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", "/nonexistent/customer.yaml")
+    limited = _limited_client(monkeypatch, [])
+
+    class Matter:
+        def get(self, _path: str, **_params: Any) -> Any:
+            return {"value": [{"id": "f1", "name": "Intake.pdf", "fileExtension": ".pdf", "versionId": "v1"}]}
+
+        def download_file(self, matter_id: str, file_id: str) -> Any:
+            return limited.get(f"/matters/{matter_id}/documents/files/{file_id}")
+
+    with pytest.raises(draft_budget.OutOfTime) as stopped:
+        draft_budget.Clock().run(draft_budget.READING, 10.0, draft_sources.collect, Matter(), "m-212")
+    assert stopped.value.stage == draft_budget.READING
+
+
+def test_a_rate_limited_render_is_out_of_time(monkeypatch, short_budget) -> None:
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", "/nonexistent/customer.yaml")
+    limited = _limited_client(monkeypatch, [])
+    monkeypatch.setattr(server, "_get_client", lambda: limited)
+
+    out = server.render_docx_draft("m-213", "Response Draft", DRAFT)
+
+    assert (out["reason"], out["outOfTime"]) == ("out_of_time", "reading the matter's documents")
+    assert out["fileId"] is None
+
+
+def test_a_rate_limited_list_count_is_out_of_time_not_an_unread_folder(monkeypatch, short_budget) -> None:
+    limited = _limited_client(monkeypatch, [])
+    monkeypatch.setattr(server, "_get_client", lambda: limited)
+
+    out = server.render_docx_draft("m-214", "Production List", "# LIST\n\n1. Intake\n", None, None, None, "fold-4")
+
+    assert (out["reason"], out["outOfTime"]) == ("out_of_time", "counting the listed folder")
 
 
 def test_the_readback_stops_waiting_at_the_deadline(monkeypatch) -> None:
