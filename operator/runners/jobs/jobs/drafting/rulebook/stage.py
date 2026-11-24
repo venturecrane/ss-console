@@ -70,7 +70,10 @@ NOTES: dict[str, str] = {
         "Response {item}: an objection was written for this request, {by}; the firm's standard wording has no "
         "sentence for it."
     ),
-    "phrase_missing": "Response " + FIRM_MESSAGES["phrase_missing"],
+    "phrase_missing": (
+        "Response {item}: left as drafted; the firm's standard wording has no sentence for this objection, and none "
+        "written for this request passed the firm's checks."
+    ),
     makers.EXHIBIT: "Response " + FIRM_MESSAGES["exhibit_unresolved"],
     makers.NO_TRANSITION: (
         "Response {item}: not changed ({by}); the response has no transition and the firm's standard wording has none."
@@ -117,7 +120,8 @@ def _instructions(doc: StageDoc, dtype: str, book: Book) -> list[Clause]:
             continue
         keys = tuple(k for k in ins.keys if k in book.entries)
         numbers = tuple(str(x) for x in ins.numbers)
-        out.append(Clause(ins.source, n, ins.quote, True, (dtype,), act, keys, (), "numbers", numbers))
+        grounds = ins.grounds if act == "add_objection" else ()
+        out.append(Clause(ins.source, n, ins.quote, True, (dtype,), act, keys, grounds, "numbers", numbers))
     return out
 
 

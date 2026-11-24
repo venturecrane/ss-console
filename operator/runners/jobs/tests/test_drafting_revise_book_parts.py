@@ -193,10 +193,19 @@ def test_the_index_follows_what_the_revision_changed() -> None:
     ch = index_fix.recompute(doc, index_fix.produced(doc), index_fix.produced(after))
     lines = [ch.edits.get(i, doc.blocks[i]) for i in doc.index.blocks]
     assert lines[1] == "1. Records of Example Clinic (Request No. 2)"
+    # Exhibit B holds two files: which answer Request 1 is the attorney's call, so its lines stay and are named.
+    # FALSIFIER: tag every line and a 96-file exhibit gets 96 numbers where the firm's final put one (2026-11-24).
     assert lines[3:] == [
-        "1. Bills of Example Clinic (Request Nos. 1, 2)",
-        "2. Bills of Example Lab (Request Nos. 1, 2)",
+        "1. Bills of Example Clinic (Request No. 2)",
+        "2. Bills of Example Lab (Request No. 2)",
     ]
+    assert ("1", "index_which_files", "Exhibit B") in ch.left
+    one = rs.read(INDEX_MD.replace("2. Bills of Example Lab (Request No. 2)\n", ""))
+    after = rs.read(blocks.build(one, {"1": ["Responsive documents can be found at Exhibit B."]}))
+    ch = index_fix.recompute(one, index_fix.produced(one), index_fix.produced(after))
+    assert [ch.edits.get(i, one.blocks[i]) for i in one.index.blocks][
+        3
+    ] == "1. Bills of Example Clinic (Request Nos. 1, 2)"
 
 
 def test_a_line_left_with_no_request_and_an_unlisted_letter_are_named_not_written() -> None:
@@ -326,3 +335,27 @@ def test_an_email_that_opens_with_a_hash_number_is_covered_by_its_own_quote() ->
     assert uncovered(text, ["#22: always give the full date."]) == []
     assert uncovered(text, ["22: always give the full date."]) == []
     assert uncovered(text, []) != []
+
+
+def test_an_emailed_objection_may_name_a_ground_the_book_lacks_but_only_in_his_words() -> None:
+    email = "For RFP No. 9 add a cumulative objection."
+    ok = _item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"], grounds=["cumulative"])
+    got, problems = ins.check({"items": [ok]}, email, DOCS, BOOK)
+    assert problems == [] and got.instructions["01"][0].grounds == ("cumulative",)
+    assert ins.Read.from_dict(got.to_dict()) == got
+    for item, frag in [
+        (_item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"], grounds=["harassing"]), "not named"),
+        (_item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"]), "key or ground"),
+        (_item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"], action="use_phrase",
+               grounds=["cumulative"]), "phrase-book key"),
+    ]:  # fmt: skip
+        _got, problems = ins.check({"items": [item]}, email, DOCS, BOOK)
+        assert any(frag in p for p in problems), problems
+    # A ground the book already names is re-asked as its key: the firm's own sentence, never a written one.
+    email2 = "For RFP No. 9 add a privacy objection."
+    item = _item(quote="For RFP No. 9 add a privacy objection", numbers=["9"], grounds=["privacy"])
+    _got, problems = ins.check({"items": [item]}, email2, DOCS, BOOK)
+    assert any("give its key" in p for p in problems), problems
+    old = {"instructions": {"01": [{"source": "email", "quote": "q", "numbers": ["9"], "doc_type": "",
+                                    "act": "add_objection", "keys": ["privacy"]}]}}  # fmt: skip
+    assert ins.Read.from_dict(old).instructions["01"][0].grounds == ()

@@ -33,6 +33,13 @@ from .types import Ask
 
 STAGE = "rulebook-write"
 MAX_TOKENS = 4_000
+
+
+def _words(text: str) -> str:
+    """Words only: "attorney-client" and "attorney client" are one ground."""
+    return " ".join(re.findall(r"\w+", fold(text)))
+
+
 _NAME = re.compile(r"\b[A-Z][a-z]+\b")
 _ABBREV = re.compile(r"\b(?:No|Nos|Inc|Co|Corp|Ltd|Civ|Proc|Code|Cal|App|Dr|Mr|Mrs|Ms)\.", re.I)
 
@@ -71,7 +78,7 @@ def check_one(sentence: str, need: Need, lead: str, book: Book) -> str:
     s = norm(sentence)
     if not fold(s).startswith(fold(lead)):
         return "it does not start with the lead"
-    if need.ground not in fold(s):
+    if f" {_words(need.ground)} " not in f" {_words(s)} ":
         return f"it does not name the ground {need.ground!r}"
     if not s.endswith(".") or re.search(r"[.!?;]\s", _ABBREV.sub("", s[:-1])):
         return "it is not one sentence ending in a full stop"

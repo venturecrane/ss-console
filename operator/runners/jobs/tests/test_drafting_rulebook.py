@@ -375,6 +375,14 @@ def test_a_phrase_replaces_the_disposition_or_ends_a_response_without_one():
     assert blocks[plain.by_number()["2"].body[0]] == "Invented answer. " + BOOK.text("nodocs")
 
 
+def test_a_phrase_takes_the_place_of_an_answer_left_for_the_attorney():
+    """FALSIFIER: append after "[ATTORNEY TO CONFIRM]" and the recheck cannot find the phrase (r4, 2026-11-24)."""
+    marked = rs.read(MD.replace("Responding Party will produce the bills he has.", "[ATTORNEY TO CONFIRM]"))
+    blocks, why = makers.put(marked.blocks, _own(marked)["2"], BOOK.text("nodocs"), ())
+    body = blocks[marked.by_number()["2"].body[0]]
+    assert why == "" and "ATTORNEY" not in body and body.endswith(BOOK.text("nodocs"))
+
+
 def test_a_cut_removes_the_sentence_and_never_empties_a_paragraph():
     doc = _doc()
     first = "Responding Party objects to this Request on the ground that it is overbroad."

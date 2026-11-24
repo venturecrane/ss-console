@@ -115,7 +115,7 @@ def test_a_ground_with_no_book_sentence_is_written_for_the_request_or_left(tmp_p
     refused = Model(**{reading.STAGE: read, written.STAGE: {"sentences": []}})
     res = stage.run(_job(tmp_path / "b", refused, rules), _doc())
     assert res.md == MD and [(x.item, x.reason) for x in res.left] == [("1", "phrase_missing"), ("2", "phrase_missing")]
-    assert res.notes[0].startswith("Response 1: left as drafted and marked for you")
+    assert res.notes[0].startswith("Response 1: left as drafted; the firm's standard wording")
 
 
 PROD_RULES = [{"rule_id": "r5", "text": "For bills, produce them under the exhibit they are in."}]
@@ -189,6 +189,30 @@ def test_an_instruction_removing_an_objection_by_key(tmp_path):
                       "remove_objection", ("overbroad",))  # fmt: skip
     res = stage.run(_job(tmp_path, Model(), rules=[]), _doc(instructions=(ins,)))
     assert "is overbroad" not in res.md and res.notes == ("Response 1: a sentence removed, as the request asks.",)
+
+
+def test_an_email_objection_the_book_has_no_sentence_for_is_written_for_its_number_only(tmp_path):
+    """An emailed ground with no book entry goes through the written path (checked), never a refusal."""
+    ins = Instruction("email", "for No. 2 add a cumulative objection", ("2",), "requests_for_production",
+                      "add_objection", (), ("cumulative",))  # fmt: skip
+    ok = {"sentences": [{"item": "2", "ground": "cumulative", "sentence": f"{LEAD} is cumulative."}]}
+    model = Model(**{written.STAGE: ok})
+    res = stage.run(_job(tmp_path / "a", model, rules=[]), _doc(instructions=(ins,)))
+    assert model.stages() == [written.STAGE]
+    assert res.md.count(f"{LEAD} is cumulative.") == 1
+    assert res.notes[0].startswith("Response 2: an objection was written for this request")
+    bad = {"sentences": [{"item": "2", "ground": "cumulative", "sentence": f"{LEAD} is cumulative of 14 visits."}]}
+    res = stage.run(_job(tmp_path / "b", Model(**{written.STAGE: bad}), rules=[]), _doc(instructions=(ins,)))
+    assert res.md == MD and [(x.item, x.reason) for x in res.left] == [("2", "phrase_missing")]
+
+
+def test_a_hyphenated_ground_is_named_by_its_words_either_way():
+    """FALSIFIER: a substring test refuses "attorney-client privilege" for the ground "attorney client privilege"."""
+    need = written.Need("2", "attorney client privilege", "email", "invented request", "add privilege")
+    book = stage.book_mod.Book({})
+    assert written.check_one(f"{LEAD} is protected by the attorney-client privilege.", need, LEAD, book) == ""
+    need = written.Need("2", "attorney-client privilege", "email", "invented request", "add privilege")
+    assert written.check_one(f"{LEAD} is protected by the attorney client privilege.", need, LEAD, book) == ""
 
 
 def test_the_estimate_counts_the_read_and_each_grid_before_any_call(tmp_path):
