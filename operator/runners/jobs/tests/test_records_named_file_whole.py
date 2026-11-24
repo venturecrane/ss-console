@@ -16,7 +16,8 @@ import pytest
 
 from jobs import proof_mode
 from jobs.records import rank
-from jobs.records.run import RecordsRun, as_stored
+from jobs.records.named import as_stored
+from jobs.records.run import RecordsRun
 from records_testkit import FakeFinderModel, FakeParseClient, FakeSmokeball, job_dir, pdf, setup_env
 
 
