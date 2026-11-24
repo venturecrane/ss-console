@@ -50,6 +50,9 @@ RUN chmod 0755 /usr/local/bin/ops-entrypoint
 # (a file in ~/bin still wins, for smd-ops's hand-installed ones).
 COPY bin/ /opt/ops/bin/
 COPY crontab-workspace /opt/ops/crontab-workspace
+# A client workspace's Claude auto-mode rules; the entrypoint fills and installs
+# them every boot (bin/ops-workspace-automode).
+COPY workspace-automode.json /opt/ops/workspace-automode.json
 RUN chmod 0755 /opt/ops/bin/*
 
 # Root only for the entrypoint itself: it chowns the freshly mounted volume and

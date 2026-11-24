@@ -59,6 +59,17 @@ if [ -n "${OPS_WORKSPACE:-}" ]; then
   grep -q ops-secrets "$HOME_DIR/.bashrc" || echo '[ -f "$HOME/.ops-secrets" ] && . "$HOME/.ops-secrets"' >> "$HOME_DIR/.bashrc"
   install -d -o ops -g ops -m 0700 "$HOME_DIR/work" "$HOME_DIR/work/medchron" "$HOME_DIR/work/filereview" "$HOME_DIR/ledger"
   [ -f "$HOME_DIR/.crontab" ] || install -o ops -g ops -m 0600 /opt/ops/crontab-workspace "$HOME_DIR/.crontab"
+  # Claude's auto-mode rules for this workspace (bin/ops-workspace-automode,
+  # 2026-11-24): without them the classifier refused every hand answer on the
+  # client's seat. The autoMode key is replaced every boot from the image's
+  # template; other settings keys are kept; a malformed settings.json is left
+  # alone and logged, and the boot goes on.
+  [ -d "$HOME_DIR/.claude" ] || install -d -o ops -g ops -m 0700 "$HOME_DIR/.claude"
+  if /opt/ops/bin/ops-workspace-automode /opt/ops/workspace-automode.json "$HOME_DIR/.claude/settings.json"; then
+    chown ops:ops "$HOME_DIR/.claude/settings.json"
+  else
+    echo "ops-workspace-automode did not install the autoMode rules (exit $?); booting on"
+  fi
 fi
 
 # The Captain's Claude account tokens (CLAUDE_OAUTH_TOKEN_<letter>, Fly

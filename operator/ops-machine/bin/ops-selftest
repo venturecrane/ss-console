@@ -62,6 +62,11 @@ if [ -f /etc/smd-ops-workspace ]; then
     first=$(bash -lc 'command -v claude' 2>/dev/null)   # login shell: .bash_profile -> .bashrc
     [ "$first" = /opt/ops/bin/claude ] && ok "claude resolves to the key-stripping shim" \
       || bad "claude resolves to ${first:-nothing}, not /opt/ops/bin/claude (sessions would bill the client's key)"
+    # The auto-mode rules that let sessions do hand answers on the seat
+    # (2026-11-24: without them every seat write was refused).
+    jq -e --arg s "$OPS_SEAT_APP" '.autoMode.allow | map(select(contains($s))) | length > 0' \
+      "$HOME/.claude/settings.json" >/dev/null 2>&1 && ok "claude auto-mode rules name $OPS_SEAT_APP" \
+      || bad "no autoMode rules for $OPS_SEAT_APP in ~/.claude/settings.json (the entrypoint installs them at boot; check its log)"
   fi
   for r in ss-console engagements; do
     [ -d "$HOME/dev/$r/.git" ] && ok "repo $r cloned" || bad "repo $r missing (run ops-bootstrap)"
