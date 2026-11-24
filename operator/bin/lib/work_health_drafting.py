@@ -28,11 +28,16 @@ STEPS: dict[str, str] = {
     ),
     "firm_told": "Held, and the requester was told why: confirm the reply went, then close it.",
     "smd_noted": "Delivered with a part left for SMD and named in the notes: finish that part.",
+    # The requester is never asked (no client loops, 2026-11-23): SMD settles it.
+    "smd_request": (
+        "Held: code could not tell what to draft from the request. Read the request and the reason on the seat, "
+        "then queue it again with what it needs, or draft it by hand; the firm hears only the delivery."
+    ),
 }
 
 #: Reason code -> triage class.
 TRIAGE: dict[str, str] = {
-    "request_incomplete": "firm_told",
+    "request_incomplete": "smd_request",
     "gate_refused": "smd_check",
     "format_check": "smd_resume",
     "record_unreadable": "smd_resume",

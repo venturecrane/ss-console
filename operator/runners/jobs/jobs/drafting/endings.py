@@ -61,7 +61,10 @@ def _held() -> Ending:
 
 
 ENDINGS: dict[str, Ending] = {
-    "request_incomplete": _held(),
+    # SMD's, never a question relayed to the attorney (no client loops, 2026-11-23):
+    # what code can settle it settles (``set_package.py``: "sets of discovery"
+    # naming no kind is the standard package); what is left is SMD's to finish.
+    "request_incomplete": Ending("smd", ("held",), False, "none"),
     "gate_refused": Ending("smd", ("held", "failed"), False, "relay"),
     "format_check": _f(),
     "record_unreadable": _f(),

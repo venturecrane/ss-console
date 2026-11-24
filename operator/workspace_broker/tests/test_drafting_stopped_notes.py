@@ -67,8 +67,15 @@ CASES = [
     ),
     (
         "held_firm_cause",
-        [("running", ""), ("held", "request_incomplete: the request is missing what the draft needs: a name")],
+        [("running", ""), ("held", "no_readable_documents: the matter file has no readable document")],
         "held_firm_cause",
+        "job_held",
+    ),
+    (
+        # SMD's since 2026-11-23: what a request leaves open is never put to the firm.
+        "held_request_incomplete",
+        [("running", ""), ("held", "request_incomplete: the request is missing what the draft needs: a name")],
+        "held",
         "job_held",
     ),
     ("review_held", [("running", ""), ("failed", "review_held: 2 MUST-FIX findings")], "review_held", "job_failed"),

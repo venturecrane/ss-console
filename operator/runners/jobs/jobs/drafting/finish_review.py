@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import grounding, notes as notes_mod, pleading, render, review as review_mod, wording
+from . import grounding, notes as notes_mod, pleading, render, review as review_mod, set_package, wording
 from .forms import lane_hook as form_hook
 from .outcome import DraftingFailed
 
@@ -43,6 +43,7 @@ class FinishReview:
         def _atomic(self, name: str, text: str) -> None: ...
         def _context(self) -> list[str]: ...
         def served_review(self) -> dict[str, dict[str, Any]] | None: ...
+        def _state(self) -> dict[str, Any]: ...
 
     def _all_markers(self) -> list[dict[str, str]]:
         seen, out = set(), []
@@ -117,7 +118,8 @@ class FinishReview:
         for u in self.units():
             render_notes += [(f"{u.label}: " if u.key else "") + n for n in self._rendered(u)["notes"]]
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
-        render_notes = [self._block_note(), *render_notes]
+        basis = set_package.note(self._state().get(set_package.BASIS_KEY), [str(u.variant) for u in self.units()])
+        render_notes = [self._block_note(), *([basis] if basis else []), *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
         md = form_hook.with_cite_tables(self, md)  # each form set's cite table, by code
         # SMD's hand-written sections of the notes this replaces, carried by

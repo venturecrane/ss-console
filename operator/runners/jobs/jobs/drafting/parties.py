@@ -272,8 +272,12 @@ def _related(a: Candidate, b: Candidate) -> bool:
 def named_in(text: str, cands: list[Candidate]) -> list[Candidate]:
     """The candidates ``text`` names, longest first where they overlap, in
     the order the text names them; one per span of the text. One phrase of
-    the text naming two unrelated candidates stops (``PartyUnknown``)."""
-    hits = [h for c in cands for h in _hits(text, c)]
+    the text naming two unrelated candidates stops (``PartyUnknown``). A
+    short reference ("to the school district") names a party only as its
+    unique tail (``party_tail.py``)."""
+    from . import party_tail  # it imports this module's helpers
+
+    hits = [h for c in cands for h in _hits(text, c)] + party_tail.hits(text, cands)
     hits.sort(key=lambda h: (-(h[1] - h[0]), h[0]))
     taken: list[tuple[int, int, Candidate]] = []
     for h in hits:
@@ -502,7 +506,7 @@ def _scope(request: str, cands: list[Candidate]) -> list[Candidate] | None:
     got: list[Candidate] = []
     lines = [m.group("a") or m.group("b") or "" for m in _ONLY.finditer(request or "")]
     for chunk in lines:
-        found = named_in(chunk, cands)
+        found = named_in(f"to {chunk}", cands)  # "to the School District only": a short reference, too
         if not found and re.search(r"\b[A-Z][A-Za-z]", chunk) and not _EVERY.search(f"to {chunk}"):
             raise PartyUnknown(
                 f'the request limits its sets to "{chunk.strip()[:80]}", which is no party on the caption'

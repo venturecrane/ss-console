@@ -16,6 +16,7 @@ from jobs.drafting import endings, outcome
 _ALLOWED = {
     ("firm", ("held",)): {"firm_told"},
     ("smd", ("held", "failed")): {"smd_check"},
+    ("smd", ("held",)): {"smd_request"},
     ("smd", ("delivered",)): {"smd_noted"},
     ("firm", ("delivered",)): {"firm_told"},
 }
