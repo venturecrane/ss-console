@@ -1268,11 +1268,19 @@ def add_file(
 ) -> Any:
     """Upload a document to a matter. Supply the content EXACTLY ONE of two ways:
 
-    - ``content_text`` — **use this for every textual document** (letters,
-      briefs, memos, discovery responses, indexes, .txt/.md/.csv). Pass the
-      document's text verbatim; the connector encodes it UTF-8 server-side.
+    - ``content_text`` — for a data file in text (.csv). Pass the text
+      verbatim; the connector encodes it UTF-8 server-side.
     - ``content_base64`` — for genuinely binary files (PDF, DOCX, images) whose
       base64 came from a tool, never from your own composition.
+
+    **A document a person reads is a Word document, never a text file.** A
+    letter, brief, memo, list, index or draft is filed with
+    ``render_docx_draft``. A ``.txt``/``.md`` file, or text with no extension,
+    is refused here (``status: "refused"``, ``reason: "text_document"``,
+    nothing filed, SMD paged): an attorney cannot work in it, and filing one
+    after ``render_docx_draft`` refused routes around that refusal. If you
+    cannot file the Word document, reply only "Let me look into that. I'll
+    reply in this thread."
 
     **Never hand-encode text to base64.** Model-written base64 fails outright or,
     worse, decodes to subtly corrupted text — a rehearsal filed a brief reading
@@ -1296,6 +1304,15 @@ def add_file(
         raise ValueError(
             "add_file: supply exactly one of content_text (plain text, encoded "
             f"server-side) or content_base64 (binary) — got {supplied}"
+        )
+    from .list_check import is_text_document, refused
+
+    if is_text_document(file_name, as_text=content_text is not None):
+        return refused(
+            matter_id,
+            file_name,
+            "text_document",
+            ["a document is filed as Word with render_docx_draft, never as a text file"],
         )
     if content_text is not None:
         data = content_text.encode("utf-8")
@@ -1635,6 +1652,7 @@ def render_docx_draft(
     folder_id: str | None = None,
     held_out_file_names: list[str] | None = None,
     document_class: str | None = None,
+    listed_folder_id: str | None = None,
 ) -> Any:
     """Render a FILLED DRAFT (markdown) to a real Word .docx and file it on a
     matter, for attorney review. The sibling of ``render_docx_template``, and the
@@ -1716,9 +1734,25 @@ def render_docx_draft(
     letterhead, and do not marker one: ``formatApplied.letterhead`` says which
     source applied, or that neither exists, and that is what the report states.
 
+    **Held out means not named.** A document named in ``held_out_file_names``
+    is refused if its name appears in the draft's body: what the attorney
+    withholds is said in your reply to the attorney, never on the document.
+
+    **A list of documents (``listed_folder_id``).** For a production list or an
+    index of the documents in a folder, pass that folder's id: write one
+    numbered entry (``1.``) per document, and the draft is refused unless the
+    count matches the folder's files (held-out files excepted).
+
+    **A refusal is never told to the person.** Every refusal carries
+    ``status: "refused"`` and a ``reason`` token, and pages SMD. Do not file the
+    document any other way (never a ``.txt``); if you cannot fix what the
+    refusals name, reply only "Let me look into that. I'll reply in this
+    thread."
+
     Classified INTERNAL_WRITE at the overlay: the Operator saving its own work
     product into the firm's record. Nothing leaves the firm; delivery to anyone
     outside is a separate, separately-gated act."""
+    from .list_check import count_refusal, refused, withheld_named
     from .record_check import run_record_check
     from .render import TemplateContentRefused, check_draft_content
 
@@ -1727,14 +1761,20 @@ def render_docx_draft(
     try:
         check_draft_content(draft_markdown)
     except TemplateContentRefused as exc:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [str(v) for v in exc.violations],
-        }
+        return refused(matter_id, file_name, "content_gate", [str(v) for v in exc.violations])
+    held_out = list(held_out_file_names or ())
+    named = withheld_named(draft_markdown, held_out)
+    if named:
+        return refused(
+            matter_id,
+            file_name,
+            "held_out_named",
+            ["held-out documents are named in the draft: " + ", ".join(named) + "; remove them from the document"],
+        )
+    if listed_folder_id:
+        miss = count_refusal(_get_client(), matter_id, listed_folder_id, draft_markdown, held_out)
+        if miss:
+            return refused(matter_id, file_name, miss[0], [miss[1]])
 
     # The ten mechanical gates, against this matter's own record. Nothing is
     # rendered or uploaded until they pass — see record_check.py for the
@@ -1743,36 +1783,32 @@ def render_docx_draft(
     verdict = run_record_check(
         draft_markdown,
         sources,
-        held_out_names=set(held_out_file_names or ()),
+        held_out_names=set(held_out),
         unextractable=unextractable,
         vision_sources=vision_sources,
     )
     if not verdict.passed:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": verdict.refusals,
-            "recordCheck": verdict.disposition,
-            "warnings": verdict.warnings,
-            "infos": verdict.infos,
-            "checkedSources": verdict.checked_sources,
-        }
+        return refused(
+            matter_id,
+            file_name,
+            "record_check",
+            verdict.refusals,
+            recordCheck=verdict.disposition,
+            warnings=verdict.warnings,
+            infos=verdict.infos,
+            checkedSources=verdict.checked_sources,
+        )
 
     data, format_applied, refusal, library = _render_with_format(draft_markdown, document_class, matter_id)
     if refusal:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [refusal],
-            "formatApplied": format_applied,
+        return refused(
+            matter_id,
+            file_name,
+            "format_refused",
+            [refusal],
+            formatApplied=format_applied,
             **({"libraryResolution": library} if library is not None else {}),
-        }
+        )
     result = add_file(
         matter_id,
         file_name,

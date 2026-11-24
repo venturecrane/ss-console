@@ -341,3 +341,105 @@ def test_the_content_gate_runs_BEFORE_the_record_check(monkeypatch) -> None:
     assert any("em dash" in r for r in out["refusals"])
     assert not called, "the record check ran despite a content-gate refusal"
     assert "recordCheck" not in out
+
+
+# ---- A list of documents (2026-11-24) ---------------------------------------
+#
+# An attorney asked for the supplemental production list for the documents in a
+# folder, leaving out a withheld statement. The list had one entry more than the
+# folder had documents, named the withheld statement, and when the Word version
+# was refused the reply told the attorney why. Every name below is invented.
+
+_FOLDER = "fld-supp"
+_FOLDER_FILES = [
+    {"id": "f1", "name": "Harbor Clinic Records.pdf", "folder": {"id": _FOLDER}},
+    {"id": "f2", "name": "Harbor Clinic Billing.pdf", "folder": {"id": _FOLDER}},
+    {"id": "f3", "name": "Quill Imaging Report.pdf", "folder": {"id": _FOLDER}},
+    {"id": "f4", "name": "Neighbor Witness Statement.pdf", "folder": {"id": _FOLDER}},
+    {"id": "f5", "name": "Elsewhere.pdf", "folder": {"id": "fld-other"}},
+]
+_HELD = ["Neighbor Witness Statement.pdf"]
+
+_LIST = """# SUPPLEMENTAL PRODUCTION LIST
+
+1. Harbor Clinic records, dates of service 03/27/2025 through 04/15/2025
+2. Harbor Clinic billing, dates of service 03/27/2025 through 04/15/2025
+3. Quill Imaging report dated 04/02/2025
+"""
+
+
+def _folder_listing(monkeypatch) -> None:
+    from smokeball_connector import list_check
+
+    monkeypatch.setattr(list_check, "list_matter_files", lambda _c, _m: list(_FOLDER_FILES))
+
+
+def test_a_list_naming_a_held_out_document_is_refused_and_nothing_is_filed(monkeypatch) -> None:
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
+    _stub_record_check(monkeypatch)
+    _folder_listing(monkeypatch)
+    leaked = _LIST + "4. Neighbor Witness Statement (withheld)\n"
+
+    out = server.render_docx_draft("m-104", "Supp List", leaked, held_out_file_names=_HELD)
+
+    assert out["fileId"] is None
+    assert out["status"] == "refused" and out["reason"] == "held_out_named"
+    assert not [r for r in captured if r.method == "PUT"]
+
+
+def test_a_held_out_section_of_the_draft_may_name_it() -> None:
+    """The drafting discipline's own HELD OUT section is not the body."""
+    from smokeball_connector import list_check
+
+    draft = _LIST + "\n## Held out\n\nNeighbor Witness Statement\n"
+    assert list_check.withheld_named(draft, _HELD) == []
+    assert list_check.withheld_named(_LIST + "Neighbor witness statement\n", _HELD) == _HELD
+
+
+def test_a_list_with_more_entries_than_the_folder_has_documents_is_refused(monkeypatch) -> None:
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
+    _stub_record_check(monkeypatch)
+    _folder_listing(monkeypatch)
+    doubled = _LIST + "4. Harbor Clinic records (duplicate)\n"
+
+    out = server.render_docx_draft("m-104", "Supp List", doubled, held_out_file_names=_HELD, listed_folder_id=_FOLDER)
+
+    assert out["status"] == "refused" and out["reason"] == "list_count_mismatch"
+    assert "4 numbered entries" in out["refusals"][0] and "holds 3" in out["refusals"][0]
+    assert not [r for r in captured if r.method == "PUT"]
+
+
+def test_a_list_with_one_entry_per_document_is_filed_as_word(monkeypatch) -> None:
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
+    _stub_record_check(monkeypatch)
+    _folder_listing(monkeypatch)
+
+    out = server.render_docx_draft("m-104", "Supp List", _LIST, held_out_file_names=_HELD, listed_folder_id=_FOLDER)
+
+    assert out["fileId"] == "file-77" and out["refusals"] == []
+    assert out["fileName"] == "Supp List.docx"
+    put = next(r for r in captured if r.method == "PUT")
+    assert put.content[:2] == b"PK"
+    assert "Neighbor" not in _docx_text(put.content)
+
+
+@pytest.mark.parametrize(
+    ("draft", "passed", "reason"),
+    [("Body — dash.\n", True, "content_gate"), (_FILLED_DRAFT, False, "record_check")],
+)
+def test_every_refusal_carries_a_status_the_audit_pages_smd_on(monkeypatch, draft, passed, reason) -> None:
+    """Before this, a refusal carried no ``status``, the audit scored the call
+    ``ok``, and nobody at SMD heard about it while the firm was told the reason.
+    The note steers the reply to the one fixed sentence."""
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
+    _stub_record_check(monkeypatch, passed=passed, disposition="source_unextractable")
+
+    out = server.render_docx_draft("m-104", "Draft", draft)
+
+    assert out["fileId"] is None
+    assert out["status"] == "refused" and out["reason"] == reason
+    assert "Let me look into that. I'll reply in this thread." in out["note"]

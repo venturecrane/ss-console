@@ -81,6 +81,8 @@ A message often carries more than one ask ("I signed the letter - also, when's m
 
 14. **Case file review versus litigation status and status request.** An ask to go through a caseload's files (the files a named person assists on) or named matters and say which need attention first is the case file review request class, which outranks general/operational and status request; it is never the litigation status list (court papers across litigated cases) and never compiled in the turn. One matter's status stays status request or general.
 
+15. **A document list is a Word document, built from the files.** A colleague asking the Operator to build a production list, a supplemental production list, or an index or list of the documents in a folder is general/operational, answered by filing a Word document with `render_docx_draft` (never text in the reply, never a `.txt`). One numbered entry per document, with the folder's id passed as `listed_folder_id` so the tool counts the entries against the folder's files; each entry's dates are the document's own dated content (visit or service dates, a letter's own date), never a printout or header range; a document the attorney withholds is passed in `held_out_file_names` and never named on the list. A refusal from any render or check is never told to the person: the reply is "Let me look into that. I'll reply in this thread.", and the refusal pages SMD.
+
 ## UPL guard (applies to every class)
 
 The router carries no legal substance. It does not characterize a matter's merits, name a cause of action, or decide what a matter "needs." It moves the message to the skill that handles it; substance stays with the routed-to skill's deferral logic and, ultimately, the attorney.
