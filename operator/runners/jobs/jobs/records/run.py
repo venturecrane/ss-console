@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tempfile
 import traceback
 from pathlib import Path
@@ -54,6 +55,20 @@ STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
 MATTER_STATUSES = ("Open", "Pending")
 #: Candidate files per record, at most.
 MAX_CANDIDATES = 3
+#: An active PDF key outside stream data (the broker's wall,
+#: workspace_broker/agentmail_attachments.py). A named file carrying one cannot
+#: go exactly as the matter holds it, so it holds for SMD.
+_ACTIVE = re.compile(
+    rb"/(?:JS|JavaScript|AA|Launch|EmbeddedFile|EmbeddedFiles|RichMedia|XFA|SubmitForm|ImportData|GoToR|GoToE)"
+    rb"(?=[\s()<>\[\]{}/%]|$)"
+)
+_STREAM = re.compile(rb"stream\r?\n.*?endstream", re.DOTALL)
+
+
+def as_stored(raw: bytes) -> bool:
+    """May a PDF go exactly as the matter holds it (its sha256 the matter
+    file's): a PDF, not encrypted, no active key outside stream data."""
+    return raw.startswith(b"%PDF-") and b"/Encrypt" not in raw and not _ACTIVE.search(_STREAM.sub(b"", raw))
 
 
 class CapStop(pf.CallRefused):
@@ -303,6 +318,58 @@ class RecordsRun(RunBase):
         # Then the matter PDFs already read whole (free.py), before any priced one.
         return free + free_mod.extras(self, mid, rows, files, dict(got)) + priced[:MAX_CANDIDATES]
 
+    def _named_file(self, mid: str, rec: dict[str, Any], files: dict[str, Any]) -> str | None:
+        """The one PDF the record NAMES, fetched, or None. Code decides, never a
+        model (``rank.names_whole``): every word of the file's name, or of its
+        folder's name when that folder holds this one PDF, is in the record's
+        words, and the record asks for nothing narrower (no date, no page
+        range). 2026-11-24: a request naming one 17-page PDF went out as the 4
+        pages the finder matched, its sha256 not the matter file's, and SMD's
+        review rejected the reply."""
+        from smokeball_connector import matter_files as mf
+
+        try:
+            rows, _complete = mf._all_files(self.client, mid)
+        except Exception as exc:  # could not look is never "no file is named for it"
+            raise RecordsHold("finder_failed: the matter's files could not be listed") from exc
+        pdfs = [r for r in rows if rank.is_pdf(r) and r.get("id")]
+        hits = {str(r["id"]) for r in pdfs if rank.names_whole(rec, r.get("name"))}
+        if not hits:
+            try:
+                folders = mf._folder_paths(self.client, mid)
+            except Exception:  # noqa: BLE001 - unreadable folders name no file; the finder path runs
+                folders = {}
+            by_folder: dict[str, list[str]] = {}
+            for r in pdfs:
+                path = folders.get(mf._folder_id(r) or "", "")
+                by_folder.setdefault(path.rsplit("/", 1)[-1], []).append(str(r["id"]))
+            hits = {ids[0] for label, ids in by_folder.items() if len(ids) == 1 and rank.names_whole(rec, label)}
+        if len(hits) != 1:
+            return None
+        (fid,) = hits
+        return fid if self._fetch(mid, fid, files) else None
+
+    def _keep_whole(self, n: int, fid: str, mid: str, rec: dict[str, Any], meta: dict[str, Any]) -> None:
+        """The named file's result in the finder's shape: found, every page, so
+        the cut takes the whole file and the facts say "the whole file"."""
+        total = int(meta["page_count"])
+        result = {
+            "schemaVersion": 2,
+            "pageCount": total,
+            "counts": {"pages": total, "read": 0, "unreadable": 0, "notReached": 0},
+            "namedFile": True,
+            "items": [
+                {
+                    "asked": rec["asked"],
+                    "found": True,
+                    "established": True,
+                    "ranges": [{"pages": f"1-{total}" if total > 1 else "1"}],
+                }
+            ],
+        }
+        if not self.locate_path(n, fid).is_file():
+            search._keep(self, n, fid, mid, meta, result, save=True)
+
     def _resolve(self) -> None:
         mid = self._matter_id()
         dump(self.data / "matter.json", {"matter_id": mid})
@@ -311,6 +378,12 @@ class RecordsRun(RunBase):
         scores: dict[str, dict[str, int]] = {}
         holds = search.item_holds(self.data)
         for rec in self._records():
+            whole = self._named_file(mid, rec, files)
+            if whole is not None:
+                self._keep_whole(int(rec["n"]), whole, mid, rec, files[whole])
+                candidates[str(rec["n"])] = [whole]
+                scores[str(rec["n"])] = {whole: 1}
+                continue
             ranked = self._ranked(mid, rec, files)
             candidates[str(rec["n"])] = [fid for fid, _ in ranked]
             scores[str(rec["n"])] = dict(ranked)
@@ -394,11 +467,20 @@ class RecordsRun(RunBase):
         for fid, result in results.items():
             for pages, n in assemble.ranges_to_cut(result, fid, owners):
                 counter[n] = k = counter.get(n, 0) + 1
-                try:
-                    span = mf.parse_pages(pages) if pages else None
-                    blob, _removed = mf.prepare_local(self.data / "files" / f"{fid}.pdf", span)
-                except mf.StageRefused as exc:
-                    raise RecordsHold(f"cut_refused: {exc}") from exc
+                source = self.data / "files" / f"{fid}.pdf"
+                if result.get("namedFile"):
+                    # The record named this file: it goes whole and exactly as the
+                    # matter holds it, proved by sha256 (2026-11-24).
+                    blob = source.read_bytes()
+                    if not as_stored(blob) or hashlib.sha256(blob).hexdigest() != files[fid]["sha256"]:
+                        raise RecordsHold("cut_refused: a named file cannot go exactly as the matter holds it")
+                    span = None
+                else:
+                    try:
+                        span = mf.parse_pages(pages) if pages else None
+                        blob, _removed = mf.prepare_local(source, span)
+                    except mf.StageRefused as exc:
+                        raise RecordsHold(f"cut_refused: {exc}") from exc
                 if len(blob) > mf.MAX_FILE_BYTES:
                     raise RecordsHold("cut_refused: a cut is over the size one email carries")
                 out = self.data / "cuts" / f"{n}-{k}.pdf"
@@ -631,4 +713,4 @@ class RecordsRun(RunBase):
         )
 
 
-__all__ = ["STAGES", "CapHook", "RecordsRun"]
+__all__ = ["STAGES", "CapHook", "RecordsRun", "as_stored"]
