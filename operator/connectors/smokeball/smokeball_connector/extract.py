@@ -3,7 +3,8 @@
 Bounded, dependency-light, and deliberately dumb: the goal is to hand the
 agent the document's TEXT as data — never to render, execute, or interpret
 anything inside it. Supported types are the three that cover a law office's
-matter folder (PDF, DOCX, plain text), plus Excel workbooks (``xlsx_io``);
+matter folder (PDF, DOCX, plain text), plus Excel workbooks (``xlsx_io``)
+and saved Outlook emails (``msg_read``);
 everything else returns an explicit
 unsupported error so the skill can fail closed instead of guessing.
 
@@ -77,6 +78,9 @@ METHOD_XLSX = "xlsx"
 #: other, but never counted as the firm's record by the drafting check: the
 #: Operator's own figures must not be able to validate a later draft.
 METHOD_XLSX_OPERATOR = "xlsx_operator"
+#: An Outlook email saved in the matter (``msg_read``): its head, its body, and
+#: each attachment's text under its name, attachments read with no model call.
+METHOD_MSG = "msg"
 
 METHODS = frozenset(
     {
@@ -89,12 +93,13 @@ METHODS = frozenset(
         METHOD_MIXED,
         METHOD_XLSX,
         METHOD_XLSX_OPERATOR,
+        METHOD_MSG,
     }
 )
 
 #: The roads whose text is the document's own, mechanically read, and so may
 #: stand as the firm's record in a drafting check.
-MECHANICAL_METHODS = (METHOD_PYPDF, METHOD_DOCX, METHOD_PLAIN, METHOD_XLSX)
+MECHANICAL_METHODS = (METHOD_PYPDF, METHOD_DOCX, METHOD_PLAIN, METHOD_XLSX, METHOD_MSG)
 
 #: Why a scanned PDF produced no text. Closed set — never an exception message
 #: (which can carry a URL or a credential fragment) and never model output.
@@ -266,10 +271,7 @@ def _extract(
     if blob.startswith(_ZIP_MAGIC) and _office_kind(blob) is not None:
         return _office_result(blob, file_name)
     if blob.startswith(OLE_MAGIC):
-        raise UnsupportedDocumentError(
-            f"{file_name or 'document'!r} is a legacy Office file (.xls/.doc/.msg) or an encrypted one; "
-            "needs manual review"
-        )
+        return _msg_result(blob, file_name, allow_cache=allow_cache)
     if blob.startswith(_ZIP_MAGIC) and (ext in ("docx", "dotx", "docm", "dotm", "") or _looks_like_docx(blob)):
         return ExtractResult(_docx_text(blob), METHOD_DOCX)
     if ext in ("txt", "text", "md", "csv", "log", "eml"):
@@ -285,6 +287,44 @@ def _extract(
         f"no text-extraction path for {file_name or 'document'!r} "
         f"(extension {file_extension or 'unknown'!r}); needs manual review"
     )
+
+
+def _msg_result(blob: bytes, file_name: str, *, allow_cache: bool) -> ExtractResult:
+    """An Outlook email (``msg_read``); any other OLE file, a legacy .doc or
+    .xls or an encrypted Office file, is refused by name as it always was.
+    Each attachment is read by this module's own roads with no model call (a
+    scan is served from the store when ``allow_cache`` allows, else named as
+    not read), so reading one email can never bill a transcription per page."""
+    from .msg_read import MsgAttachment, email_text, is_msg, open_msg
+
+    name = file_name or "document"
+    if not is_msg(blob):
+        # The wording is the refusal's since before emails were read (the reader
+        # goldens pin it); an OLE file that is no message lands here, a damaged
+        # .msg included.
+        raise UnsupportedDocumentError(
+            f"{name!r} is a legacy Office file (.xls/.doc/.msg) or an encrypted one; needs manual review"
+        )
+    try:
+        fields = open_msg(blob)
+    except Exception as exc:  # the library's error text is never passed on; the refusal names the file
+        raise UnsupportedDocumentError(
+            f"{name!r} is an Outlook email that could not be read; needs manual review"
+        ) from exc
+
+    def attachment_text(att: MsgAttachment) -> str:
+        if att.data is None:
+            return "[not read: could not be read]" if att.error else "[not read: an attached email]"
+        ext = att.name.rsplit(".", 1)[-1] if "." in att.name else ""
+        try:
+            got = _extract(
+                att.data, file_name=att.name, file_extension=ext, allow_vision=False, allow_cache=allow_cache
+            )
+        except UnsupportedDocumentError:
+            return "[not read: no text can be read from this type]"
+        return "[not read: a scan with no stored reading]" if got.method == METHOD_NONE_SCANNED else got.text
+
+    return ExtractResult(email_text(fields, attachment_text), METHOD_MSG)
 
 
 def _image_media_type(blob: bytes, ext: str) -> str | None:
