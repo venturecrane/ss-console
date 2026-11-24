@@ -46,6 +46,7 @@ from typing import Any
 
 import httpx
 
+from . import draft_budget
 from .write_record import WriteRecord, refuse_proof_run_write
 
 # /matters/{id} paths take the matter's UUID, never its human matter number.
@@ -91,6 +92,17 @@ _MAX_ATTEMPTS = 4
 #: turn never hangs on a limit that will not clear.
 _RATE_LIMIT_ATTEMPTS = 6
 _RATE_LIMIT_MAX_SLEEP = 30.0
+
+
+def _timeout(http: Any) -> Any:
+    """The client's own timeout, shortened to the time left when a render stage
+    deadline is set (``draft_budget``); unchanged outside one."""
+    default = getattr(http, "timeout", None)
+    if not isinstance(default, httpx.Timeout):
+        return httpx.USE_CLIENT_DEFAULT
+    if draft_budget.remaining() is None:
+        return default
+    return httpx.Timeout(draft_budget.request_timeout(default.read or 30.0))
 
 
 def _rate_limit_sleep(resp: Any, attempt: int) -> float:
@@ -385,14 +397,19 @@ class SmokeballClient:
                 "Accept": "application/json",
             }
             try:
-                last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
+                last = self._http.request(
+                    method, url, params=_clean(params), json=json, headers=headers, timeout=_timeout(self._http)
+                )
             except httpx.HTTPError as exc:
                 record.finish(None, error=f"{type(exc).__name__}: {exc}")
                 raise
             if last.status_code == 429:
-                if attempt + 1 >= _RATE_LIMIT_ATTEMPTS:
+                pause = _rate_limit_sleep(last, attempt)
+                # Inside a render's stage deadline (draft_budget), a rate limit
+                # that would outlast it is surfaced now instead of slept out.
+                if attempt + 1 >= _RATE_LIMIT_ATTEMPTS or draft_budget.would_pass(pause):
                     break
-                time.sleep(_rate_limit_sleep(last, attempt))
+                time.sleep(pause)
                 continue
             if last.status_code == 401 and not refreshed:
                 self._token = None  # force a fresh mint, then retry once
@@ -559,7 +576,7 @@ class SmokeballClient:
                 f"download: file {file_id!r} is {advertised} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
             )
         try:
-            resp = self._http.get(info["downloadUrl"])
+            resp = self._http.get(info["downloadUrl"], timeout=_timeout(self._http))
         except httpx.HTTPError as exc:
             raise SmokeballWriteError(f"presigned download GET failed: {exc}") from exc
         if resp.status_code >= 400:
@@ -612,7 +629,7 @@ class SmokeballClient:
         EMPTY ``Content-Type`` (the header is not part of the signed request)."""
         refuse_proof_run_write("PUT", "presigned upload")
         try:
-            resp = self._http.put(url, content=data, headers={"Content-Type": ""})
+            resp = self._http.put(url, content=data, headers={"Content-Type": ""}, timeout=_timeout(self._http))
         except httpx.HTTPError as exc:
             raise SmokeballWriteError(f"presigned upload PUT failed: {exc}") from exc
         if resp.status_code >= 400:

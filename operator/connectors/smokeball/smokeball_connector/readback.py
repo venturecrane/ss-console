@@ -39,6 +39,7 @@ import hashlib
 import time
 from typing import Any, Callable
 
+from . import draft_budget
 from .library import _listing, _walk_folders, list_matter_files, name_matches
 
 #: Pauses between reads, in seconds. The forms' measured backoff (2, 3, 5, 8),
@@ -128,6 +129,11 @@ def poll(read: Callable[[], Any], done: Callable[[Any], bool]) -> tuple[Any, boo
     last: Any = None
     error = ""
     for wait in (0.0, *WAITS):
+        if wait and draft_budget.would_pass(wait):
+            # A render's filing stage (draft_budget): stop waiting rather than
+            # run past it; the caller reports what the reads so far showed.
+            error = error or "stopped waiting at the render's deadline"
+            break
         if wait:
             SLEEP(wait)
         try:
