@@ -76,6 +76,43 @@ def score(name: Any, rec: dict[str, Any]) -> int:
     return 2 * len(provider & have) + len(asked & have) + len(dates & have)
 
 
+#: Words a request can carry beside a file's own name and still mean the whole file.
+_WHOLE_EXTRA = frozenset("whole entire full complete copy attached attach pdf page pages pp folder".split())
+
+
+def is_pdf(row: dict[str, Any]) -> bool:
+    return str(row.get("fileExtension") or "").strip().lower().lstrip(".") == "pdf"
+
+
+_PAGE_RANGE = re.compile(r"\bpages?\s+\d", re.I)
+_PAGE_COUNT = re.compile(r"\b(\d+)[\s-]pages?\b", re.I)
+
+
+def names_whole(rec: dict[str, Any], label: Any) -> bool:
+    """Does the record NAME the file called ``label`` (a file's name, or its
+    folder's), asking for the whole of it? Code, never a model: every word of
+    the label (stop words aside) is in the record's words, and the record asks
+    for nothing narrower: no date or page range in its hints, and no word
+    beyond the label's but stop words, "whole", "copy", "attached" and the
+    like, and a page count ("the 17-page declaration"). "the ER visit of 3/2
+    from the hospital records" names a part of a file, never the file."""
+    hints = rec.get("hints") or {}
+    if hints.get("dates") or hints.get("date") or hints.get("pages"):
+        return False
+    raw = str(rec.get("asked") or "")
+    if _PAGE_RANGE.search(raw):  # "page 3 of", "pages 12-14": a part, never the whole
+        return False
+    counts = set(_PAGE_COUNT.findall(raw))  # "the 17-page declaration"
+    asked = tokens(rec.get("asked")) - STOP - CREDENTIALS
+    want = tokens(label) - STOP - CREDENTIALS - {"pdf"}
+    if not want or not want <= asked:
+        return False
+    extra = asked - want - _WHOLE_EXTRA
+    if extra and (extra - {t for t in extra if t.isdigit() and t in counts} or not asked & {"page", "pages"}):
+        return False
+    return True
+
+
 def rank(rows: list[dict[str, Any]], rec: dict[str, Any], top: int = TOP) -> list[tuple[str, int]]:
     """``[(file_id, score)]`` for the matter's PDFs that score above 0, best
     first (smaller file, then id, breaking a tie), at most ``top``."""
@@ -89,4 +126,4 @@ def rank(rows: list[dict[str, Any]], rec: dict[str, Any], top: int = TOP) -> lis
     return [(fid, -neg) for neg, _size, fid in sorted(scored)[:top]]
 
 
-__all__ = ["CREDENTIALS", "STOP", "TOP", "date_tokens", "rank", "score", "tokens"]
+__all__ = ["CREDENTIALS", "STOP", "TOP", "date_tokens", "is_pdf", "names_whole", "rank", "score", "tokens"]

@@ -33,7 +33,6 @@ finder's hook) is caught only at the top, and becomes the hold reason.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import tempfile
 import traceback
@@ -46,7 +45,18 @@ from smokeball_connector import page_finder as pf
 from .. import budget as budget_mod, limits as limits_mod, paid, proof_mode, stop_request
 from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
-from . import assemble, firm as firm_mod, free as free_mod, job as job_mod, measure, parse as parse_mod, rank, search
+from . import (
+    assemble,
+    cut as cut_mod,
+    firm as firm_mod,
+    free as free_mod,
+    job as job_mod,
+    measure,
+    named,
+    parse as parse_mod,
+    rank,
+    search,
+)
 from .outcome import REASON, RecordsFailed, RecordsHold, Verdict, proof_ending
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
@@ -311,6 +321,12 @@ class RecordsRun(RunBase):
         scores: dict[str, dict[str, int]] = {}
         holds = search.item_holds(self.data)
         for rec in self._records():
+            whole = named.named_file(self, mid, rec, files)
+            if whole is not None:
+                named.keep_whole(self, int(rec["n"]), whole, mid, rec, files[whole])
+                candidates[str(rec["n"])] = [whole]
+                scores[str(rec["n"])] = {whole: 1}
+                continue
             ranked = self._ranked(mid, rec, files)
             candidates[str(rec["n"])] = [fid for fid, _ in ranked]
             scores[str(rec["n"])] = dict(ranked)
@@ -382,46 +398,7 @@ class RecordsRun(RunBase):
 
     # ---- cut ------------------------------------------------------------------------
     def _cut(self) -> None:
-        from records_contract import batches as batches_mod
-        from smokeball_connector import matter_files as mf
-
-        files = self._json("files.json")
-        results, owners = assemble.merge(self.located())
-        rows: list[dict[str, Any]] = []
-        taken: set[str] = set()
-        (self.data / "cuts").mkdir(exist_ok=True)
-        counter: dict[int, int] = {}
-        for fid, result in results.items():
-            for pages, n in assemble.ranges_to_cut(result, fid, owners):
-                counter[n] = k = counter.get(n, 0) + 1
-                try:
-                    span = mf.parse_pages(pages) if pages else None
-                    blob, _removed = mf.prepare_local(self.data / "files" / f"{fid}.pdf", span)
-                except mf.StageRefused as exc:
-                    raise RecordsHold(f"cut_refused: {exc}") from exc
-                if len(blob) > mf.MAX_FILE_BYTES:
-                    raise RecordsHold("cut_refused: a cut is over the size one email carries")
-                out = self.data / "cuts" / f"{n}-{k}.pdf"
-                out.write_bytes(blob)
-                count = span[1] - span[0] + 1 if span else int(files[fid]["page_count"])
-                rows.append(
-                    {
-                        "n": n,
-                        "k": k,
-                        "file_id": fid,
-                        "pages": pages,
-                        "page_count": count,
-                        "sha256": hashlib.sha256(blob).hexdigest(),
-                        "size": len(blob),
-                        "name": mf.attachment_name(files[fid].get("name"), span, taken),
-                        "path": str(out.relative_to(self.data)),
-                    }
-                )
-        try:
-            batches_mod.batches(rows)
-        except batches_mod.BatchesRefused as exc:
-            raise RecordsHold(f"cut_refused: {exc}") from exc
-        dump(self.data / "cuts.json", rows)
+        cut_mod.cut(self)
 
     # ---- facts ------------------------------------------------------------------------
     def compose(self, hold: str | None) -> dict[str, Any]:
