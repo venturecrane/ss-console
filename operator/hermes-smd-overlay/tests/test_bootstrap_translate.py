@@ -163,7 +163,7 @@ def test_translate_writes_persona_identity_into_soul_md(tmp_path):
 
 
 def test_soul_md_states_the_staff_checklist_before_the_first_draft(tmp_path):
-    """A&P 2026-11-24: each checklist hold cost a redraft and left a draft behind.
+    """A&P, November 2026: each checklist hold cost a redraft and left a draft behind.
     The rules the send gate enforces reach SOUL.md, from the gate's own set."""
     from shared import output_checklist
 

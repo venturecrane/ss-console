@@ -1336,7 +1336,7 @@ def test_held_drafts_a_sent_redraft_superseded_are_discarded_with_it(drafts) -> 
 
 
 def test_a_draft_the_checklist_held_is_discarded_when_its_redraft_is_sent(drafts) -> None:
-    """A&P 2026-11-24: a reply held by the output checklist (capitals), redrafted
+    """A&P, November 2026: a reply held by the output checklist (capitals), redrafted
     seconds later and sent. Both versions are copies of a reply that went out."""
     mod, d1, broker, _, discarded = drafts
     _email_turn(mod, "mail-1")

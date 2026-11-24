@@ -189,7 +189,7 @@ def _discards(mod, monkeypatch) -> list[str]:
 
 
 def test_lane_a_released_reply_discards_the_drafts_it_superseded(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
-    """A&P 2026-11-24 shape: the checklist held a reply (capitals), the Operator
+    """The A&P shape of November 2026: the checklist held a reply (capitals), the Operator
     redrafted, and the redraft waited for SMD's review. Once the review sends
     it, the held draft and the sent one leave the mailbox's Drafts folder.
     FALSIFIER: before the fix the release discarded nothing."""

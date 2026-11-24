@@ -215,7 +215,7 @@ def test_capitals_outside_the_folder_name_are_still_emphasis():
     assert oc._caps(f"Filed in {FOLDER}. Review it TODAY.", oc.MEMO).group(0) == "TODAY"
 
 
-#: A reply citing a matter's folders as the firm spells them (A&P 2026-11-24, a
+#: A reply citing a matter's folders as the firm spells them (A&P, November 2026, a
 #: reply to an attorney; the names here are invented in the same shape).
 FOLDER_REPLY = (
     "The intake scans are in the CLIENT RECORDS folder, the photos are in the "
@@ -236,7 +236,7 @@ FOLDER_REPLY = (
     ],
 )
 def test_a_folder_the_reply_cites_by_its_own_name_is_not_emphasis(line):
-    """A&P 2026-11-24: a reply quoting the matter's Smokeball folders exactly as
+    """A&P, November 2026: a reply quoting the matter's Smokeball folders exactly as
     the firm spells them was held as shouting, and the redraft, in ordinary
     case, misquoted the folders. FALSIFIER: on the old rule each refused."""
     assert oc._caps(line, oc.STAFF_SEND) is None
