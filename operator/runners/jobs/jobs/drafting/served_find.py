@@ -60,10 +60,11 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
-from . import amended, parties, served_earlier as earlier
+from . import amended, parties, provenance, served_earlier as earlier
 from . import served as served_mod
 from .outcome import DraftingFailed
 from .served import OPERATOR, OTHER, SET_TYPES, ServedSet, found_drafted_by
+from .served_earlier import Delivered as Delivered, delivered_drafts as delivered_drafts
 from . import served_formset as formset, served_papers as papers
 from .served_docs import EXCERPT_CHARS as EXCERPT_CHARS, Doc, docs as docs, load as _load, other_side as other_side
 from .served_slice import RESPONDING as _RESPONDING, slice_requests as _slice
@@ -116,7 +117,8 @@ class Found:
     answered: list[tuple[ServedSet, Doc]] = field(default_factory=list)
     #: Lines for the attorney notes (``attorney_lines``): files left out, earlier papers of ours.
     notes: list[str] = field(default_factory=list)
-    firm: Any = None  #: our firm's attorneys (``provenance.our_firm``): their block marks a paper ours
+    #: What the job knows of our side (``provenance.Evidence``): a paper is ours only on its strong evidence.
+    ev: provenance.Evidence | None = None
 
     def note(self, doc: Doc | None, kind: str, kept: bool, why: str, **more: Any) -> None:
         head = {"id": doc.id, "name": doc.name, "folder": doc.folder, "copies": doc.copies} if doc else {}
@@ -322,8 +324,9 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
     if responding and not ours(responding, clients):
         f.note(d, "response", False, "the other side's response to our client's discovery; ignored", set_type=kind)
         return
-    if not kind:  # ours by its name (provenance.whose), of a kind code cannot read
+    if not kind:  # ours on strong evidence (provenance.whose), of a kind code cannot read
         f.note(d, "response", False, "our side's paper, not a served set; its kind is not read")
+        f.notes.append(f'"{d.name}": the Operator could not read what kind of paper this is; it was not answered.')
         return
     if not papers.was_served(d.name, d.text):
         why = "a draft by its name" if papers.draft_name(d.name) else "no proof of service or dated signature"
@@ -338,10 +341,10 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
 
 def sort_docs(f: Found, all_docs: list[Doc], clients: list[str]) -> Sorted:
     """Every document by code's own reading; a set our client propounded is dropped here."""
-    out = Sorted()
+    out, ev = Sorted(), f.ev or provenance.Evidence(tuple(clients))
     ours_folders: set[str] = set()
     for d in all_docs:
-        what, kind = classify(d, f.firm)
+        what, kind = classify(d, ev)
         if what == "response":
             _response(f, d, kind, clients, out)
         elif what == "served" and kind:
@@ -456,14 +459,10 @@ def _before_spend(f: Found, got: Sorted, kinds: list[str]) -> None:
     """Every stop code can call before a single read is paid for."""
     for d in got.scans:
         f.note(d, "scan", False, "its name reads as discovery and its first pages have no text; not read")
-    if got.others and got.served:  # a leftover beside sets the job drafts never refuses it (2026-11-24)
-        for d in got.others:
-            f.note(d, "other_set", False, "a paper of a kind outside the list beside the served sets; left out")
-            f.notes.append(f'Not answered by these drafts: "{d.name}" reads as a discovery paper of a kind other '
-                           "than interrogatories, requests for production or requests for admission.")  # fmt: skip
-    elif got.others:
+    if got.others:  # never ours on strong evidence (that is a response paper), so it holds as before
         for d in got.others:
             f.note(d, "other_set", False, "a served set of a kind outside the list")
+            f.notes.append(f'"{d.name}": the Operator could not read what kind of paper this is; it was not answered.')
         names = ", ".join(repr(d.name) for d in got.others)
         raise Stop("served_other_set", f"the served sets include a kind outside the list: {names} "
                    '(record it as type "other", drafted by smd)')  # fmt: skip
@@ -544,14 +543,16 @@ def find(
     other_side: list[str] | None = None,
     title: str = "Discovery Responses",
     form_by_operator: bool = False,
-    firm: Any = None,
+    firm: provenance.OurFirm | None = None,
 ) -> Found | None:
     """The served sets, found and written as ``served.json``; None (nothing
     done) when the hand file is already there. Raises ``Stop`` on every stop;
     ``found-report.json`` is written either way."""
     if (Path(job_dir) / served_mod.FILE).exists():
         return None
-    f = Found(form_by_operator=form_by_operator, firm=firm)
+    mine = earlier.delivered_drafts(job_dir)
+    ev = provenance.Evidence(tuple(clients), firm, tuple(d.document for d in mine), earlier.proven_ids(job_dir))
+    f = Found(form_by_operator=form_by_operator, ev=ev)
     stop: Stop | None = None
     try:
         _walk(f, data, request, reader, list(clients), list(other_side or []), title, Path(job_dir))
@@ -579,11 +580,12 @@ def candidates(f: Found, data: Path, request: str, clients: list[str]) -> Sorted
     return got
 
 
-def planned_reads(data: Path, request: str, clients: list[str]) -> list[str]:
+def planned_reads(data: Path, request: str, clients: list[str], firm: provenance.OurFirm | None = None) -> list[str]:
     """The excerpt of every read the finder would make, in order; empty when
     code stops before any read (the replay lists every call it needs at once)."""
+    f = Found(ev=provenance.Evidence(tuple(clients), firm))
     try:
-        return [d.excerpt() for d, _k in candidates(Found(), data, request, list(clients)).served]
+        return [d.excerpt() for d, _k in candidates(f, data, request, list(clients)).served]
     except Stop:
         return []
 
@@ -606,7 +608,7 @@ def _walk(
         return
     if not f.keep:
         raise Stop("served_none", "every served set in the matter file is answered by a later response of ours")
-    delivered = delivered_drafts(job_dir) if job_dir is not None else []
+    delivered = earlier.delivered_drafts(job_dir) if job_dir is not None else []
     f.keep, notes = earlier.apply(with_priors(f, prior, delivered), got.drafts, delivered)
     f.notes += notes
 
@@ -627,50 +629,6 @@ def _amended(f: Found, data: Path, request: str) -> bool:
     for d in letters:
         f.note(d, "letter", True, "the other side's meet-and-confer letter: read for the amended responses")
     return True
-
-
-@dataclass(frozen=True)
-class Delivered:
-    """A draft an earlier Operator job delivered for one served set."""
-
-    set_type: str
-    set_number: int
-    propounding_party: str
-    document: str
-    job_id: str
-
-
-def delivered_drafts(job_dir: Path) -> list[Delivered]:
-    """Every draft an earlier Operator job on this matter DELIVERED, by the
-    served set it answers (type, number, asking party): the sibling job
-    directories' ``served-plan.json`` beside their ``served-outcomes.json``,
-    which the runner writes only after the filed files are read back
-    (``run._file``). A set SMD filed (``drafted_by`` smd) and a set the job
-    itself named as already drafted are not the Operator's draft."""
-    own = _load(Path(job_dir) / "job.json", {})
-    matter = str(own.get("matter_id") or "") if isinstance(own, dict) else ""
-    out: list[Delivered] = []
-    if not matter:
-        return out
-    try:
-        dirs = sorted(p for p in Path(job_dir).parent.iterdir() if p.is_dir() and p != Path(job_dir))
-    except OSError:
-        return out
-    for d in dirs:
-        job = _load(d / "job.json", {})
-        if not isinstance(job, dict) or str(job.get("matter_id") or "") != matter:
-            continue
-        plan, rows = _load(d / "data" / served_mod.PLAN, {}), _load(d / "data" / served_mod.OUTCOMES, {})
-        sets = plan.get("sets") if isinstance(plan, dict) else None
-        done = rows.get("sets") if isinstance(rows, dict) else None
-        if not isinstance(sets, list) or not isinstance(done, list) or len(sets) != len(done):
-            continue
-        for s, r in zip(sets, done):
-            if (isinstance(s, dict) and isinstance(r, dict) and r.get("status") == served_mod.FILED
-                    and r.get("drafted_by") == OPERATOR and not r.get(served_mod.PRIOR) and r.get("document")):  # fmt: skip
-                out.append(Delivered(str(s.get("set_type")), int(s.get("set_number") or 0),
-                                     str(s.get("propounding_party") or ""), str(r["document"]), d.name))  # fmt: skip
-    return out
 
 
 def with_priors(f: Found, prior: dict[tuple[str, int], list[str]], delivered: list[Delivered]) -> list[ServedSet]:
@@ -717,7 +675,7 @@ def _report(job_dir: Path, f: Found, stop: Stop | None, reader: Reader) -> None:
         "spent_usd": round(reader.spent(), 4),
         "planned": [s.label for s in f.keep] if not stop else [],
         "candidates": f.rows,
-        "attorney_notes": f.notes if not stop else [],
+        "attorney_notes": f.notes,
     }
     _atomic(Path(job_dir) / REPORT, json.dumps(doc, indent=1))
 

@@ -31,11 +31,16 @@ _PROOF = re.compile(r"(?m)^[ \t|]*PROOF\s+OF\s+(?:ELECTRONIC\s+)?SERVICE\b")
 _DATED = re.compile(rf"(?i)\b(?:dated|served)\b[^\n]{{0,40}}?{_DATE}")
 #: A signature block after the date: "/s/", "By:", or "Attorneys for".
 _SIGNED = re.compile(r"(?i)/s/|^[ \t|]*By:|\bAttorneys?\s+for\b", re.M)
-#: A draft by its name: "DRAFT" anywhere (2026-11-24: "Responses to <party> RFP Set
-#: One DRAFT <date> by A&P Operator Agent" put it last), "for attorney review", or
-#: a paper the Operator's agent wrote. The Operator never serves a paper itself.
+#: A file NAMED as SMD's or the Operator's: "DRAFT ..." first, "for attorney review"
+#: (``ours_written``: never wider than this, 2026-11-24 review).
+_DRAFT_START = re.compile(r"(?i)^\s*DRAFT\b|for\s+attorney\s+review")
+#: The Operator's own stamp, as its agent names a paper: "... by A&P Operator Agent".
+STAMP = re.compile(r"(?i)\bby\s+(?:[A-Za-z0-9&.'’]+\s+){0,3}?Operator\s+Agent\b")
+#: A draft by its name: DRAFT as its own token first or last, or followed by a
+#: date or a version ("... Set One DRAFT 2026-09-23 by ..."); never "Draft Lease".
 _DRAFT_NAME = re.compile(
-    r"(?i)(?<![a-z])DRAFT(?![a-z])|for\s+attorney\s+review|(?<![a-z])operator[\s_-]+agent(?![a-z])"
+    r"(?i)^\s*DRAFT\b|\bDRAFT\s*(?:\.[a-z0-9]{2,4})?\s*$"
+    r"|\bDRAFT[\s_-]+(?:v(?:er(?:sion)?)?\.?\s*\d|\d{1,4}[-/.]\d{1,2})|for\s+attorney\s+review"
 )
 #: "DRAFT ... Responses to <kind>, Set One", with or without the comma (measured
 #: 2026-11-20: 0 of 15 real draft names carried it), the number in digits or words.
@@ -54,8 +59,10 @@ _WORDS = {w: i for i, w in enumerate("one two three four five six seven eight ni
 
 
 def draft_name(name: str) -> bool:
-    """A file NAMED as a draft ("DRAFT ...", "... for attorney review ...")."""
-    return bool(_DRAFT_NAME.search(name or ""))
+    """A file NAMED as a draft ("DRAFT ...", "... DRAFT <date>", "... for attorney
+    review ...") or stamped by the Operator's agent (``STAMP``)."""
+    spaced = " ".join(re.sub(r"_+", " ", name or "").split())
+    return bool(_DRAFT_NAME.search(spaced) or STAMP.search(spaced))
 
 
 def was_served(name: str, text: str) -> bool:
@@ -137,7 +144,12 @@ _OPERATOR_FOLDER = re.compile(r"\(Operator [0-9A-Za-z]{6}\)")
 def ours_written(name: str, folder: str) -> bool:
     """A file SMD wrote: named as a draft ("DRAFT ... Exhibit B"), or in a
     folder the Operator delivered into. Never a served paper or a scan of one."""
-    return draft_name(name) or bool(_OPERATOR_FOLDER.search(folder or ""))
+    return bool(_DRAFT_START.search(name or "")) or operator_folder(folder)
+
+
+def operator_folder(folder: str) -> bool:
+    """A folder the Operator delivered into: our own filing record."""
+    return bool(_OPERATOR_FOLDER.search(folder or ""))
 
 
 #: A sentence that asks for responses to be drafted ("draft responses to ...",
