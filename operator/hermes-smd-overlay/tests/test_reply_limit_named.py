@@ -43,6 +43,11 @@ LIMIT_REPLIES = [
     "That file format is not supported.",
     "We are not set up to send files from the matter.",
     "I don't have a way to attach those emails.",
+    # A render of our own that failed, and work handed back (2026-11-24).
+    "The Word version timed out twice and was not filed, so it needs to be pasted into your template.",
+    "The DOCX draft failed, so you will need to paste it into the caption page.",
+    "The Word file could not be generated; please copy and paste the text below.",
+    "It timed out on our side.",
 ]
 
 
@@ -84,6 +89,9 @@ def test_ordinary_answers_state_no_limit() -> None:
         "We cannot produce those documents until the protective order issues.",  # the firm producing
         "The clinic said it cannot send the records before Friday.",  # reported speech
         'Dr. Lee wrote: "I cannot attach the imaging to email."',  # a quote
+        "The complaint was not filed until March 3.",  # a fact about the case
+        "Please copy Dana Roe on your reply.",  # copy a person, not paste our work
+        "The court portal said the session timed out.",  # reported, not ours
     ],
 )
 def test_an_answer_or_someone_else_s_words_are_never_held(text: str) -> None:

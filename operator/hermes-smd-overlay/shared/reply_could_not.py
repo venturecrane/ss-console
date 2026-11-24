@@ -234,6 +234,16 @@ _PRODUCT_LIMIT_RE = re.compile(
     r"|\b(?:that|this|the)\s+(?:file\s+)?format\s+(?:is\s+not|isn't)\s+(?:supported|readable)\b"
     rf"|{_SUBJECT}(?:'m|'re|\s+am|\s+are)\s+not\s+(?:set\s+up|equipped|built)\s+to\b"
     rf"|{_SUBJECT}\s+(?:do\s+not|don't)\s+have\s+(?:a\s+)?(?:way|tool|the\s+ability)\s+to\b"
+    # A render or filing of our own that failed, told to the person
+    # (2026-11-24: "the Word version timed out twice and was not filed").
+    r"|\b(?:word|docx)\s+(?:version|file|document|copy|draft)\b[^.?!\n]{0,60}?"
+    r"\b(?:timed\s+out|failed|did\s+not\s+(?:render|generate|finish|go\s+through)"
+    r"|(?:was\s+not|wasn't|could\s+not\s+be|couldn't\s+be)\s+(?:filed|created|generated|rendered|saved))\b"
+    r"|\b(?:it|the\s+(?:render|rendering|upload|conversion|tool|filing))\s+timed\s+out\b"
+    # Work handed back to the person: pasting or retyping our output.
+    r"|\b(?:needs?|will\s+need|would\s+need|has|have)\s+to\s+be\s+(?:pasted|retyped|re-typed|copied)\s+in(?:to)?\b"
+    r"|\byou(?:'ll|\s+will|\s+would|'d)?\s+(?:need|have|want)\s+to\s+(?:copy\s+and\s+)?(?:paste|retype|re-type)\b"
+    r"|\b(?:please|you\s+can|you\s+could)\s+(?:copy\s+and\s+)?(?:paste|retype|re-type)\b"
 )
 
 #: The owner's sentence (:data:`LOOK_INTO`), or the same promise in its words.
