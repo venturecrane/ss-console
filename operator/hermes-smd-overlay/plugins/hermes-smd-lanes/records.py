@@ -1,6 +1,7 @@
 """The agent-facing tool for a matter-records request (ADR 0102 amendment 4).
 
-A staff member emails the Operator for named records on a matter. The turn
+A staff member emails the Operator for documents from a matter's file, named
+or by kind (2026-11-24: "every parent statement in the file, attached"). The turn
 does not find, read, cut or attach anything: it queues a ``records`` job and
 relays the broker's acknowledgement. The runner parses the request once, finds
 each record in each file once, cuts the pages, renders the facts from

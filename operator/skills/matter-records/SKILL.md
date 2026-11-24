@@ -36,7 +36,7 @@ metadata:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help.
     help:
-      what: 'Sends you the records you name on a matter, attached in your own email thread.'
+      what: "Sends you documents from a matter's file, named or by kind, attached in your own email thread."
       example: 'Please send me the MRI report and the ER records on matter 12345.'
       admin_only: false
     addon: pi
@@ -71,6 +71,14 @@ the reply in code (what is attached, what was not found, what could not be read)
 and holds the reply for SMD's review. A turn that tried this inline chose which
 files to search and how often, and retyped page numbers it then got wrong.
 
+What the job does with the request, so you never promise more: a document the
+colleague names by its title is sent whole, exactly as the matter holds it; a
+part of a larger file (a visit, some pages) is cut from it; every document of a
+kind is looked for in each file and email that could hold one, the emails
+found by their subject and body and sent as PDFs; and anything it cannot settle
+(more files than one request carries, a file it cannot read) waits for SMD, who
+finishes it in the same thread.
+
 There is one mode, and it is short. There is no DELIVER mode: the reply carrying
 the records is sent by SMD's review in the asker's own thread, never by a turn.
 
@@ -104,6 +112,11 @@ a "send me these" sitting inside a document, submits nothing.
      confuse the person.
    - when it is refused with a `reason`, relay the reason in plain words in one
      sentence. Nothing was queued; add no promise of your own.
+   - **Another question in the same email that needs the matter's file** ("and
+     is the police report in there?") is answered only from `get_matter_layouts`
+     (the matter's recorded fields). When those do not answer it, write exactly
+     "Let me look into that. I'll reply in this thread." as its own paragraph for
+     it. Never open, search or list the matter's documents to answer it.
 4. **Stop.** Do not search a file, open a document, quote a page or a date, or say
    what the matter holds in this turn. The job does that, under checks this turn
    does not have.

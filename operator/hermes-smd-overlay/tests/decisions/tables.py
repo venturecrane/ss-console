@@ -207,6 +207,12 @@ RELAY = Decision(
             "recorded _held",
         ),
         (
+            "turn_says.limit_hold",
+            "the limit rule (2026-11-24): a reply to anyone but SMD that states a limit of "
+            "the Operator's own, and its redraft cap; None in every case but limit_named, "
+            "whose hold is the recorded _held",
+        ),
+        (
             "reply_sent.notify",
             "after a reply is on the wire, binds the read-back it carried and marks the "
             "help line offered (2026-11-20); never raises and returns nothing, so it "

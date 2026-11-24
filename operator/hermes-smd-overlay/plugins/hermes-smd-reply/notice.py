@@ -144,11 +144,15 @@ _REASON_HINTS: dict[str, str] = {
         "reply is still yours. Draft it again without the phrase below, in the "
         "person's terms: what they asked, and what they will get."
     ),
+    "limit_named": (
+        "The reply told the person something you cannot do. Nothing was sent and the one "
+        "reply is still yours. Draft it again as the note below says."
+    ),
 }
 
 #: Holds whose guidance stands on every attempt: the redraft that clears them is
 #: named exactly, so "do not redraft" on a second hold would be the wrong advice.
-_EXACT_REDRAFT_REASONS = frozenset({"fixed_wording", "mechanics_named"})
+_EXACT_REDRAFT_REASONS = frozenset({"fixed_wording", "mechanics_named", "limit_named"})
 #: The detail of a fixed-wording hold past the relay's redraft cap (relay_checks
 #: step 5a, every seat): the one case "draft it again" is the wrong advice.
 FIXED_WORDING_STOP = (
@@ -159,6 +163,11 @@ FIXED_WORDING_STOP = (
 MECHANICS_STOP = (
     "mechanics_named: nothing was sent. This reply has been held too many times for describing "
     "how the work is done. Do not draft it again; SMD has been told."
+)
+#: The same, for a reply held too often for stating a limit of the Operator's own.
+LIMIT_STOP = (
+    "limit_named: nothing was sent. This reply has been held too many times for telling the "
+    "person what cannot be done. Do not draft it again; SMD has been told."
 )
 _STOP_GUIDANCE = "Do not draft this reply again."
 #: How the relay's step-5a refusal begins (``shared.turn_says.REFUSAL_LEAD``,
@@ -219,7 +228,7 @@ def render(notice: HoldNotice) -> str:
         return _SENT_TRACE_INCOMPLETE_TEXT.format(recipient=recipient)
     exact = reason in _EXACT_REDRAFT_REASONS
     if exact:
-        stopped = notice.detail in (FIXED_WORDING_STOP, MECHANICS_STOP)
+        stopped = notice.detail in (FIXED_WORDING_STOP, MECHANICS_STOP, LIMIT_STOP)
         paragraphs = reason == "fixed_wording" and notice.detail.startswith(SAY_REFUSAL_LEAD)
         hint = _REASON_HINTS["fixed_wording_paragraphs" if paragraphs else reason]
         guidance = _STOP_GUIDANCE if stopped else hint

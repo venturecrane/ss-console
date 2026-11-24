@@ -68,8 +68,22 @@ CODES = frozenset(
         "cannot_complete",
         "not_permitted",
         "none_available",
+        "product_limit",
+        "looking_into",
     }
 )
+
+#: The one sentence the Operator says when it cannot do what was asked
+#: (2026-11-24, the owner's rule): it never states a limit of its own to the
+#: person; it owns the follow-up, and SMD does the work. A reply carrying it is
+#: stamped ``looking_into``, so the request reads NOT FULFILLED and pages SMD
+#: exactly as a decline did (``shared.heartbeat``, ``shared.request_cards``).
+LOOK_INTO = "Let me look into that. I'll reply in this thread."
+
+#: The codes that mean the reply STATED an inability or a limit of the
+#: Operator's own: what :func:`stated_limit` reports and the reply relay holds.
+#: ``looking_into`` is the sentence that replaces them, never one of them.
+STATED_CODES = CODES - {"looking_into"}
 
 #: The audit metadata key the reply plugin writes the code under.
 METADATA_KEY = "could_not"
@@ -197,6 +211,25 @@ _NOT_PERMITTED_RE = re.compile(
     rf"{_SUBJECT}(?:'m|'re|\s+am|\s+are)\s+not\s+(?:permitted|allowed|authorized|authorised)\s+to\b"
 )
 
+#: A limit of the Operator's own said as a product fact rather than in the
+#: first person (2026-11-24, A&P: "my document reader cannot open that format
+#: ... This is a limit of how I read files in Smokeball"), which the
+#: first-person rule above does not see.
+_PRODUCT_LIMIT_RE = re.compile(
+    r"\b(?:my|our)\s+(?:[a-z-]+\s+){0,3}?"
+    r"(?:tool|tools|reader|system|setup|access|email|mailbox|connection|software)\s+"
+    r"(?:cannot|can't|can\s+not|could\s+not|couldn't|is\s+unable\s+to|isn't\s+able\s+to"
+    r"|does\s+not|doesn't|won't|will\s+not)\s+"
+    r"(?:open|read|attach|send|access|handle|support|carry|reach)\b"
+    r"|\ba\s+limit(?:ation)?\s+(?:of|in)\s+(?:how|what)\s+(?:i|we)\b"
+    r"|\b(?:that|this|the)\s+(?:file\s+)?format\s+(?:is\s+not|isn't)\s+(?:supported|readable)\b"
+    rf"|{_SUBJECT}(?:'m|'re|\s+am|\s+are)\s+not\s+(?:set\s+up|equipped|built)\s+to\b"
+    rf"|{_SUBJECT}\s+(?:do\s+not|don't)\s+have\s+(?:a\s+)?(?:way|tool|the\s+ability)\s+to\b"
+)
+
+#: The owner's sentence (:data:`LOOK_INTO`), or the same promise in its words.
+_LOOKING_INTO_RE = re.compile(r"\blet\s+me\s+look\s+into\s+(?:that|this|it)\b")
+
 _NONE_OF_RE = re.compile(
     r"\bnone\s+of\s+(?:the|those|these|them|your)\b[^.?!\n]{0,100}?"
     r"\b(?:could\s+be|can\s+be|were|are|was|is)\s+(?:found|located|attached|available|accessible)\b"
@@ -241,34 +274,50 @@ def _sentence_before(text: str, start: int) -> str:
     return head[breaks[-1].end() :] if breaks else head
 
 
-def classify(text: object) -> str | None:
-    """The closed code for a reply that told the person the Operator could not
-    do what they asked, or ``None``. Never raises; non-text is ``None``."""
+def _hits(text: object) -> list[tuple[int, str, str]]:
+    """Every rule's first match in a reply's own lines, as ``(start, code,
+    the words matched)``, in order of where it starts."""
     if not isinstance(text, str) or not text.strip():
-        return None
+        return []
     own = _own_text(text)
-    hits: list[tuple[int, str]] = []
+    hits: list[tuple[int, str, str]] = []
     for match in _FIRST_PERSON_RE.finditer(own):
         if _HYPOTHETICAL_RE.search(_sentence_before(own, match.start())):
             continue
         verb = match.group("verb")
         if verb == "find" and _CLEAN_RESULT_RE.match(own, match.end()):
             continue
-        hits.append((match.start(), _VERB_CODES[verb]))
+        hits.append((match.start(), _VERB_CODES[verb], match.group(0)))
         break
     for pattern, code in (
         (_NO_ACCESS_RE, "cannot_access"),
         (_NOT_PERMITTED_RE, "not_permitted"),
         (_NONE_OF_RE, "none_available"),
+        (_PRODUCT_LIMIT_RE, "product_limit"),
+        (_LOOKING_INTO_RE, "looking_into"),
     ):
         for match in pattern.finditer(own):
-            if _HYPOTHETICAL_RE.search(_sentence_before(own, match.start())):
+            if code != "looking_into" and _HYPOTHETICAL_RE.search(
+                _sentence_before(own, match.start())
+            ):
                 continue
-            hits.append((match.start(), code))
+            hits.append((match.start(), code, match.group(0)))
             break
-    if not hits:
-        return None
-    return min(hits)[1]
+    return sorted(hits)
+
+
+def classify(text: object) -> str | None:
+    """The closed code for a reply that told the person the Operator could not
+    do what they asked, or ``None``. Never raises; non-text is ``None``."""
+    hits = _hits(text)
+    return hits[0][1] if hits else None
+
+
+def stated_limit(text: object) -> str:
+    """The words with which a reply STATES an inability or a limit of the
+    Operator's own (any code in :data:`STATED_CODES`), or ``""``. The reply
+    relay holds such a reply so the redraft says :data:`LOOK_INTO` instead."""
+    return next((words.strip() for _start, code, words in _hits(text) if code in STATED_CODES), "")
 
 
 def metadata(text: object) -> dict[str, str]:

@@ -107,6 +107,46 @@ describe('matter records procedure (router)', () => {
   })
 })
 
+describe('records is delivery of documents, never a question about them (tie-break 15)', () => {
+  const router = readFileSync(ROUTER, 'utf8')
+  const rubric = readFileSync(
+    'operator/skills/matter-inbox-router/references/routing-rubric.md',
+    'utf8'
+  )
+  // The shape of a real follow-up question (invented words): a $0 replay sent it
+  // to records 3 of 3 under the first wording of this fix (2026-11-24).
+  const QUESTION = 'are there new records or statements to produce since the last production?'
+
+  it('names a question about what exists or what to produce as not this class', () => {
+    expect(router).toContain('"' + QUESTION + '"')
+    expect(router).toMatch(/\*\*Only an ask for the documents themselves to be delivered\*\*/)
+    expect(router).toMatch(/drafting beats records/)
+  })
+
+  it('the class line in the procedure says delivered, named or by kind, never "named records"', () => {
+    expect(router).toMatch(
+      /- \*\*Matter records request\*\* \(a \*\*rostered colleague\*\* asking for documents already in one matter's file to be delivered to them, named or by kind/
+    )
+    expect(router).not.toMatch(/asking for named records on one matter/)
+  })
+
+  it('the rubric carries tie-break 15 and the outside-party and case-review lines', () => {
+    expect(rubric).toMatch(/^15\. \*\*Matter records versus general, drafting and the rest\.\*\*/m)
+    expect(rubric).toMatch(/A case file review is never the matter records class/)
+    expect(rubric).toMatch(/REQUESTED or ORDERED from someone outside the firm[^\n]*is file work/)
+    expect(rubric).not.toMatch(/"can you pull X,"/)
+  })
+})
+
+describe('the Operator never tells a colleague a limit of its own (2026-11-24)', () => {
+  const router = readFileSync(ROUTER, 'utf8')
+
+  it("says the owner's sentence instead, as its own paragraph", () => {
+    expect(router).toMatch(/\*\*When you cannot do what was asked, never say so\.\*\*/)
+    expect(router).toContain('Write exactly "Let me look into that. I\'ll reply in this thread."')
+  })
+})
+
 describe('matter-records skill', () => {
   const skill = readFileSync(RECORDS, 'utf8')
 

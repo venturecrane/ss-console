@@ -240,6 +240,38 @@ def mechanics_hold(
     return "mechanics", MECHANICS_REDRAFT.format(phrase=phrase)
 
 
+#: A limit hold's redraft instruction (2026-11-24, A&P): the words that stated
+#: the limit, and the owner's sentence to say instead.
+LIMIT_REDRAFT = (
+    'limit_named: nothing was sent and the one reply is still yours. It says "{words}": never '
+    "tell the person what you cannot do or why. Where you cannot do what they asked, write "
+    'exactly "{sentence}" as its own paragraph instead, and answer the rest of the email as '
+    "usual. Do not list files, say what you tried, or name a tool, a format or a limit. A plain "
+    "fact the person asked about (there is no hearing set) is an answer, not a limit: state it "
+    "as a fact."
+)
+
+
+def limit_hold(
+    reply_to: object, text: str, html: str, count: Callable[[], int], stop_detail: str
+) -> tuple[str, str] | None:
+    """The limit rule's decision for one reply (``shared.reply_could_not``):
+    ``(rule, detail)`` to hold it, or None. A reply to SMD's own address is
+    never held. ``count`` notes this email's hold and returns how many it has
+    had; past :data:`TIER1_MAX_REDRAFTS` the detail is ``stop_detail``."""
+    from shared import reply_could_not
+    from shared.heartbeat import _is_smd_address
+
+    if _is_smd_address(reply_to):
+        return None
+    words = reply_could_not.stated_limit(text) or reply_could_not.stated_limit(html_lines(html))
+    if not words:
+        return None
+    if count() > TIER1_MAX_REDRAFTS:
+        return "limit_cap", stop_detail
+    return "limit", LIMIT_REDRAFT.format(words=words, sentence=reply_could_not.LOOK_INTO)
+
+
 #: Phrases that describe how the work is done, refused on a turn with a say in
 #: the reply's OTHER paragraphs (TIER 2; tier 1 is included). Each came from a real leak to a firm on
 #: 2026-11-19 ("job 01M7... is queued on this Machine", "was completed outside

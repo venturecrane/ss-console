@@ -489,7 +489,12 @@ def test_lane_an_outsider_on_the_reply_roster_gets_no_files(lane) -> None:
     notice = _draft(mod, to="outsider@else.example")
     assert sent == [] and "matter_files_refused" in notice
     # The hold cleared the staging: the redraft goes, without any file.
-    _draft(mod, to="outsider@else.example", body="I could not attach the records.", call="d2")
+    _draft(
+        mod,
+        to="outsider@else.example",
+        body="Let me look into that. I'll reply in this thread.",
+        call="d2",
+    )
     assert len(sent) == 1 and "attachments" not in sent[0]
 
 

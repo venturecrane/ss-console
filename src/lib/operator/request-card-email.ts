@@ -37,6 +37,8 @@ const COULD_NOT_TEXT: Record<CouldNotCode, string> = {
   cannot_complete: 'it could not do what they asked',
   not_permitted: 'it is not permitted to do what they asked',
   none_available: 'none of what they asked for was available',
+  product_limit: "a limit of the Operator's own (a tool, a format, how it works)",
+  looking_into: 'it is looking into it and will reply in the thread, so SMD owes the answer',
   other: 'it could not do what they asked',
 }
 

@@ -361,6 +361,10 @@ def body_and_facts(
         return None
     if mechanics_held(origin, reply_to, send_text, send_html):
         return None
+    # A turn's fixed sentence owns its own wording (5a), so the limit rule
+    # reads only replies the model wrote freely.
+    if say is None and limit_held(origin, reply_to, send_text, send_html):
+        return None
     if facts is not None and not facts_hold:
         # The invariant, checked on the body that would go: no marker, and
         # the facts block present whenever there is one.
@@ -512,6 +516,32 @@ def mechanics_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -
     if hold is not None:
         _plugin._held(MECHANICS_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
     return hold is not None
+
+
+def limit_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -> bool:
+    """2026-11-24 (A&P, matter-file request): the Operator told an attorney
+    "I cannot attach files to this reply" and then "my document reader cannot
+    open that format ... This is a limit of how I read files". The owner's rule:
+    the Operator never states a limit of its own to a person; it says
+    ``reply_could_not.LOOK_INTO`` and SMD does the work, paged by that
+    sentence's ``looking_into`` code on the sent row. A reply to anyone but
+    SMD that states one is held here with the sentence to use, under the same
+    redraft cap as 5a (``turn_says.limit_hold``); past it the hold stands and
+    pages SMD."""
+    hold = turn_says.limit_hold(
+        reply_to,
+        send_text,
+        send_html,
+        lambda: _SAY_HOLDS.note(origin.message_id),
+        notice.LIMIT_STOP,
+    )
+    if hold is not None:
+        _plugin._held(LIMIT_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
+    return hold is not None
+
+
+#: The hold reason of a reply that states a limit of the Operator's own.
+LIMIT_HOLD_REASON = "limit_named"
 
 
 def turn_say(session_id: str, origin: Any, send_text: str, send_html: str) -> bool:

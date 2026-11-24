@@ -1,9 +1,48 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges. This change (2026-11-20): a step-5a fixed_wording hold (say_other_words and every pair with it) is now told the paragraph rule, each required sentence exactly once as its own paragraph, in any order, beside other paragraphs, instead of the broker's whole-body hint, so the rendered notice the transform hook returns changes (its length and digest). No decision, hold reason, row or detail moves.",
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges. This change (2026-11-24): the relay holds a reply that states a limit of the Operator's own (limit_named, turn_says.limit_hold), so the new limit_named case and every pair and raise with it hold where the base sent; test_reply's decline test now redrafts to the owner's sentence before it sends, and test_matter_file_reply's outsider redraft says that sentence instead of a decline.",
   "existing/test_champion_audience": [],
   "existing/test_champion_wall": [],
-  "synthetic/relay.guard": [],
+  "synthetic/relay.guard": [
+    "limit_named"
+  ],
   "existing/test_reply_binding": [],
-  "synthetic/relay.pair": [],
-  "synthetic/relay.raise": []
+  "synthetic/relay.pair": [
+    "bound_unsupported+limit_named",
+    "champion_wall+limit_named",
+    "code_sent_job+limit_named",
+    "config_oserror+limit_named",
+    "config_unreadable+limit_named",
+    "device_unsupported+limit_named",
+    "draft_failed+limit_named",
+    "duplicate+limit_named",
+    "gate_refused+limit_named",
+    "limit_named+advertising_hold",
+    "limit_named+checklist_hold",
+    "limit_named+empty_body"
+  ],
+  "synthetic/relay.raise": [
+    "limit_named@13:relay.recipient_locked",
+    "limit_named@14:_file_facts",
+    "limit_named@15:matter_file_facts.model_words",
+    "limit_named@16:relay.draft_body",
+    "limit_named@17:_held"
+  ],
+  "existing/test_matter_file_reply": [
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.16.result",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.17.result.0",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.17.result.1",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.23.args.0",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.24.args.1",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.24.result",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.26.args.0",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.27.args.0",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.28.kwargs.body",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.30.kwargs.scan_text",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.37.args.1",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.37.result.0",
+    "tests/test_matter_file_reply.py::test_lane_an_outsider_on_the_reply_roster_gets_no_files.timeline.3.events.37.result.1"
+  ],
+  "existing/test_reply": [
+    "tests/test_reply.py::test_a_sent_reply_that_declines_carries_its_code_never_its_words.timeline"
+  ]
 }
