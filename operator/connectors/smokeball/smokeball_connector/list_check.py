@@ -240,7 +240,7 @@ def list_refusal(
     return refused(matter_id, file_name, miss[0], [miss[1]]) if miss else None
 
 
-def record_refusal(matter_id: str, file_name: str, verdict: Any) -> dict[str, Any]:
+def record_check_refusal(matter_id: str, file_name: str, verdict: Any) -> dict[str, Any]:
     """A failed record check: ``revise`` when a redraft can clear it, else ``refused``."""
     return refused(
         matter_id,

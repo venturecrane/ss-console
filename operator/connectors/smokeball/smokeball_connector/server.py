@@ -1739,7 +1739,7 @@ def render_docx_draft(
     Classified INTERNAL_WRITE at the overlay: the Operator saving its own work
     product into the firm's record. Nothing leaves the firm; delivery to anyone
     outside is a separate, separately-gated act."""
-    from .list_check import REVISE, list_refusal, record_refusal, refused, render_refusal
+    from .list_check import REVISE, list_refusal, record_check_refusal, refused, render_refusal
     from .record_check import run_record_check
     from .render import TemplateContentRefused, check_draft_content
 
@@ -1766,7 +1766,7 @@ def render_docx_draft(
         vision_sources=vision_sources,
     )
     if not verdict.passed:
-        return record_refusal(matter_id, file_name, verdict)
+        return record_check_refusal(matter_id, file_name, verdict)
 
     data, format_applied, refusal, library = _render_with_format(draft_markdown, document_class, matter_id)
     if refusal:
