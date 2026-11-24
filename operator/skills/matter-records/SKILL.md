@@ -53,7 +53,7 @@ metadata:
 A colleague at the firm asks the Operator for records on a matter: a report, a
 visit's records, some pages of a document, or every document of a kind ("every
 parent statement in the file", "all the emails from the adjuster"), whatever the
-files are (PDFs, emails, scans, photos). They want every one of those records
+files are PDFs (scans included) or emails saved on the matter. They want every one of those records
 back in their own email thread, with a true account of each.
 
 **Finding which files those are is the job's work, never the turn's.** On

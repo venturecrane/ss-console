@@ -131,7 +131,7 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     "records_job_submit": (
         "Queue a matter-records request for the person whose email opened this turn: any ask for "
         "documents from one matter's file, named or by kind (every parent statement, all the "
-        "adjuster's emails), whatever the files are. Never search, list, read or name the matter's "
+        "adjuster's emails), PDFs or saved emails. Never search, list, read or name the matter's "
         "files in the turn, and never find, "
         "read, cut, attach or describe records in the turn: this queues a job that finds the "
         "records on the Machine and sends them in this thread once SMD has reviewed them. Pass the "

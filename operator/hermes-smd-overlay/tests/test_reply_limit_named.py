@@ -39,7 +39,6 @@ LIMIT_REPLIES = [
 @pytest.mark.parametrize("text", LIMIT_REPLIES)
 def test_each_stated_limit_is_found(text: str) -> None:
     assert reply_could_not.stated_limit(text)
-    assert reply_could_not.classify(text) in reply_could_not.STATED_CODES
 
 
 def test_the_owners_sentence_states_no_limit_and_still_reads_not_fulfilled() -> None:
@@ -63,6 +62,36 @@ def test_ordinary_answers_state_no_limit() -> None:
         "The format of the order is set by the court.",
     ):
         assert reply_could_not.stated_limit(text) == "", text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can't find a file named Roe deposition on matter 4417.",  # cannot_find: an answer
+        "We were unable to locate the defendant at the Elm Street address.",  # the firm's "we"
+        "None of the bills were attached to the matter.",  # none_available
+        "I couldn't complete the intake; the client did not sign.",  # cannot_complete
+        "We cannot produce those documents until the protective order issues.",  # the firm producing
+        "The clinic said it cannot send the records before Friday.",  # reported speech
+        'Dr. Lee wrote: "I cannot attach the imaging to email."',  # a quote
+    ],
+)
+def test_an_answer_or_someone_else_s_words_are_never_held(text: str) -> None:
+    """Review of #4210: only a limit of the Operator's own is held (product_limit,
+    cannot_attach, cannot_access, in its own voice). FALSIFIER: holding every
+    code in CODES holds each of these."""
+    assert reply_could_not.stated_limit(text) == "", text
+
+
+def test_the_limit_rule_counts_its_redrafts_apart_from_other_holds(mod: Any) -> None:  # noqa: F811
+    """Two fixed-wording holds on the same email must not use up the limit
+    rule's redrafts (review of #4210)."""
+    origin = _origin()
+    for _ in range(mod.relay_checks.SAY_MAX_REDRAFTS + 1):
+        mod.relay_checks._SAY_HOLDS.note(origin.message_id)
+    mod.relay_checks.limit_held(origin, SENDER, LIMIT_REPLIES[0], "")
+    detail = next(c[2]["_detail"] for c in mod.calls if c[0] == "_held")
+    assert detail != mod.notice.LIMIT_STOP and reply_could_not.LOOK_INTO in detail
 
 
 def test_a_reply_stating_a_limit_is_held_with_the_sentence_to_use(mod: Any) -> None:  # noqa: F811

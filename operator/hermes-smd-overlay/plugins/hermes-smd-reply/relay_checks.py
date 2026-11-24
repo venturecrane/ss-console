@@ -526,13 +526,13 @@ def limit_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -> bo
     ``reply_could_not.LOOK_INTO`` and SMD does the work, paged by that
     sentence's ``looking_into`` code on the sent row. A reply to anyone but
     SMD that states one is held here with the sentence to use, under the same
-    redraft cap as 5a (``turn_says.limit_hold``); past it the hold stands and
+    redraft cap as 5a, counted on its own (``turn_says.limit_hold``); past it the hold stands and
     pages SMD."""
     hold = turn_says.limit_hold(
         reply_to,
         send_text,
         send_html,
-        lambda: _SAY_HOLDS.note(origin.message_id),
+        lambda: _LIMIT_HOLDS.note(origin.message_id),
         notice.LIMIT_STOP,
     )
     if hold is not None:
@@ -542,6 +542,9 @@ def limit_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -> bo
 
 #: The hold reason of a reply that states a limit of the Operator's own.
 LIMIT_HOLD_REASON = "limit_named"
+#: The limit rule's own redraft count per email (review of #4210): a fixed-
+#: wording or mechanics hold on the same email does not use up its redrafts.
+_LIMIT_HOLDS = held_notice.HoldCounter()
 
 
 def turn_say(session_id: str, origin: Any, send_text: str, send_html: str) -> bool:

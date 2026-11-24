@@ -80,10 +80,19 @@ CODES = frozenset(
 #: exactly as a decline did (``shared.heartbeat``, ``shared.request_cards``).
 LOOK_INTO = "Let me look into that. I'll reply in this thread."
 
-#: The codes that mean the reply STATED an inability or a limit of the
-#: Operator's own: what :func:`stated_limit` reports and the reply relay holds.
-#: ``looking_into`` is the sentence that replaces them, never one of them.
-STATED_CODES = CODES - {"looking_into"}
+#: The codes the reply relay HOLDS a reply for (:func:`stated_limit`): a limit
+#: of the Operator's own, or that it cannot attach, send or open something
+#: (review of #4210). ``cannot_find``, ``none_available``, ``cannot_complete``
+#: and ``not_permitted`` stay metadata only: "I can't find a file named X on
+#: matter Y" and "we were unable to locate the defendant" are answers, and the
+#: request card still reads them NOT FULFILLED.
+HOLD_CODES = frozenset({"product_limit", "cannot_attach", "cannot_access"})
+#: A sentence that reports what someone else said or wrote ("the clinic said
+#: it cannot send the records", "Dr. Roe wrote: we cannot provide ...").
+_REPORTED_RE = re.compile(
+    r"\b(?:said|says|told|tells|wrote|writes|replied|replies|responded|stated|states|"
+    r"according\s+to|per\s+(?:the|their|his|her))\b|[\"“]"
+)
 
 #: The audit metadata key the reply plugin writes the code under.
 METADATA_KEY = "could_not"
@@ -314,10 +323,47 @@ def classify(text: object) -> str | None:
 
 
 def stated_limit(text: object) -> str:
-    """The words with which a reply STATES an inability or a limit of the
-    Operator's own (any code in :data:`STATED_CODES`), or ``""``. The reply
-    relay holds such a reply so the redraft says :data:`LOOK_INTO` instead."""
-    return next((words.strip() for _start, code, words in _hits(text) if code in STATED_CODES), "")
+    """The words with which a reply STATES a limit of the Operator's own, or
+    ``""``. The reply relay holds such a reply so the redraft says
+    :data:`LOOK_INTO` instead. Only :data:`HOLD_CODES`, every match read (not
+    only the first), and never:
+
+    * a "we" that is the firm: a first-person "we cannot attach / open" is the
+      firm's act as often as the Operator's ("we cannot produce those until the
+      protective order issues"), so only "I", "my", "our <tool>" and a stated
+      limit of how the Operator works hold;
+    * a sentence that reports what someone else said or wrote."""
+    if not isinstance(text, str) or not text.strip():
+        return ""
+    own = _own_text(text)
+    for match in _FIRST_PERSON_RE.finditer(own):
+        codes = {_VERB_CODES[match.group("verb")]}
+        joined = _JOINED_VERB_RE.match(own, match.end())  # "find or attach"
+        if joined:
+            codes.add(_VERB_CODES[joined.group("verb")])
+        if codes & HOLD_CODES and match.group(0).startswith("i") and _plain(own, match.start()):
+            return (match.group(0) + (joined.group(0) if joined else "")).strip()
+    for pattern, code in ((_NO_ACCESS_RE, "cannot_access"), (_PRODUCT_LIMIT_RE, "product_limit")):
+        for match in pattern.finditer(own):
+            if code == "cannot_access" and not match.group(0).startswith("i"):
+                continue
+            if _plain(own, match.start()):
+                return match.group(0).strip()
+    return ""
+
+
+#: A second delivery verb joined to the first ("I couldn't find or attach").
+_JOINED_VERB_RE = re.compile(rf"\s+(?:or|and|nor)\s+(?P<verb>{_VERB_RE})\b")
+
+
+def _plain(own: str, start: int) -> bool:
+    """The match's own sentence is the Operator speaking: no hypothetical, and
+    nothing reported from someone else."""
+    before = _sentence_before(own, start)
+    after = own[start:]
+    end = _SENTENCE_BREAK_RE.search(after)
+    sentence = before + (after[: end.start()] if end else after)
+    return not _HYPOTHETICAL_RE.search(before) and not _REPORTED_RE.search(sentence)
 
 
 def metadata(text: object) -> dict[str, str]:
