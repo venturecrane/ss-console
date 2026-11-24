@@ -107,9 +107,7 @@ def _route_set(
         holders = _prior_holders(db, delivered, threaded)
         if isinstance(holders, RouteRefused):
             return holders
-        block, bad = revise_units.collect(
-            db, delivered, lambda r: in_thread(r) or str(r["id"]) in holders
-        )
+        block, bad = revise_units.collect(db, delivered, lambda r: in_thread(r) or str(r["id"]) in holders)
     except ThreadUnknown:
         return _unanswered()
     if block is None:
