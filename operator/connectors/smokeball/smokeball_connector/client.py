@@ -407,8 +407,13 @@ class SmokeballClient:
                 pause = _rate_limit_sleep(last, attempt)
                 # Inside a render's stage deadline (draft_budget), a rate limit
                 # that would outlast it is surfaced now instead of slept out.
-                if attempt + 1 >= _RATE_LIMIT_ATTEMPTS or draft_budget.would_pass(pause):
+                if attempt + 1 >= _RATE_LIMIT_ATTEMPTS:
                     break
+                if draft_budget.would_pass(pause):
+                    # The stage's clock ran out, not the vendor's patience: a
+                    # stopped stage (out_of_time), never an unreadable document.
+                    record.finish(last.status_code, error="rate limit outlasts the render's deadline")
+                    raise draft_budget.OutOfTime("rate limit", pause)
                 time.sleep(pause)
                 continue
             if last.status_code == 401 and not refreshed:

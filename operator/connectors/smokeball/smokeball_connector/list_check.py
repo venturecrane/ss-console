@@ -41,6 +41,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterable
 
+from . import draft_budget
 from .library import _entry_folder_id, _listing, _walk_folders, list_matter_files
 
 #: The draft's own held-out part: the drafting checker's heading
@@ -141,6 +142,8 @@ def count_refusal(
     held = list(held_out_names)
     try:
         files = folder_files(client, matter_id, folder_id)
+    except draft_budget.OutOfTime:
+        raise  # the render's clock stopped the count: out_of_time, not an unread folder
     except Exception:  # noqa: BLE001 - ListingFailed or a folder read: could not look must never read as a count
         return ("list_folder_unread", "the folder's files could not be listed, so the entries were not counted")
     stems = {_stem(_name(f)) for f in files}
