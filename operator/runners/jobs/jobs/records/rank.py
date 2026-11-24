@@ -86,17 +86,27 @@ def is_pdf(row: dict[str, Any]) -> bool:
 
 
 _PAGE_RANGE = re.compile(r"\bpages?\s+\d", re.I)
+#: Words that frame a file's name without narrowing it (2026-11-24, live: "the
+#: file named <name>.pdf on matter 201094" was cut to 4 pages because "named"
+#: and the matter number read as extra words).
+_FRAMING = frozenset("file named called titled entitled document folder pdf msg matter".split())
+#: "on matter 201094", "in matter no. 2026-PI-101", "matter #201094": the matter
+#: the request is about, never a part of the file.
+_MATTER_REF = re.compile(r"\bmatter\s+(?:no\.?\s*|number\s+|#\s*)?[\w./-]*\d[\w./-]*", re.I)
 _PAGE_COUNT = re.compile(r"\b(\d+)[\s-]pages?\b", re.I)
 
 
-def names_whole(rec: dict[str, Any], label: Any) -> bool:
+def names_whole(rec: dict[str, Any], label: Any, folder: Any = "") -> bool:
     """Does the record NAME the file called ``label`` (a file's name, or its
     folder's), asking for the whole of it? Code, never a model: every word of
     the label (stop words aside) is in the record's words, and the record asks
     for nothing narrower: no date or page range in its hints, and no word
     beyond the label's but stop words, "whole", "copy", "attached" and the
     like, and a page count ("the 17-page declaration"). "the ER visit of 3/2
-    from the hospital records" names a part of a file, never the file."""
+    from the hospital records" names a part of a file, never the file.
+    Framing around the name is not narrowing: "the file named X.pdf on matter
+    201094", "the document called X", "file X.pdf from the Y folder" (the
+    file's own ``folder``)."""
     hints = rec.get("hints") or {}
     if hints.get("dates") or hints.get("date") or hints.get("pages"):
         return False
@@ -104,11 +114,11 @@ def names_whole(rec: dict[str, Any], label: Any) -> bool:
     if _PAGE_RANGE.search(raw):  # "page 3 of", "pages 12-14": a part, never the whole
         return False
     counts = set(_PAGE_COUNT.findall(raw))  # "the 17-page declaration"
-    asked = tokens(rec.get("asked")) - STOP - CREDENTIALS
+    asked = tokens(_MATTER_REF.sub(" ", raw)) - STOP - CREDENTIALS
     want = tokens(label) - STOP - CREDENTIALS - {"pdf"}
     if not want or not want <= asked:
         return False
-    extra = asked - want - _WHOLE_EXTRA
+    extra = asked - want - _WHOLE_EXTRA - _FRAMING - (tokens(folder) - STOP - CREDENTIALS)
     if extra and (extra - {t for t in extra if t.isdigit() and t in counts} or not asked & {"page", "pages"}):
         return False
     return True

@@ -98,6 +98,47 @@ def test_names_whole_is_code_and_never_a_part() -> None:
     assert not rank.names_whole(_item("the 17-page Declaration of Jane Roe 4"), "Declaration of Jane Roe.pdf")
 
 
+@pytest.mark.parametrize(
+    ("asked", "folder"),
+    [
+        # The live phrasing that was cut to 4 pages (2026-11-24), names invented.
+        ("the file named Parent Statements Roe.pdf on matter 201094", ""),
+        ("the document called Parent Statements Roe", ""),
+        ("file Parent Statements Roe.pdf from the Discovery folder", "Discovery"),
+        ("the file titled Parent Statements Roe in matter no. 2026-PI-101", ""),
+        ("the document entitled Parent Statements Roe in the Discovery folder", "Discovery"),
+    ],
+)
+def test_framing_around_a_file_name_still_names_the_whole_file(asked: str, folder: str) -> None:
+    """FALSIFIER: "named", "called", the matter number and the folder's own
+    words read as extra words, so each of these went to the page finder."""
+    assert rank.names_whole(_item(asked), "Parent Statements Roe.pdf", folder=folder)
+
+
+def test_framing_never_hides_a_part() -> None:
+    name = "Parent Statements Roe.pdf"
+    assert not rank.names_whole(_item("pages 2-5 of the file named Parent Statements Roe.pdf on matter 201094"), name)
+    assert not rank.names_whole(_item("the file named Parent Statements Roe.pdf", dates=["3/2/2024"]), name)
+    # A folder word that is not the file's own folder still narrows.
+    assert not rank.names_whole(
+        _item("file Parent Statements Roe.pdf from the Medical folder"), name, folder="Discovery"
+    )
+
+
+def test_the_live_phrasing_goes_whole_end_to_end(tmp_path: Path, env: dict[str, Path], model: FakeFinderModel) -> None:
+    stored = pdf(17)
+    sb = FakeSmokeball()
+    f = sb.add(1, "Parent Statements Roe.pdf", stored)
+    sb.add(2, "Northside Clinic records.pdf", pdf(10))
+    asked = "the file named Parent Statements Roe.pdf on matter 201094"
+    r, v = _run(tmp_path, env, sb, [_item(asked)], f"Please send me {asked}.")
+    assert v["verdict"] == "delivered", v
+    (cut,) = json.loads((r.data / "cuts.json").read_text())
+    assert (cut["file_id"], cut["pages"], cut["page_count"]) == (f, "", 17)
+    assert cut["sha256"] == hashlib.sha256(stored).hexdigest()
+    assert model.index_calls() == 0
+
+
 def test_a_named_pdf_with_an_active_key_holds_rather_than_going_altered() -> None:
     assert as_stored(pdf(1))
     assert not as_stored(b"%PDF-1.4 << /OpenAction << /S /JavaScript /JS (x) >> >>")

@@ -44,16 +44,20 @@ def named_file(run: Any, mid: str, rec: dict[str, Any], files: dict[str, Any]) -
     except Exception as exc:  # could not look is never "no file is named for it"
         raise RecordsHold("finder_failed: the matter's files could not be listed") from exc
     pdfs = [r for r in rows if rank.is_pdf(r) and r.get("id")]
-    hits = {str(r["id"]) for r in pdfs if rank.names_whole(rec, r.get("name"))}
+    try:
+        folders = mf._folder_paths(run.client, mid)
+    except Exception:  # noqa: BLE001 - unreadable folders name no file; the finder path runs
+        folders = {}
+
+    def folder_of(r: dict[str, Any]) -> str:
+        return folders.get(mf._folder_id(r) or "", "").rsplit("/", 1)[-1]
+
+    # The file's own folder may frame its name ("X.pdf from the Statements folder").
+    hits = {str(r["id"]) for r in pdfs if rank.names_whole(rec, r.get("name"), folder=folder_of(r))}
     if not hits:
-        try:
-            folders = mf._folder_paths(run.client, mid)
-        except Exception:  # noqa: BLE001 - unreadable folders name no file; the finder path runs
-            folders = {}
         by_folder: dict[str, list[str]] = {}
         for r in pdfs:
-            path = folders.get(mf._folder_id(r) or "", "")
-            by_folder.setdefault(path.rsplit("/", 1)[-1], []).append(str(r["id"]))
+            by_folder.setdefault(folder_of(r), []).append(str(r["id"]))
         hits = {ids[0] for label, ids in by_folder.items() if len(ids) == 1 and rank.names_whole(rec, label)}
     if len(hits) != 1:
         return None
