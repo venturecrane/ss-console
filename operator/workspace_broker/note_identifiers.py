@@ -188,6 +188,8 @@ _REFERENCE_BEFORE_RE = re.compile(
     r"(?:\b(?:rfps?|rfas?|requests?|interrogator(?:y|ies)|rogs?|pages?|pp?\.?|nos?\.?|numbers?|items?|lines?)|#)\s*$",
     re.IGNORECASE,
 )
+#: The word right after a figure that makes it a reference ("100-500 pages").
+_REFERENCE_AFTER_RE = re.compile(r"\s*(?:pages?|pp\b|items?|lines?|words?|days?|exhibits?)\b", re.IGNORECASE)
 _SENTENCE_BREAK_RE = re.compile(r"[.!?\n]")
 #: What before a digit run makes it an identifier, never a run-together count:
 #: "Matter 203795", "Case No. 203795", "#203795", "phone 6025551".
@@ -222,9 +224,9 @@ def _sentence_around(text: str, start: int, end: int) -> tuple[str, str]:
 def _is_count(text: str, start: int, end: int) -> bool:
     """Is the figure at ``text[start:end]`` a count the requester asked for: a
     cutting verb before it and a discovery noun in its sentence, and no item
-    word ("pages", "RFP") right before it?"""
+    word right before it ("RFP 1-45") or after it ("100-500 pages")?"""
     head, tail = _sentence_around(text, start, end)
-    if _REFERENCE_BEFORE_RE.search(head) or not _COUNT_VERB_RE.search(head):
+    if _REFERENCE_BEFORE_RE.search(head) or _REFERENCE_AFTER_RE.match(tail) or not _COUNT_VERB_RE.search(head):
         return False
     return bool(_COUNT_NOUN_RE.search(head) or _COUNT_NOUN_RE.search(tail))
 

@@ -289,14 +289,22 @@ def _norm(line: str) -> str:
     return " ".join(line.replace("’", "'").split()).lower()
 
 
+#: A short greeting or closing line ("Thanks.", "Thank you!", "Hi Dana.").
+_GREETING_OR_CLOSING_RE = re.compile(
+    r"^(?:thanks|thank\s+you|best|regards|best\s+regards|kind\s+regards|cheers|hi|hello|dear)\b[^.!?]{0,30}[.!]$",
+    re.IGNORECASE,
+)
+
+
 def is_look_into(text: object) -> bool:
     """Is :data:`LOOK_INTO` the reply's only sentence? Lines with no terminal
-    punctuation (a greeting, a signature block) are set aside; nothing else may
-    be there."""
+    punctuation (a greeting, a signature block) and short greetings and
+    closings ("Thanks.", "Hi Dana.") are set aside; nothing else may be
+    there."""
     if not isinstance(text, str):
         return False
     lines = [ln.strip() for ln in _own_text(text).splitlines() if ln.strip()]
-    said = [ln for ln in lines if ln[-1] in ".!?"]
+    said = [ln for ln in lines if ln[-1] in ".!?" and not _GREETING_OR_CLOSING_RE.match(ln)]
     return _norm(" ".join(said)) == _norm(LOOK_INTO)
 
 

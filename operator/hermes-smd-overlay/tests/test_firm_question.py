@@ -42,6 +42,12 @@ ASKS = [
     "Would you like me to file it on matter 900417 as well.",
     'Reply "yes" to proceed.',
     "Reply with the number, for example 35.",
+    # Today's real closings (invented names).
+    "Hi Dana,\n\nI can trim the special interrogatories on matter 900417.\n"
+    "How many interrogatories should each set be cut to?\n\nThanks,\nOperator",
+    "The draft is filed on matter 900417 without the caption block.\n\n"
+    "Tell me if you want that draft revised to carry the block.\n\nBest,\nOperator\nExample & Partners LLP",
+    'The delete is ready on matter 900417.\n\nReply "yes" to proceed.',
 ]
 
 STATES = [
@@ -97,13 +103,47 @@ STATES = [
 ]
 
 
+#: The reviewer's 28 realistic replies (review of #4220, 2026-11-24): each quotes
+#: the other side's questions in our own summary, and none asks the reader anything.
+REVIEWER_REPLIES = [
+    "Hi Chris,\n\nThe Responses to Plaintiff's Special Interrogatories, Set One, are filed to Discovery > Responses in matter 203795. The set is trimmed to the 120 you asked for; Nos. 121-160 are withdrawn.\n\nThanks,\nOperator",
+    'The draft objects to Special Interrogatory No. 22 as follows:\n\nResponding Party objects to this interrogatory on the grounds that it is vague and ambiguous as to the term "incident," overbroad as to time, and seeks information protected by the attorney-client privilege. Without waiving these objections, Responding Party responds: Plaintiff was treated at Banner Desert on 3/14/2025.\n\nIt is filed to Discovery.',
+    "Defendant served Special Interrogatories, Set Two (35 items). They ask: Did you have any prior neck injuries? Have you filed any other lawsuits? Were you using your phone at the time of the collision? The full set is filed to Discovery > Received.",
+    "Their SROGs:\n1. State your full name.\n2. Were you employed at the time of the incident?\n3. Did you consume any alcohol within 24 hours before the incident?\n4. Identify each health care provider who treated you.\n\nWe'll draft responses from the intake and medical records.",
+    "Defendant's Form Interrogatories, Set One\n\n2.5 What is your present residence address?\n6.1 Do you attribute any physical injuries to the incident?\n8.1 Do you attribute any loss of income to the incident?\n\nDrafts are in progress.",
+    "Deposition outline excerpt (filed to Depositions):\n\nII. Background\n- How long have you worked at Sun Valley Logistics?\n- Who was your supervisor on 3/14/2025?\n- Did you receive any safety training?\n\nThe full outline is 14 pages.",
+    "The meet-and-confer letter is drafted and filed. Its key paragraph reads:\n\nYour responses to Requests for Production Nos. 4 through 9 consist entirely of boilerplate objections. How can Plaintiff evaluate the claimed privilege without a privilege log? We request supplemental responses within 10 days.\n\nIt goes out under Ms. Park's signature once signed.",
+    "Filed the meet-and-confer draft. The letter asks opposing counsel why no privilege log was served and sets a 10-day deadline.",
+    "Status for Garcia v. Sun Valley: discovery responses due 12/8; deposition of plaintiff set for 12/15; mediation not yet scheduled.",
+    "What's done: the RFAs are answered. What's left: the verification, which the client signs. When it's due: 12/8.",
+    "Filed to Discovery, which now holds:\n1. Responses to SROGs, Set One\n2. Responses to RFPs, Set One\n3. Responses to RFAs, Set One",
+    "Defendant's RFAs (Set One) ask the client to admit:\n- RFA 1: that she was not wearing a seatbelt;\n- RFA 2: that she was on her phone;\n- RFA 3: that she had prior back treatment.\nAll three are denied in the draft.",
+    "Requests for Admission received:\nAdmit that you were exceeding the speed limit?\nAdmit that you did not seek treatment within 7 days?\n\nThe draft denies both.",
+    "From the meet-and-confer letter we drafted:\n\nIf Defendant has no documents responsive to Request No. 12, why does its response say production will follow? Please supplement within ten days.\n\nFiled to Correspondence.",
+    "The demand letter is filed to Correspondence. If the carrier responds before 12/1, we'll add their offer to the matter notes.",
+    "The chronology is in progress. It will show whether the client treated continuously from March through August.",
+    "Topics opposing counsel will likely cover at the deposition, from their notice:\nWhere were you going at the time of the accident?\nHow fast were you driving?\nWhat did you tell the officer?\n\nThe prep outline answers each from the police report.",
+    "Form Interrogatory 17.1 asks, for each RFA not admitted, the facts, witnesses and documents. The draft answers it for RFAs 1-3. Filed.",
+    "Hi Dana,\n\nThe verification is filed to Discovery > Verifications. Send it to the client for signature by 12/6.\n\nBest,\nOperator",
+    'Objection text added to Request No. 9:\nResponding Party objects that the request is unintelligible as phrased. What "all documents relating to" means here is not stated.\n\nFiled.',
+    "You asked whether the RFPs could be cut to 45. They are cut to 45 and filed.",
+    "Summary of Defendant's SROGs, Set Two: prior injuries (Nos. 1-6), employment (Nos. 7-12), phone use (Nos. 13-15). The one that needs the client: Did she see a chiropractor before 2025? We'll pull that from the records.",
+    "Next steps:\n1. Client signs verification (due 12/6).\n2. We serve the responses on 12/8.\n3. Calendar the meet-and-confer call.",
+    "Special Interrogatories received, Set Three:\n41. Identify every witness to the incident.\n42. Did you speak with anyone at the scene?\n43. Have you posted about the incident on social media?\nDrafts follow on Monday.",
+    "Opposing counsel's meet-and-confer letter (filed) makes two points: our RFP responses lacked a privilege log, and our SROG 14 answer was incomplete. Their closing line: \"Are you willing to stipulate to a 30-day extension?\" We'll draft a response for Ms. Park.",
+    "Depo outline, Section IV:\n4.1 Did you call 911?\n4.2 Who arrived first, police or paramedics?\n\nFiled to Depositions.",
+    "SPECIAL INTERROGATORIES, SET TWO\nDid you have a driver's license on the date of the incident?\nHave you been convicted of a felony?\n\nBoth are answered no in the draft.",
+    "Questions in Defendant's Set Two that need the client:\nHave you ever been in another car accident?\nDid you miss work after the accident?\n\nWe'll ask the client through the intake form.",
+]
+
+
 @pytest.mark.parametrize("text", ASKS)
 def test_a_reply_that_asks_is_found(text: str) -> None:
     """FALSIFIER: before step 5b nothing read a firm reply for a question."""
     assert firm_question.question_in(text)
 
 
-@pytest.mark.parametrize("text", STATES)
+@pytest.mark.parametrize("text", STATES + REVIEWER_REPLIES)
 def test_a_reply_that_states_is_not(text: str) -> None:
     """A false hold leaves an attorney with silence where the work should be."""
     assert firm_question.question_in(text) == ""
@@ -405,3 +445,9 @@ def test_an_owed_act_line_is_codes_words_not_a_question(monkeypatch) -> None:
     ask = 'Reply "yes, delete them" to proceed.'
     assert hold(f"Holding this. Please {ask[0].lower()}{ask[1:]}", "s-act") is not None
     assert hold(f"Holding this. {ask}", "s-act") is None
+
+
+def test_only_the_closing_is_read() -> None:
+    """Fourth review: a question earlier in the body is never read."""
+    assert firm_question.question_in("Which set did you mean?\n\nThe set is filed.") == ""
+    assert firm_question.question_in("The set is filed.\n\nWhich set did you mean?")

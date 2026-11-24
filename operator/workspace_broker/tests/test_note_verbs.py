@@ -543,6 +543,7 @@ def test_a_matter_case_or_phone_number_is_never_split(tmp_path: Path, body: str)
         "Please read pages 1-500 and trim the rogs",
         "Reduce RFP 1-45 in the set",
         "The rogs are 1-500 long",
+        "Trim the rogs to 100-500 pages",
     ],
 )
 def test_a_reference_range_vouches_for_nothing_between_its_ends(tmp_path: Path, body: str) -> None:

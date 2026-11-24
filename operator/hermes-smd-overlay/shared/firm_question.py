@@ -20,28 +20,27 @@ A FALSE HOLD IS WORSE THAN A MISSED QUESTION: a held delivery to an attorney is
 silence where the work should be. So every ask pattern is narrow, and each has a
 test showing a statement with the same words that still passes.
 
-WHAT COUNTS AS ASKING (few, clear signals; a missed ask is cheaper than a
-held delivery, and the turn's [thread-so-far] context and the router skill
-cover the rest)
-* a sentence that ends with a question mark;
-* a small ask set (:data:`_ASK_RES`): "Reply with the number" (no subject
-  before it), sentence-initial "Reply "yes" to proceed", "let me know which /
+ONLY THE CLOSING IS READ (fourth review). Law-firm replies quote the other
+side's questions all the time (interrogatory lists, deposition outlines,
+meet-and-confer letters), so no sentence in the body is scanned. A reply asks
+its reader something when its CLOSING does:
+
+* its last sentence ends in "?"; or
+* its last paragraph (at most three sentences) carries one of the asks in
+  :data:`_ASK_RES`: "Reply with the number" (no subject before it),
+  "Reply "yes" to proceed", "let me know which / whether", "tell me if /
   whether", "please / can you confirm whether", "which would you prefer",
   "would you like me to".
 
-WHAT DOES NOT
-* quoted history: lines starting ``>`` and everything from an "On ... wrote:",
-  "-----Original Message-----" or "From: " line down; in HTML, every
-  ``<blockquote>`` and everything from a ``gmail_quote`` block on;
-* quoted discovery: a line or sentence starting with a discovery label and a
-  number ("Request No. 4:", "SROG 14:", "Discovery Request 4:", "RFP Set Two,
-  No. 8:", "No. 14.", "Form Interrogatory 2.5:") and the lines under it to the
-  next blank line, and "Q:" / "A:" lines;
-* a one-line label ("FAQ: ...?"), words inside quotation marks (single or
-  double, across lines), web addresses, reported speech ("You asked whether",
-  "The letter says: ...?");
-* every line of a required block the turn's tools or hooks wrote
-  (``shared.turn_says``), and an owed pending-act confirmation line.
+The closing is the reply's own text (quoted history, ``<blockquote>`` and
+``gmail_quote`` dropped, web addresses removed), less the sign-off: trailing
+lines with no closing punctuation (a name, a firm, "Thanks,") and short
+closings ("Thanks.", "Thank you!"). It does not count when it is a list item,
+a discovery label ("SROG 14: ...?"), a Q:/A: line, a short label ("FAQ: ...?"),
+under a heading or a line ending in a colon, quoted, or reported ("The letter
+says: ...?"). The turn's required blocks and an owed act's ask are set aside
+first. A missed ask is cheaper than a held delivery; the turn's
+[thread-so-far] context and the router skill cover the rest.
 """
 
 from __future__ import annotations
@@ -94,6 +93,7 @@ _ASK_RES: tuple[re.Pattern[str], ...] = tuple(
         # Sentence-initial "Reply yes to proceed" (checked before quotes are stripped).
         r"^(?:please\s+)?(?:reply|respond)\s+[\"\u201c']?(?:yes|no|ok|approve|confirm)\b",
         r"\blet\s+(?:me|us)\s+know\s+(?:which|whether)\b",
+        r"\btell\s+(?:me|us)\s+(?:if|whether)\b",
         r"\b(?:please|can\s+you|could\s+you)\s+confirm\s+whether\b",
         r"\bwhich\s+would\s+you\s+prefer\b",
         r"\bwould\s+you\s+like\s+(?:me|us)\s+to\b",
@@ -134,41 +134,44 @@ def _asks(sentence: str) -> bool:
 _REPLY_FIRST_RE = re.compile(r"^(?:please\s+)?(?:reply|respond)\b", re.IGNORECASE)
 
 
-def _ask_in_line(line: str) -> str:
-    """The first asking sentence of one line (quotes already stripped), or ``""``."""
-    bare = _SINGLE_QUOTED_RE.sub("''", line)
-    for sentence in _sentences(bare):
-        if _REPORTED_RE.search(sentence) or _DISCOVERY_RE.match(sentence) or _QA_RE.match(sentence):
-            continue
-        if sentence.endswith("?") or _asks(sentence):
-            return sentence
-    return ""
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*\u2022]|\(?\d+(?:\.\d+)*[.)]?|\(?[A-Za-z][.)])\s")
+_SHORT_CLOSING_RE = re.compile(
+    r"^(?:thanks|thank\s+you|best|regards|best\s+regards|kind\s+regards|cheers|hi|hello|dear)\b[^.!?]{0,30}[.!]$",
+    re.IGNORECASE,
+)
 
 
-def _readable(lines: list[str], fixed: set[str]) -> list[str]:
-    """The lines a question is looked for in: no block line, no label line, no
-    Q:/A: line, and no discovery block (a labelled line to the next blank line)."""
-    out: list[str] = []
-    discovery = False
-    for line in lines:
-        if not line.strip():
-            discovery = False
-            continue
-        if _norm(line) in fixed:
-            continue
-        if _DISCOVERY_RE.match(line):
-            discovery = True
-            continue
-        if discovery or _QA_RE.match(line):
-            continue
-        if _LABEL_RE.match(line):
-            continue
-        out.append(line)
-    return out
+def _sign_off(line: str) -> bool:
+    """A trailing line that is a sign-off, a name or a signature, never an ask."""
+    stripped = line.strip()
+    if not stripped or any(p.search(stripped) for p in _ASK_RES):
+        return not stripped
+    return stripped[-1] not in ".!?" or bool(_SHORT_CLOSING_RE.match(stripped))
+
+
+def _closing(text: str) -> list[str]:
+    """The lines of the reply's last paragraph, sign-off set aside."""
+    lines = text.splitlines()
+    while lines and _sign_off(lines[-1]):
+        lines.pop()
+    para: list[str] = []
+    while lines and lines[-1].strip():
+        para.insert(0, lines.pop())
+    return para
+
+
+def _exempt(line: str, sentence: str) -> bool:
+    return bool(
+        _LIST_ITEM_RE.match(line)
+        or _DISCOVERY_RE.match(line)
+        or _QA_RE.match(line)
+        or _LABEL_RE.match(line)
+        or _REPORTED_RE.search(sentence)
+    )
 
 
 def question_in(text: str, blocks: Iterable[str] = ()) -> str:
-    """The first sentence of ``text`` that asks its reader something, or ``""``.
+    """The reply's closing sentence that asks its reader something, or ``""``.
 
     ``blocks`` are the turn's required blocks (code's words); their lines are
     never read. Never raises on text."""
@@ -181,17 +184,30 @@ def question_in(text: str, blocks: Iterable[str] = ()) -> str:
         for line in block.splitlines()
         if line.strip()
     }
-    own = _URL_RE.sub("", _own_text(text))
+    own = "\n".join(
+        ln for ln in _URL_RE.sub("", _own_text(text)).splitlines() if _norm(ln) not in fixed
+    )
+    para = _closing(own)
+    if not para:
+        return ""
+    # Under a heading or a line ending in a colon: a list, never the closing.
+    if len(para) > 1 and (para[0].rstrip().endswith(":") or para[0].strip()[-1] not in ".!?"):
+        return ""
+    last_line = para[-1]
     # "Reply "yes" to proceed" is read before quoted words are stripped.
-    for line in _readable(own.splitlines(), fixed):
-        for sentence in _sentences(line):
-            if _REPLY_FIRST_RE.match(sentence) and _asks(sentence):
-                return sentence[:200]
-    lines = _readable(_DOUBLE_QUOTED_RE.sub('""', own).splitlines(), fixed)
-    for line in lines:
-        found = _ask_in_line(line)
-        if found:
-            return found[:200]
+    raw = _sentences(" ".join(ln.strip() for ln in para))[-3:]
+    for sentence in raw:
+        if _REPLY_FIRST_RE.match(sentence) and any(p.search(sentence) for p in _ASK_RES):
+            return sentence[:200]
+    bare = _SINGLE_QUOTED_RE.sub("''", _DOUBLE_QUOTED_RE.sub('""', "\n".join(para)))
+    sentences = _sentences(" ".join(ln.strip() for ln in bare.splitlines()))[-3:]
+    if not sentences or _exempt(last_line, sentences[-1]):
+        return ""
+    if sentences[-1].endswith("?"):
+        return sentences[-1][:200]
+    for sentence in sentences:
+        if not _REPORTED_RE.search(sentence) and _asks(sentence):
+            return sentence[:200]
     return ""
 
 
