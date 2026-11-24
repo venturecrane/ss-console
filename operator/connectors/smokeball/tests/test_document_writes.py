@@ -269,7 +269,7 @@ def test_add_file_schema_offers_content_text_and_requires_neither_content() -> N
         ("Supplemental Production List - DRAFT.txt", {"content_text": "1. Harbor Clinic records"}),
         ("Index of Documents.md", {"content_text": "1. Quill Imaging report"}),
         ("Production List", {"content_text": "1. Quill Imaging report"}),
-        ("List.TXT", {"content_base64": base64.b64encode(b"1. a").decode()}),
+        ("List.TXT", {"content_text": "1. a"}),
     ],
 )
 def test_server_add_file_refuses_a_text_document_without_filing(monkeypatch, name, kwargs) -> None:
@@ -286,3 +286,14 @@ def test_server_add_file_refuses_a_text_document_without_filing(monkeypatch, nam
     assert out["fileId"] is None
     assert out["status"] == "refused" and out["reason"] == "text_document"
     assert "render_docx_draft" in out["refusals"][0]
+
+
+def test_server_add_file_restages_an_existing_text_file_from_its_bytes(monkeypatch) -> None:
+    """Bytes are never refused by name: restaging an existing .txt keeps working."""
+    from smokeball_connector import server
+
+    fake = _RecordingClient()
+    monkeypatch.setattr(server, "_get_client", lambda: fake)
+    out = server.add_file("m-1", "Old Phone Log.txt", content_base64=base64.b64encode(b"saved").decode())
+    assert out["readback"] == "confirmed"
+    assert fake.seen["file_name"] == "Old Phone Log.txt" and fake.seen["data"] == b"saved"

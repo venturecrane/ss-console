@@ -1275,8 +1275,8 @@ def add_file(
 
     **A document a person reads is a Word document, never a text file.** A
     letter, brief, memo, list, index or draft is filed with
-    ``render_docx_draft``. A ``.txt``/``.md`` file, or text with no extension,
-    is refused here (``status: "refused"``, ``reason: "text_document"``,
+    ``render_docx_draft``. ``content_text`` filed as a ``.txt``/``.md`` file,
+    or with no extension, is refused here (``status: "refused"``, ``reason: "text_document"``,
     nothing filed, SMD paged): an attorney cannot work in it, and filing one
     after ``render_docx_draft`` refused routes around that refusal. If you
     cannot file the Word document, reply only "Let me look into that. I'll
@@ -1514,21 +1514,18 @@ def render_docx_template(
     Classified INTERNAL_WRITE at the overlay: the Operator writing a template
     into the firm's own record. Nothing leaves the firm."""
     from .library import classless_name_refusal, names_agree
+    from .list_check import REVISE, refused
     from .render import TemplateContentRefused, check_template_content
 
     file_name = file_name if file_name.lower().endswith(".docx") else f"{file_name}.docx"
     try:
         check_template_content(skeleton_markdown)
     except TemplateContentRefused as exc:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [str(v) for v in exc.violations],
-        }
+        return refused(matter_id, file_name, "content_gate", [str(v) for v in exc.violations], status=REVISE)
     data, format_applied, refusal, library = _render_with_format(skeleton_markdown, document_class)
+    # A format refusal is final (SMD paged); a naming refusal is fixed by
+    # calling again under the right name (revise).
+    reason, status = ("format_refused", "refused") if refusal else ("template_name", REVISE)
     # A class name is a class decision (the 2026-09-21 library defect): see
     # ``library.classless_name_refusal``, which passes any call that names a
     # class. Checked after the (network-free, classless) render, before upload.
@@ -1549,16 +1546,15 @@ def render_docx_template(
                 "FIRST and then file under the authored name."
             )
     if refusal:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [refusal],
-            "formatApplied": format_applied,
+        return refused(
+            matter_id,
+            file_name,
+            reason,
+            [refusal],
+            status=status,
+            formatApplied=format_applied,
             **({"libraryResolution": library} if library is not None else {}),
-        }
+        )
     result = add_file(
         matter_id,
         file_name,
@@ -1740,19 +1736,22 @@ def render_docx_draft(
 
     **A list of documents (``listed_folder_id``).** For a production list or an
     index of the documents in a folder, pass that folder's id: write one
-    numbered entry (``1.``) per document, and the draft is refused unless the
-    count matches the folder's files (held-out files excepted).
+    top-level numbered entry (``1.``) per document, and the draft is refused
+    unless the count matches the files in that folder and its subfolders
+    (held-out files and earlier lists or indexes excepted). Pass each withheld
+    document's file name exactly: one that matches no file there is refused.
 
-    **A refusal is never told to the person.** Every refusal carries
-    ``status: "refused"`` and a ``reason`` token, and pages SMD. Do not file the
-    document any other way (never a ``.txt``); if you cannot fix what the
-    refusals name, reply only "Let me look into that. I'll reply in this
-    thread."
+    **A refusal is never told to the person.** Every refusal carries a
+    ``reason`` token and a ``status``: ``revise`` (a content-gate or
+    record-check finding: fix it and call again) or ``refused`` (one a redraft
+    cannot clear, or a list check: SMD is paged). Do not file the document any
+    other way (never a ``.txt``); if you cannot fix what the refusals name,
+    reply only "Let me look into that. I'll reply in this thread."
 
     Classified INTERNAL_WRITE at the overlay: the Operator saving its own work
     product into the firm's record. Nothing leaves the firm; delivery to anyone
     outside is a separate, separately-gated act."""
-    from .list_check import count_refusal, refused, withheld_named
+    from .list_check import REVISABLE_RECORD_CHECK, REVISE, count_refusal, refused, withheld_named
     from .record_check import run_record_check
     from .render import TemplateContentRefused, check_draft_content
 
@@ -1761,7 +1760,7 @@ def render_docx_draft(
     try:
         check_draft_content(draft_markdown)
     except TemplateContentRefused as exc:
-        return refused(matter_id, file_name, "content_gate", [str(v) for v in exc.violations])
+        return refused(matter_id, file_name, "content_gate", [str(v) for v in exc.violations], status=REVISE)
     held_out = list(held_out_file_names or ())
     named = withheld_named(draft_markdown, held_out)
     if named:
@@ -1793,6 +1792,7 @@ def render_docx_draft(
             file_name,
             "record_check",
             verdict.refusals,
+            status=REVISE if verdict.disposition in REVISABLE_RECORD_CHECK else "refused",
             recordCheck=verdict.disposition,
             warnings=verdict.warnings,
             infos=verdict.infos,
