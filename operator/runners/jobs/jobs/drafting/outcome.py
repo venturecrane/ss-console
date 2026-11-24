@@ -106,6 +106,16 @@ REASON_CODES = (
     # A model request too large for its model, never sent and never billed (request_size.py):
     # failed, resumable, SMD alerted with the stage, size and limit, the firm told nothing.
     "request_too_large",
+    # The discovery work (2026-11-23 plan), raised only by code a firm setting switches on: what each
+    # one means, who owns it and whether it resumes is in endings.py, the one table of them.
+    "rule_unchecked",
+    "rule_unmet",
+    "rule_changed",
+    "phrase_missing",
+    "exhibit_unresolved",
+    "index_unpaired",
+    "challenge_unread",
+    "prior_draft_routed",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

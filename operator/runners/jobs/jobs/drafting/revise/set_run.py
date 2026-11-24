@@ -55,6 +55,7 @@ from ...demand import deliver
 from ...matter import pull as matter_pull
 from .. import review as review_mod
 from ..outcome import DraftingFailed, DraftingHold, Verdict
+from ..rulebook import hook as rule_hook
 from . import checklist as ck, responses as rs, rules as rules_mod, set_units as su, versions
 from .run import ReviseRun
 
@@ -231,9 +232,11 @@ class ReviseSetRun(ReviseRun):
     def _render_unit(self, k: int) -> dict[str, Any]:
         d = self._udir(k)
         values, _conflicts = rules_mod.from_json((d / "values.json").read_text(encoding="utf-8"))
+        # The firm's rules stage: a no-op unless phrase_book switches it on for revisions.
+        base = rule_hook.at_revise(self, k, (d / "base.md").read_text(encoding="utf-8"), self._hint(k))
         try:
             rec = su.revise_one(
-                (d / "base.md").read_text(encoding="utf-8"),
+                base,
                 d / "filed.docx",
                 values,
                 d / "out" / self.units[k]["name"],
