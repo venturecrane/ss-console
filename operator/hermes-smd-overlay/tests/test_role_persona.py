@@ -140,7 +140,7 @@ def test_a_household_role_states_its_own_checklist_in_soul(tmp_path):
     FALSIFIER: without roles_dir reaching policy_profile.current, this seat
     reads the image's default roles dir, finds no package, and is told the
     paralegal rules."""
-    from shared import output_checklist
+    from shared import output_checklist, output_checklist_rules
 
     roles = _roles_dir(
         tmp_path,
@@ -150,7 +150,7 @@ def test_a_household_role_states_its_own_checklist_in_soul(tmp_path):
     )
     soul = _soul(tmp_path / "seat", _with_seat("couples"), roles)
     section = soul.split("## Writing a message\n", 1)[1].split("\n## ", 1)[0]
-    for line in output_checklist.writing_rules(
+    for line in output_checklist_rules.writing_rules(
         output_checklist.STAFF_SEND, output_checklist.PROFILE_HOUSEHOLD
     ):
         assert f"- {line}" in section

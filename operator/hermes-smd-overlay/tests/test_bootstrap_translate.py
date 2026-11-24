@@ -165,7 +165,7 @@ def test_translate_writes_persona_identity_into_soul_md(tmp_path):
 def test_soul_md_states_the_staff_checklist_before_the_first_draft(tmp_path):
     """A&P, November 2026: each checklist hold cost a redraft and left a draft behind.
     The rules the send gate enforces reach SOUL.md, from the gate's own set."""
-    from shared import output_checklist
+    from shared import output_checklist, output_checklist_rules
 
     customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path)
     translate_customer_yaml(
@@ -175,7 +175,7 @@ def test_soul_md_states_the_staff_checklist_before_the_first_draft(tmp_path):
     )
     soul = (hermes_home / "profiles" / "marcus" / "SOUL.md").read_text()
     assert "## Writing a message to staff" in soul
-    for line in output_checklist.writing_rules(output_checklist.STAFF_SEND):
+    for line in output_checklist_rules.writing_rules(output_checklist.STAFF_SEND):
         assert f"- {line}" in soul
 
 

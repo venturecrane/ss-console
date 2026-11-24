@@ -708,60 +708,14 @@ def check(
     return found
 
 
-#: Each rule as the writer meets it, for the reply-writing guidance the model
-#: reads before its first draft (SOUL.md, ``bootstrap/translate.py``). Rules
-#: that share a line are written once. Every line passes the staff checklist.
-_PLAIN_TEXT_LINE = (
-    "Plain text only: no pound-sign headings, asterisks, underscores, backticks, "
-    "tables or html tags."
-)
-_STAMP_LINE = "Never a time in another zone, such as Greenwich time, or a machine timestamp."
-_WRITER_LINES: dict[str, str] = {
-    "em_dash": "No em or en dashes. Use a comma or a period.",
-    "exclamation": "No exclamation marks.",
-    "caps_emphasis": (
-        "No words in capitals for emphasis. Write a folder or file name the firm spells "
-        "in capitals in ordinary case, or quote it exactly inside double quotes "
-        '("CLIENT DOCUMENTS").'
-    ),
-    "heading_marks": _PLAIN_TEXT_LINE,
-    "emphasis_marks": _PLAIN_TEXT_LINE,
-    "pipe_table": _PLAIN_TEXT_LINE,
-    "html_tag": _PLAIN_TEXT_LINE,
-    "bare_clock": "A clock time carries a.m. or p.m., in the firm's local time.",
-    "utc_time": _STAMP_LINE,
-    "iso_timestamp": _STAMP_LINE,
-    "internal_id": (
-        "No internal ids or codes. Name a matter by its number and client, an entry "
-        "by its subject and date, a document by its file name."
-    ),
-}
-
-#: The same rules for a profile that is not a firm (a couple's or a family's
-#: own messages): no firm, no matter, no client in the wording.
-_WRITER_LINES_BY_PROFILE: dict[str, dict[str, str]] = {
-    PROFILE_HOUSEHOLD: {
-        "bare_clock": "A clock time carries a.m. or p.m., in local time.",
-        "internal_id": (
-            "No internal ids or codes. Name an entry by its subject and date, "
-            "a document by its file name."
-        ),
-    },
-}
-
-
-def writing_rules(surface: str = STAFF_SEND, profile: str = PROFILE_PARALEGAL) -> list[str]:
-    """The lines a writer follows so ``surface`` holds nothing, for ``profile``.
-
-    Read from the same rule sets :func:`check` enforces, so the guidance and the
-    gate cannot name different rules. Loosens nothing: it only states them."""
+def surface_rules(
+    surface: str, profile: str = PROFILE_PARALEGAL
+) -> tuple[tuple[str, ...], int | None]:
+    """``(rules, line ceiling)`` that :func:`check` applies on ``surface`` for
+    ``profile`` (no job-reply rule), for guidance that must state the same set."""
     rules, ceiling, _on_wire = _SURFACES[surface]
     dropped = _PROFILE_DROPS.get(profile, frozenset())
-    words = {**_WRITER_LINES, **_WRITER_LINES_BY_PROFILE.get(profile, {})}
-    lines = [words.get(rule, "") for rule in rules if rule not in dropped]
-    if ceiling is not None:
-        lines.append(f"At most {ceiling} lines.")
-    return [line for line in dict.fromkeys(lines) if line]
+    return tuple(rule for rule in rules if rule not in dropped), ceiling
 
 
 def refusing(violations: list[Violation]) -> list[Violation]:
@@ -848,6 +802,6 @@ __all__ = [
     "fingerprint",
     "refusing",
     "rule_names",
+    "surface_rules",
     "wire_text",
-    "writing_rules",
 ]

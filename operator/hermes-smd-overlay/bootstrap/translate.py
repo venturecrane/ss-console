@@ -87,7 +87,7 @@ from bootstrap.cron_materialize import (
 from bootstrap.mcp_registry import MCP_CONNECTOR_REGISTRY
 from bootstrap.role_persona import RolePersonaError, load_role_persona
 from bootstrap.validate import validate_customer_yaml
-from shared import capabilities, seat_config
+from shared import capabilities, output_checklist_rules, seat_config
 from shared.cron_containment import containment_active, containment_reason, sentinel_path
 from shared.routine_change_spool import append_routine_change
 from shared.secrets import get_secret
@@ -2036,12 +2036,7 @@ def _send_posture_soul_section(
     )
 
 
-def _soul_body(
-    persona: dict[str, Any],
-    customer: dict[str, Any],
-    role_persona: str = "",
-    roles_dir: str | None = None,
-) -> str:
+def _soul_body(persona: dict[str, Any], customer: dict[str, Any], role_persona: str = "") -> str:
     """Build the per-persona ``SOUL.md`` body.
 
     The shape is intentionally minimal: identity (name, title, tone)
@@ -2052,8 +2047,6 @@ def _soul_body(
     ``role_persona`` is the seat's role persona prompt (ss ADR 0090), appended
     verbatim; see :mod:`bootstrap.role_persona`. A seat with no role passes
     ``""`` and its SOUL.md is byte-identical to the pre-role shape.
-    ``roles_dir`` is the role-package root the seat's checklist profile is read
-    from (``policy_profile.current``), the same root the role persona came from.
     """
     persona_name = persona.get("name") or persona.get("slug") or "Persona"
     title = persona.get("title") or "AI Associate"
@@ -2075,33 +2068,7 @@ def _soul_body(
         f"{_relationship_soul_section(customer)}"
         f"{_digest_home_soul_section(customer)}"
         f"{_escalation_soul_section(customer)}"
-        f"{_writing_rules_soul_section(customer, roles_dir)}"
         f"{_role_persona_soul_section(role_persona)}"
-    )
-
-
-def _writing_rules_soul_section(customer: dict[str, Any], roles_dir: str | None = None) -> str:
-    """The send checklist, stated before the first draft (A&P, November 2026:
-    every held reply was redrafted 8 to 24 seconds later, each hold a wasted
-    model turn and a leftover draft). The lines come from
-    ``shared.output_checklist.writing_rules``, the rule set the send gate
-    enforces, for this seat's checklist profile (``policy_profile.current``
-    never raises; a policy it cannot read is the strict set). A firm's seat is
-    told about the firm's staff; a household seat is not. Loosens nothing."""
-    from shared import output_checklist, policy_profile
-
-    profile = policy_profile.current(customer, roles_dir_override=roles_dir).checklist_profile
-    lines = output_checklist.writing_rules(output_checklist.STAFF_SEND, profile)
-    body = "\n".join(f"- {line}" for line in lines)
-    if profile == output_checklist.PROFILE_HOUSEHOLD:
-        heading, lead = "Writing a message", "A message you send"
-    else:
-        heading, lead = "Writing a message to staff", "A message to the firm's staff"
-    return (
-        f"\n## {heading}\n\n"
-        f"{lead} is checked before it goes, and one that breaks any of these is held "
-        "and has to be written again. Write it this way the first time:\n"
-        f"{body}\n"
     )
 
 
@@ -2651,6 +2618,9 @@ def translate_customer_yaml(
     # SKILL.md byte-identical to the catalog — the idempotency contract
     # _write_if_changed relies on.
     spec_block = _spec_pointer_block()
+    # The send checklist's rules close every SOUL.md, for the seat's checklist
+    # profile read from the persona's own roles dir (output_checklist_rules).
+    checklist_rules = output_checklist_rules.soul_rules(customer, roles_dir)
 
     written_slugs: list[str] = []
     profiles_root = home_path / "profiles"
@@ -2660,13 +2630,12 @@ def translate_customer_yaml(
             raise TranslateError("persona missing slug after validation")
         profile_dir = profiles_root / slug
         config_path = profile_dir / "config.yaml"
-        soul_path = profile_dir / "SOUL.md"
 
         config_body = _persona_config(persona, customer, resolved_pins)
-        soul_body = _soul_body(persona, customer, role_persona, roles_dir)
+        soul_body = _soul_body(persona, customer, role_persona) + checklist_rules
 
         wrote_config = _write_if_changed(config_path, _yaml_bytes(config_body))
-        wrote_soul = _write_if_changed(soul_path, soul_body.encode())
+        wrote_soul = _write_if_changed(profile_dir / "SOUL.md", soul_body.encode())
         # NOTE: MEMORY.md / USER.md are intentionally NOT written here.
         # Hermes' flat-file memory core is the Phase-1 substrate; Hermes
         # auto-creates and maintains those files at profile boot. Earlier

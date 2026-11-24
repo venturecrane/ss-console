@@ -1210,13 +1210,12 @@ def _hold_for_review(
     )
     _commit_reply(reply_key, origin)
     matter_file_reply.discard(session_id)
-    every = tuple(f for batch in prepared.batches for f in batch) if prepared else ()
     _held(
         matter_file_review.HOLD_REASON,
         origin,
         review_id=row["id"],
         **({"held_because": because} if because else {}),
-        **matter_file_reply.audit_fields(every),
+        **matter_file_reply.audit_fields(prepared.files() if prepared else ()),
         _matter_ref=matter_ref,
     )
 
@@ -1335,10 +1334,9 @@ def _review_one(row: dict[str, Any]) -> None:
     request_index.record_reply_opening(origin.message_id, text, sent_message_id=sent_id)
     if len(prepared.batches) > 1:
         _send_file_continuations(prepared, origin, session_id=session_id, matter_ref=matter_ref)
-    matter_file_review.finish(row, matter_file_review.STATUS_SENT)
-    # The reply is out: its working drafts, and the held drafts it superseded,
-    # leave the Operator mailbox's Drafts folder (A&P 2026-11-24). Never raises.
-    _discard_drafts(matter_file_review.row_draft_ids(row))
+    # Marked sent, and its working drafts (the held ones it superseded
+    # included) leave the Drafts folder (working_drafts.finish_sent).
+    working_drafts.finish_sent(row, _discard_drafts)
 
 
 def _relay_draft(**kwargs: Any) -> None:

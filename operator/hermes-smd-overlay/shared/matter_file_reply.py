@@ -148,6 +148,10 @@ class Prepared:
     def rows(self) -> list[list[dict[str, Any]]]:
         return [[f.as_row() for f in batch] for batch in self.batches]
 
+    def files(self) -> tuple[StagedFile, ...]:
+        """Every file the reply carries, in order, across its batches."""
+        return tuple(f for batch in self.batches for f in batch)
+
     @classmethod
     def from_rows(cls, rows: list[list[dict[str, Any]]]) -> Prepared:
         return cls(tuple(tuple(StagedFile.from_row(f) for f in batch) for batch in rows))

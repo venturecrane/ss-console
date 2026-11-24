@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from shared import output_checklist as oc
+from shared import output_checklist_rules as ocr
 
 # The dashes are spelled by code point so this file carries none itself.
 _EM = chr(0x2014)
@@ -264,20 +265,20 @@ def test_shouting_beside_a_folder_a_path_mark_or_a_quote_is_refused(line):
 def test_the_writing_rules_state_every_refusing_staff_rule_and_pass_the_gate():
     """The guidance the model reads before its first draft (SOUL.md) names a line
     for every rule the staff gate refuses on, and itself passes that gate."""
-    lines = oc.writing_rules(oc.STAFF_SEND)
+    lines = ocr.writing_rules(oc.STAFF_SEND)
     rules = oc._SURFACES[oc.STAFF_SEND][0]
-    assert all(oc._WRITER_LINES[rule] in lines for rule in rules)
+    assert all(ocr.WRITER_LINES[rule] in lines for rule in rules)
     assert oc.refusing(oc.check("\n".join(lines), oc.STAFF_SEND)) == []
-    household = oc.writing_rules(oc.STAFF_SEND, oc.PROFILE_HOUSEHOLD)
-    assert oc._WRITER_LINES["caps_emphasis"] not in household
-    assert oc._WRITER_LINES["em_dash"] in household
+    household = ocr.writing_rules(oc.STAFF_SEND, oc.PROFILE_HOUSEHOLD)
+    assert ocr.WRITER_LINES["caps_emphasis"] not in household
+    assert ocr.WRITER_LINES["em_dash"] in household
     # A household seat is no firm: no firm, matter or client in its wording.
     words = " ".join(household).lower()
     assert "firm" not in words and "matter" not in words and "client" not in words
     assert oc.refusing(oc.check("\n".join(household), oc.STAFF_SEND, oc.PROFILE_HOUSEHOLD)) == []
     # The caps line tells the truth about the gate: a folder name keeps its
     # capitals only inside straight double quotes.
-    caps_line = oc._WRITER_LINES["caps_emphasis"]
+    caps_line = ocr.WRITER_LINES["caps_emphasis"]
     assert '"CLIENT DOCUMENTS"' in caps_line
     assert oc._caps('Filed in "CLIENT DOCUMENTS".', oc.STAFF_SEND) is None
     assert oc._caps("Filed in the CLIENT DOCUMENTS folder.", oc.STAFF_SEND) is not None

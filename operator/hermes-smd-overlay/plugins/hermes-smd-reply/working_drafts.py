@@ -42,6 +42,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
+from shared import matter_file_review
 from shared.result_unwrap import parse_tool_result
 
 logger = logging.getLogger(__name__)
@@ -102,4 +103,12 @@ def discard(draft_ids: list[str], discard_one: Callable[[str], str]) -> None:
             logger.warning("hermes-smd-reply: working draft not discarded (%s)", exc)
 
 
-__all__ = ["WorkingDrafts", "discard", "draft_id_of"]
+def finish_sent(row: dict[str, Any], discard_drafts: Callable[[list[str]], None]) -> None:
+    """A review row the release just sent: mark it sent, then hand the drafts it
+    carries (``matter_file_review.hold(draft_ids=...)``) to ``discard_drafts``,
+    the plugin's best-effort discard, which never raises."""
+    matter_file_review.finish(row, matter_file_review.STATUS_SENT)
+    discard_drafts(matter_file_review.row_draft_ids(row))
+
+
+__all__ = ["WorkingDrafts", "discard", "draft_id_of", "finish_sent"]
