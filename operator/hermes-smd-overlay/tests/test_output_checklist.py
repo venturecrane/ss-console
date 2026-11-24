@@ -215,48 +215,49 @@ def test_capitals_outside_the_folder_name_are_still_emphasis():
     assert oc._caps(f"Filed in {FOLDER}. Review it TODAY.", oc.MEMO).group(0) == "TODAY"
 
 
-#: A reply citing a matter's folders as the firm spells them (A&P, November 2026, a
-#: reply to an attorney; the names here are invented in the same shape).
-FOLDER_REPLY = (
-    "The intake scans are in the CLIENT RECORDS folder, the photos are in the "
-    "ACCIDENT PHOTOS folder and the report is in the TRAFFIC REPORT- PENDING folder."
-)
-
-
 @pytest.mark.parametrize(
     "line",
     [
-        FOLDER_REPLY,
-        "Saved to CLIENT RECORDS > ACCIDENT PHOTOS > TRAFFIC REPORT- PENDING.",
-        "Saved to CLIENT RECORDS / ACCIDENT PHOTOS.",
-        "Saved to CLIENT RECORDS\\ACCIDENT PHOTOS.",
-        "I filed it in folder ACCIDENT PHOTOS.",
-        "Filed under “CLIENT RECORDS” and “TRAFFIC REPORT- PENDING”.",
-        "Filed under 'CLIENT RECORDS' and 'ACCIDENT PHOTOS'.",
+        "Please put this in the folder URGENT",
+        "Please put this in the folder URGENT ASAP NOW",
+        "SEE ATTACHED / ASAP",
+        "the folder is EMPTY so DO NOT FILE",
+        "'DO NOT SEND'",
+        "‘DO NOT SEND’",
+        "“DO NOT SEND”",
+        "DO NOT SEND THIS UNTIL THE CLIENT FOLDER IS READY",
+        "THIS IS VERY IMPORTANT FOLDER",
+        "PLEASE REVIEW THIS IMMEDIATELY folder",
+        "I put it in the IMPORTANT folder",
+        "IMPORTANT: check the EMAILS folder",
+        "check the EMAILS folder. IMPORTANT",
+        "READ THIS > NOW",
+        "URGENT \\ ASAP",
+        "Please file it. URGENT / ASAP.",
+        "Subfolder ASAP is ready",
+        "Folder: URGENT READ NOW PLEASE",
+        "folder URGENT. PLEASE CALL ME BACK TODAY",
+        "Saved to the folder named DO NOT FILE UNTIL APPROVED",
+        "It's 'VERY URGENT' and 'MUST SEND'",
+        "(‘VERY URGENT’)",
+        "Note: 'HURRY' now",
+        "the folder\nURGENT",
+        "PLEASE NOTE\nfolder",
+        "PLEASE CHECK THE CLIENT DOCUMENTS folder NOW",
+        "PLEASE CHECK THE CLIENT DOCUMENTS folder",
+        "I NEED THIS TODAY > tomorrow",
+        "Pages 3 > 2, THIS IS WRONG",
+        "Plaintiff's 'REALLY BAD' day",
+        "He said 'WAIT HERE' then 'STOP'",
+        "We can't WAIT. It's 'not' ok",
     ],
 )
-def test_a_folder_the_reply_cites_by_its_own_name_is_not_emphasis(line):
-    """A&P, November 2026: a reply quoting the matter's Smokeball folders exactly as
-    the firm spells them was held as shouting, and the redraft, in ordinary
-    case, misquoted the folders. FALSIFIER: on the old rule each refused."""
-    assert oc._caps(line, oc.STAFF_SEND) is None
-    assert _rules(line) == []
-
-
-@pytest.mark.parametrize(
-    ("line", "word"),
-    [
-        ("PLEASE NOTE: the report is in the ACCIDENT PHOTOS folder.", "PLEASE"),
-        ("VERY IMPORTANT, the deadline moved.", "VERY"),
-        ("THIS MUST BE FILED TODAY.", "THIS"),
-        ("URGENT/ASAP call the adjuster.", "URGENT"),
-        ("URGENT saved to CLIENT RECORDS > ACCIDENT PHOTOS.", "URGENT"),
-        ("Don't SHOUT it's in the file.", "SHOUT"),
-    ],
-)
-def test_shouting_beside_a_folder_name_is_still_emphasis(line, word):
-    """The pair's other half: only the run naming the folder is spared."""
-    assert oc._caps(line, oc.STAFF_SEND).group(0) == word
+def test_shouting_beside_a_folder_a_path_mark_or_a_quote_is_refused(line):
+    """A review of a proposed folder-name exemption (November 2026) found 25 of
+    these 31 shouting inputs slipped through it: a capitals run before or after
+    the word folder, beside ">", "\\" or " / ", or inside single or typographic
+    quotes. The exemption was withdrawn. Each stays a refusal: only straight
+    double quotes and the runner's folder name spare capitals."""
     assert _rules(line) == ["caps_emphasis"]
 
 
@@ -270,6 +271,16 @@ def test_the_writing_rules_state_every_refusing_staff_rule_and_pass_the_gate():
     household = oc.writing_rules(oc.STAFF_SEND, oc.PROFILE_HOUSEHOLD)
     assert oc._WRITER_LINES["caps_emphasis"] not in household
     assert oc._WRITER_LINES["em_dash"] in household
+    # A household seat is no firm: no firm, matter or client in its wording.
+    words = " ".join(household).lower()
+    assert "firm" not in words and "matter" not in words and "client" not in words
+    assert oc.refusing(oc.check("\n".join(household), oc.STAFF_SEND, oc.PROFILE_HOUSEHOLD)) == []
+    # The caps line tells the truth about the gate: a folder name keeps its
+    # capitals only inside straight double quotes.
+    caps_line = oc._WRITER_LINES["caps_emphasis"]
+    assert '"CLIENT DOCUMENTS"' in caps_line
+    assert oc._caps('Filed in "CLIENT DOCUMENTS".', oc.STAFF_SEND) is None
+    assert oc._caps("Filed in the CLIENT DOCUMENTS folder.", oc.STAFF_SEND) is not None
 
 
 def test_not_captured_in_a_file_note_is_refused():
