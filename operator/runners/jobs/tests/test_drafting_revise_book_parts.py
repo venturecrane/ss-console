@@ -317,3 +317,12 @@ def test_every_left_reason_is_worded_from_a_table_never_model_text() -> None:
     assert lines[0].startswith("Response 3: ") and "wr-x" in lines[0] and "{" not in lines[0]
     assert lines[4] == "your request" and lines[5] == "the firm's rule wr-x of 2026-11-20"
     assert all(wording.notes_findings(x) == [] for x in lines) and "rule email" not in " ".join(lines)
+
+
+def test_an_email_that_opens_with_a_hash_number_is_covered_by_its_own_quote() -> None:
+    from jobs.drafting.revise.instructions import uncovered
+
+    text = "#22: always give the full date.\nThanks"
+    assert uncovered(text, ["#22: always give the full date."]) == []
+    assert uncovered(text, ["22: always give the full date."]) == []
+    assert uncovered(text, []) != []
