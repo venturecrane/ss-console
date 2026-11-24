@@ -128,7 +128,10 @@ def records_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) -> 
 
 TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     "records_job_submit": (
-        "Queue a matter-records request for the person whose email opened this turn. Never find, "
+        "Queue a matter-records request for the person whose email opened this turn: any ask for "
+        "documents from one matter's file, named or by kind (every parent statement, all the "
+        "adjuster's emails), whatever the files are. Never search, list, read or name the matter's "
+        "files in the turn, and never find, "
         "read, cut, attach or describe records in the turn: this queues a job that finds the "
         "records on the Machine and sends them in this thread once SMD has reviewed them. Pass the "
         "matter number exactly as the email writes it (matter_number) when it gives one, and "

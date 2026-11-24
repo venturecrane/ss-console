@@ -52,7 +52,34 @@ describe('matter records procedure (router)', () => {
     expect(body).toMatch(/carry out its REQUEST mode/)
     expect(body).toMatch(/relay its sentence word for word as your whole reply/)
     expect(body).toMatch(/send no reply when it says `none`/)
-    expect(body).toMatch(/If you cannot read the skill file this turn, say so plainly/)
+    // 2026-11-24: never a limit stated to the firm; the owner's sentence instead.
+    expect(body).toMatch(
+      /If you cannot read the skill file this turn, submit nothing and reply with only "Let me look into that\. I'll reply in this thread\."/
+    )
+  })
+
+  it('takes any ask for documents from the file, named or by kind, and never lists files in the turn', () => {
+    // 2026-11-24 (A&P): "send me every parent statement, attached" was answered
+    // in the turn with eight searches, eight reads and a list of email file names.
+    expect(body).toMatch(/\*\*This class is any ask for documents FROM a matter's file\*\*/)
+    expect(body).toMatch(/"every parent statement"/)
+    expect(body).toMatch(
+      /you never call `find_files_on_matter`, `get_files_on_matter`, `list_folders` or `read_document`, and you never answer with file names, folders or what you could or could not open/
+    )
+    expect(router).toMatch(
+      /^\| Matter records request\s*\|[^\n]*named or by kind[^\n]*never searched, listed, read or attached in the turn/m
+    )
+    const rubric = readFileSync(
+      'operator/skills/matter-inbox-router/references/routing-rubric.md',
+      'utf8'
+    )
+    expect(rubric).toMatch(
+      /\| \*\*matter records request\*\*[^\n]*named or by kind[^\n]*never answer with file names/
+    )
+    const skill = readFileSync(RECORDS, 'utf8')
+    expect(skill).toMatch(
+      /\*\*Finding which files those are is the job's work, never the turn's\.\*\*/
+    )
   })
 
   it('on a seat without the lane, replies in one fixed line and attaches nothing', () => {

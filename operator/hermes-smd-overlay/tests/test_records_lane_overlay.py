@@ -222,6 +222,29 @@ def test_the_schema_has_no_requester_field_and_only_a_matter(records) -> None:
     assert schema["required"] == [] and schema["additionalProperties"] is False
 
 
+#: The shape of the 2026-11-24 A&P ask (invented words): documents asked for
+#: by KIND, not by a file name, with "attached". The turn that took it called no
+#: job verb: eight file searches, eight document reads, and a reply listing
+#: email file names it could not open.
+EVERY_KIND_ASK = "Please send me every parent statement in the file, attached. Matter 201094."
+
+
+def test_an_ask_for_every_document_of_a_kind_is_the_records_tool_s_to_queue(records) -> None:
+    """The model reads the tool's own description to decide whether this ask is
+    its: it must claim asks for documents BY KIND and forbid searching or
+    listing the files in the turn. FALSIFIER: the pre-2026-11-24 description
+    named only records "named" on a matter and said nothing of listing files."""
+    mod, client = records
+    description = mod.TOOLS["records_job_submit"][0]
+    assert "named or by kind (every parent statement" in description
+    assert "Never search, list, read or name the matter's files in the turn" in description
+    _ask(text=EVERY_KIND_ASK)
+    out = _submit(mod, {"matter_number": "201094"})
+    assert out == {"accepted": True, "job_id": "01JREC", "say": ACK}
+    (env,) = client.envelopes
+    assert env["request_text"] == EVERY_KIND_ASK and env["matter_id"] == "201094"
+
+
 def test_the_lane_registry_and_action_class() -> None:
     from tests.conftest import load_plugin
 

@@ -1,9 +1,10 @@
 ---
 name: matter-records
 description: >-
-  Queues a matter-records request as a job. A firm colleague who asks for named
-  records on one matter ("send me the MRI report, the ER records and pages 3-11
-  of the discovery responses on matter N") gets them in that same thread: the
+  Queues a matter-records request as a job. A firm colleague who asks for
+  documents from one matter's file, named or by kind ("send me the MRI report,
+  the ER records and pages 3-11 of the discovery responses on matter N", "every
+  parent statement in the file, attached") gets them in that same thread: the
   records job on the Machine reads the request once, finds each record in each
   file, cuts the pages, writes the facts of the reply in code, and holds the
   reply for SMD's review, which sends it. REQUEST mode resolves the one matter,
@@ -50,8 +51,18 @@ metadata:
 # Matter Records
 
 A colleague at the firm asks the Operator for records on a matter: a report, a
-visit's records, some pages of a document. They want every one of those records
+visit's records, some pages of a document, or every document of a kind ("every
+parent statement in the file", "all the emails from the adjuster"), whatever the
+files are (PDFs, emails, scans, photos). They want every one of those records
 back in their own email thread, with a true account of each.
+
+**Finding which files those are is the job's work, never the turn's.** On
+2026-11-24 an attorney asked for every parent statement on a matter, attached.
+The turn searched the file, opened documents, and answered with a list of email
+file names it could not open; the statements sat in 262 emails, found only by
+reading every one. So in this skill you never call `find_files_on_matter`,
+`get_files_on_matter`, `list_folders` or `read_document`, and the reply never
+names a file, a folder, or anything you could not open or do.
 
 **This skill never finds, reads or attaches a record in the turn.** The work is a
 queued job on the Machine (the records job): it reads the request once, finds
