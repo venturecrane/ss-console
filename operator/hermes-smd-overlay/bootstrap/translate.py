@@ -2068,7 +2068,28 @@ def _soul_body(persona: dict[str, Any], customer: dict[str, Any], role_persona: 
         f"{_relationship_soul_section(customer)}"
         f"{_digest_home_soul_section(customer)}"
         f"{_escalation_soul_section(customer)}"
+        f"{_writing_rules_soul_section(customer)}"
         f"{_role_persona_soul_section(role_persona)}"
+    )
+
+
+def _writing_rules_soul_section(customer: dict[str, Any]) -> str:
+    """The staff-message checklist, stated before the first draft (A&P 2026-11-24:
+    every held reply was redrafted 8 to 24 seconds later, each hold a wasted
+    model turn and a leftover draft). The lines come from
+    ``shared.output_checklist.writing_rules``, the rule set the send gate
+    enforces, for this seat's checklist profile (``policy_profile.current``
+    never raises; a policy it cannot read is the strict set). Loosens nothing."""
+    from shared import output_checklist, policy_profile
+
+    profile = policy_profile.current(customer).checklist_profile
+    lines = output_checklist.writing_rules(output_checklist.STAFF_SEND, profile)
+    body = "\n".join(f"- {line}" for line in lines)
+    return (
+        "\n## Writing a message to staff\n\n"
+        "A message to the firm's staff is checked before it goes, and one that breaks "
+        "any of these is held and has to be written again. Write it this way the first time:\n"
+        f"{body}\n"
     )
 
 

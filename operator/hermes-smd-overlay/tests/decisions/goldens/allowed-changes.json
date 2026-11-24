@@ -1,9 +1,44 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges. This change (2026-11-20): a step-5a fixed_wording hold (say_other_words and every pair with it) is now told the paragraph rule, each required sentence exactly once as its own paragraph, in any order, beside other paragraphs, instead of the broker's whole-body hint, so the rendered notice the transform hook returns changes (its length and digest). No decision, hold reason, row or detail moves.",
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges. This change (2026-11-24): a reply held for SMD's review takes its working drafts off the in-memory tracker onto the review row (hold(draft_ids=...)), so the release can discard them once it sends; the hold call's draft_ids argument and result field are new and the _WORKING_DRAFTS register is empty after the hold. Two tests are new (the checklist-held redraft, and the review release discarding the drafts it superseded). No decision, hold reason or row moves.",
   "existing/test_champion_audience": [],
   "existing/test_champion_wall": [],
   "synthetic/relay.guard": [],
-  "existing/test_reply_binding": [],
+  "existing/test_reply_binding": [
+    "tests/test_reply_binding.py::test_a_draft_the_checklist_held_is_discarded_when_its_redraft_is_sent"
+  ],
   "synthetic/relay.pair": [],
-  "synthetic/relay.raise": []
+  "synthetic/relay.raise": [],
+  "existing/test_matter_file_facts": [
+    "tests/test_matter_file_facts.py::test_lane_a_held_device_reply_is_released_to_its_person_not_the_scanner.timeline.2.events.41.kwargs.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_held_device_reply_is_released_to_its_person_not_the_scanner.timeline.2.events.41.result.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_held_device_reply_is_released_to_its_person_not_the_scanner.timeline.2.registers._WORKING_DRAFTS",
+    "tests/test_matter_file_facts.py::test_lane_a_searched_turn_with_no_files_still_waits_for_review.timeline.2.events.40.kwargs.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_searched_turn_with_no_files_still_waits_for_review.timeline.2.events.40.result.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_searched_turn_with_no_files_still_waits_for_review.timeline.2.registers._WORKING_DRAFTS",
+    "tests/test_matter_file_facts.py::test_lane_a_version_mismatch_holds_and_sends_no_partial_block[3].timeline.3.events.33.kwargs.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_version_mismatch_holds_and_sends_no_partial_block[3].timeline.3.events.33.result.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_version_mismatch_holds_and_sends_no_partial_block[3].timeline.3.registers._WORKING_DRAFTS",
+    "tests/test_matter_file_facts.py::test_lane_a_version_mismatch_holds_and_sends_no_partial_block[None].timeline.3.events.33.kwargs.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_version_mismatch_holds_and_sends_no_partial_block[None].timeline.3.events.33.result.draft_ids",
+    "tests/test_matter_file_facts.py::test_lane_a_version_mismatch_holds_and_sends_no_partial_block[None].timeline.3.registers._WORKING_DRAFTS"
+  ],
+  "existing/test_matter_file_review": [
+    "tests/test_matter_file_review.py::test_lane_a_files_reply_waits_for_review_and_goes_exactly_as_held.timeline.1.events.38.kwargs.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_a_files_reply_waits_for_review_and_goes_exactly_as_held.timeline.1.events.38.result.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_a_files_reply_waits_for_review_and_goes_exactly_as_held.timeline.1.registers._WORKING_DRAFTS",
+    "tests/test_matter_file_review.py::test_lane_a_rejected_reply_is_discarded.timeline.1.events.38.kwargs.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_a_rejected_reply_is_discarded.timeline.1.events.38.result.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_a_rejected_reply_is_discarded.timeline.1.registers._WORKING_DRAFTS",
+    "tests/test_matter_file_review.py::test_lane_a_rejected_review_keeps_its_drafts",
+    "tests/test_matter_file_review.py::test_lane_a_released_reply_discards_the_drafts_it_superseded",
+    "tests/test_matter_file_review.py::test_lane_a_row_changed_after_review_is_not_sent.timeline.1.events.38.kwargs.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_a_row_changed_after_review_is_not_sent.timeline.1.events.38.result.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_a_row_changed_after_review_is_not_sent.timeline.1.registers._WORKING_DRAFTS",
+    "tests/test_matter_file_review.py::test_lane_review_first_a_rejected_reply_leaves_the_next_one_held.timeline.1.events.38.kwargs.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_review_first_a_rejected_reply_leaves_the_next_one_held.timeline.1.events.38.result.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_review_first_a_rejected_reply_leaves_the_next_one_held.timeline.1.registers._WORKING_DRAFTS",
+    "tests/test_matter_file_review.py::test_lane_review_first_a_rejected_reply_leaves_the_next_one_held.timeline.4.events.38.kwargs.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_review_first_a_rejected_reply_leaves_the_next_one_held.timeline.4.events.38.result.draft_ids",
+    "tests/test_matter_file_review.py::test_lane_review_first_a_rejected_reply_leaves_the_next_one_held.timeline.4.registers._WORKING_DRAFTS"
+  ]
 }

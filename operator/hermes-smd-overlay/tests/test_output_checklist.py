@@ -260,6 +260,18 @@ def test_shouting_beside_a_folder_name_is_still_emphasis(line, word):
     assert _rules(line) == ["caps_emphasis"]
 
 
+def test_the_writing_rules_state_every_refusing_staff_rule_and_pass_the_gate():
+    """The guidance the model reads before its first draft (SOUL.md) names a line
+    for every rule the staff gate refuses on, and itself passes that gate."""
+    lines = oc.writing_rules(oc.STAFF_SEND)
+    rules = oc._SURFACES[oc.STAFF_SEND][0]
+    assert all(oc._WRITER_LINES[rule] in lines for rule in rules)
+    assert oc.refusing(oc.check("\n".join(lines), oc.STAFF_SEND)) == []
+    household = oc.writing_rules(oc.STAFF_SEND, oc.PROFILE_HOUSEHOLD)
+    assert oc._WRITER_LINES["caps_emphasis"] not in household
+    assert oc._WRITER_LINES["em_dash"] in household
+
+
 def test_not_captured_in_a_file_note_is_refused():
     (refused,) = oc.refusing(
         oc.check("Motions in limine deadline: NOT CAPTURED. Attorney to confirm.", oc.MEMO)
