@@ -133,6 +133,37 @@ def test_role_persona_reaches_every_profile(tmp_path):
         assert persona in (home / "profiles" / slug / "SOUL.md").read_text()
 
 
+def test_a_household_role_states_its_own_checklist_in_soul(tmp_path):
+    """The SOUL.md writing rules follow the seat's checklist profile, read from
+    the same roles dir as the persona: a couples seat (household profile) is
+    told no caps rule and nothing about a firm, its staff, matters or clients.
+    FALSIFIER: without roles_dir reaching policy_profile.current, this seat
+    reads the image's default roles dir, finds no package, and is told the
+    paralegal rules."""
+    from shared import output_checklist, output_checklist_rules
+
+    roles = _roles_dir(
+        tmp_path,
+        role_yaml=_ROLE_YAML
+        + "policy:\n  output_checklist:\n    profile: household\n"
+        + "  rationale: a couple's own messages\n  adr: ADR 0093\n",
+    )
+    soul = _soul(tmp_path / "seat", _with_seat("couples"), roles)
+    section = soul.split("## Writing a message\n", 1)[1].split("\n## ", 1)[0]
+    for line in output_checklist_rules.writing_rules(
+        output_checklist.STAFF_SEND, output_checklist.PROFILE_HOUSEHOLD
+    ):
+        assert f"- {line}" in section
+    lowered = section.lower()
+    assert "capitals" not in lowered
+    assert not any(word in lowered for word in ("firm", "staff", "matter", "client"))
+
+
+def test_a_seat_with_no_role_states_the_staff_checklist_in_soul(tmp_path):
+    soul = _soul(tmp_path / "seat", _with_seat(None), None)
+    assert "capitals" in soul.split("## Writing a message to staff\n", 1)[1]
+
+
 # ---------------------------------------------------------------------------
 # Fail closed
 # ---------------------------------------------------------------------------
