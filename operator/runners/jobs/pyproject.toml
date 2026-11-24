@@ -16,7 +16,7 @@ dependencies = [
     "anthropic>=1.1",
     "pypdf>=4",
     "python-docx>=1.1",
-    "extract-msg>=0.48",
+    "extract-msg>=0.57.1",
     "pymupdf>=1.24",
     # PR 9: the timeline visuals.
     "matplotlib>=3.8",
