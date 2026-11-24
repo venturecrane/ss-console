@@ -48,6 +48,8 @@ EXPECTED_TOOLS = {
     "read_document",
     "list_folders",
     "create_folder",
+    "copy_files_to_folder",
+    "move_files_to_folder",
     "create_matter",
     "add_file",
     "file_attachment_to_matter",
@@ -143,6 +145,8 @@ def test_conformance_every_tool_classified() -> None:
     assert runtime_map[runtime_tool_name("smokeball", "create_event")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "create_task")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "create_folder")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "copy_files_to_folder")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "move_files_to_folder")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "create_matter")] == "commitment"
     assert runtime_map[runtime_tool_name("smokeball", "list_events")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "get_matter_balances")] == "read"
@@ -197,6 +201,10 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         "create_task": "internal_write",
         "update_task": "internal_write",
         "create_folder": "internal_write",
+        # Documents already on the matter copied or moved into one of its
+        # folders (file_placement.py); the firm's own record, nothing sent.
+        "copy_files_to_folder": "internal_write",
+        "move_files_to_folder": "internal_write",
         # The Operator's OWN matter, and the only write here that is not
         # internal_write or destructive (ss-console#2536). COMMITMENT because it
         # changes the firm's system of record and must never be autonomous: it

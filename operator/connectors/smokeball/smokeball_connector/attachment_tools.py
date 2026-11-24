@@ -33,6 +33,7 @@ from .layout_tools import register as _register_layout_tools
 from .post_journal import register as _register_post_journal_tools
 from .matter_files import register as _register_matter_file_tools
 from .matter_by_id import register as _register_matter_by_id_tools
+from .file_placement import register as _register_file_placement_tools
 from .resolution_gate import install as _install_resolution_gate
 
 
@@ -84,6 +85,9 @@ def register(server: Any) -> None:
     _register_matter_file_tools(server)
     # Confirm a matter already held by id before writing on it (matter_by_id.py).
     _register_matter_by_id_tools(server)
+    # Copy or move documents already on a matter into one of its folders
+    # (file_placement.py, 2026-11-24), last.
+    _register_file_placement_tools(server)
 
 
 __all__ = ["register"]

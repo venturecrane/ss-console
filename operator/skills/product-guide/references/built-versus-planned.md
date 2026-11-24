@@ -83,7 +83,7 @@ This document lists what the Operator can do, grouped by where each capability s
 | Limit values                           | 4                                                                                                                                                        |
 | Routine tiers                          | 3                                                                                                                                                        |
 | SMD-written connections                | 6 (5 real plus a test reference)                                                                                                                         |
-| Tools in those connections             | 91 (56 read, 28 internal write, 2 send, 3 commitment, 2 destructive)                                                                                     |
+| Tools in those connections             | 93 (56 read, 30 internal write, 2 send, 3 commitment, 2 destructive)                                                                                     |
 | Registered tool-server connections     | 8                                                                                                                                                        |
 | Ways a connection can be provided      | 4                                                                                                                                                        |
 | Industry packs                         | 13, plus a template                                                                                                                                      |

@@ -127,6 +127,13 @@ get_download_url = "read"
 read_document = "read"
 list_folders = "read"
 create_folder = "internal_write"
+# Copy or move documents already on a matter into one of its folders
+# (file_placement.py, 2026-11-24): the firm's own record reorganized, nothing
+# sent outside; every file and the folder are read through the matter first.
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py carries both
+# as ActionClass.INTERNAL_WRITE, same PR.
+copy_files_to_folder = "internal_write"
+move_files_to_folder = "internal_write"
 # The Operator's own internal matter, and never a client's case (ss#2536).
 create_matter = "commitment"
 add_file = "internal_write"
