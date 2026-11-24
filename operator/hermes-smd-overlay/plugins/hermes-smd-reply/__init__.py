@@ -112,6 +112,7 @@ from shared import (
     silence,
     space,
     spec_gate,
+    thread_recent,
     tool_gate,
 )
 from shared.action_classes import ActionClass, BannedToolError, classify_tool
@@ -913,21 +914,23 @@ def on_pre_tool_call(**kwargs: Any) -> dict[str, Any] | None:
     return {"action": "block", "message": message} if message else None
 
 
-def on_pre_llm_call(**kwargs: Any) -> None:
+def on_pre_llm_call(**kwargs: Any) -> dict | None:
     """Note a job's completion wake (binding.py), so only such a turn, or a
     scheduled one, may bind a reply, and a job's wake only to its own job.
-    Observes; injects nothing. Exception-safe."""
+
+    On a turn an email opened on a Graph seat, inject what this mailbox already
+    sent in that email's thread (``shared.thread_recent``, 2026-11-23), so the
+    reply never contradicts a delivery or a note already there. Exception-safe."""
+    session_id = kwargs.get("session_id")
+    sid = session_id if isinstance(session_id, str) else ""
     try:
-        session_id = kwargs.get("session_id")
         # A new turn: no draft or send attempted in it yet (text_delivery).
-        _TURN_SENDS.reset(session_id if isinstance(session_id, str) else "")
-        binding.TURN_SOURCES.note(
-            session_id if isinstance(session_id, str) else "",
-            kwargs.get("sender_id"),
-            kwargs.get("user_message"),
-        )
+        _TURN_SENDS.reset(sid)
+        binding.TURN_SOURCES.note(sid, kwargs.get("sender_id"), kwargs.get("user_message"))
     except Exception as exc:  # noqa: BLE001 - never raise out of a hook
         logger.warning("hermes-smd-reply: noting the turn's source failed (%s)", exc)
+    block = thread_recent.context_for(sid, kwargs.get("user_message"))
+    return {"context": block} if block else None
 
 
 def _record_binding(kwargs: dict[str, Any]) -> str | None:

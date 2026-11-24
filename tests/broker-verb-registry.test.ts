@@ -265,6 +265,9 @@ const EXPECTED_VERBS = [
   // connector's write_record.py refuses a write whose row did not land).
   'smokeball_write_append',
   'suppressed_wake_append',
+  // What this mailbox already sent in the turn's own thread, and the drafting
+  // files delivered for it (thread_recent.py): the turn's context.
+  'thread_recent',
   'webhook_suppressed_append',
 ]
 

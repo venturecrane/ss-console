@@ -207,6 +207,12 @@ RELAY = Decision(
             "recorded _held",
         ),
         (
+            "firm_question.hold",
+            "step 5b (2026-11-23): the question scan of an in-turn reply to firm staff on a "
+            "law-firm seat and its redraft cap; None in every case whose body asks nothing, "
+            "and a firm_question hold is the recorded _held",
+        ),
+        (
             "reply_sent.notify",
             "after a reply is on the wire, binds the read-back it carried and marks the "
             "help line offered (2026-11-20); never raises and returns nothing, so it "

@@ -167,18 +167,73 @@ def ambient_dates(now: datetime.datetime | None = None) -> frozenset[str]:
     return frozenset({today.isoformat(), (today - datetime.timedelta(days=1)).isoformat()})
 
 
+#: A range the requester wrote: "120-125", "120 to 125", "120 through 125".
+#: Never a piece of a longer hyphenated run (a phone number's "555-1234").
+_RANGE_RE = re.compile(
+    r"(?<![\d\-\u2013])(\d{1,10})(?:\s*[-\u2013]\s*|\s+(?:to|through|thru)\s+)(\d{1,10})(?![\d\-\u2013])",
+    re.IGNORECASE,
+)
+
+
+def _split_readings(run: str) -> tuple[str, str] | None:
+    """A run-together figure read as two numbers of equal length, the first no
+    larger than the second ("120125" -> 120 and 125), or None."""
+    if len(run) % 2 or len(run) < 2:
+        return None
+    half = len(run) // 2
+    lo, hi = run[:half], run[half:]
+    if lo.startswith("0") or hi.startswith("0") or int(lo) > int(hi):
+        return None
+    return lo, hi
+
+
+def anchor_numbers(anchor: str) -> tuple[set[str], list[tuple[int, int]]]:
+    """``(runs, ranges)``: every digit run the anchor carries, with the two
+    readings of a run-together figure, and every range the anchor states.
+
+    WHY (A&P, 2026-11-23). An attorney asked to cut a set to "the most important
+    120125", meaning 120 to 125; SMD's note saying "cut to the 120 most
+    important" was refused because 120 is not literally in his email. A number
+    read from his own figure, or one inside a range he wrote, is his number."""
+    text = anchor or ""
+    runs = {m.group(0) for m in _BARE_RUN_RE.finditer(text)}
+    ranges: list[tuple[int, int]] = []
+    for m in re.finditer(r"(?<![0-9])\d+(?![0-9])", text):
+        split = _split_readings(m.group(0))
+        if split:
+            runs.update(split)
+            ranges.append((int(split[0]), int(split[1])))
+    shaped = [h.span for h in structured(text)]
+    for m in _RANGE_RE.finditer(text):
+        lo, hi = int(m.group(1)), int(m.group(2))
+        # A count range, not a date or case number, and not a phone number's
+        # tail: endpoints of one length, or both under a thousand.
+        same = len(m.group(1)) == len(m.group(2)) or hi < 1000
+        if lo <= hi and same and not _inside(m.span(), shaped):
+            ranges.append((lo, hi))
+    return runs, ranges
+
+
 def uncorroborated(note: str, anchor: str, *, now: datetime.datetime | None = None) -> list[Hit]:
     """The identifiers in ``note`` that ``anchor`` (the request's subject and
-    body as text) does not carry. Empty means every identifier corroborates."""
+    body as text) does not carry. Empty means every identifier corroborates.
+
+    A bare number corroborates when the anchor carries it as a digit run, as one
+    reading of a run-together figure, or inside a range the anchor states
+    (``anchor_numbers``)."""
     note_hits = structured(note)
     anchor_hits = structured(anchor)
     known = {h.canonical for h in anchor_hits}
     # Every digit run in the anchor counts, inside a structured span or not:
     # "Matter 203795" and "No. 24-203795" both vouch for 203795.
-    known_runs = {m.group(0) for m in _BARE_RUN_RE.finditer(anchor or "")}
+    known_runs, ranges = anchor_numbers(anchor)
     ambient = ambient_dates(now)
     out = [h for h in note_hits if h.canonical not in known and not (h.kind == "date" and h.canonical in ambient)]
-    out += [h for h in bare_runs(note, outside=[h.span for h in note_hits]) if h.canonical not in known_runs]
+    out += [
+        h
+        for h in bare_runs(note, outside=[h.span for h in note_hits])
+        if h.canonical not in known_runs and not any(lo <= int(h.canonical) <= hi for lo, hi in ranges)
+    ]
     return out
 
 
@@ -199,4 +254,4 @@ def new_message_scan(note: str, *, now: datetime.datetime | None = None) -> tupl
     return runs, others
 
 
-__all__ = ["Hit", "ambient_dates", "bare_runs", "new_message_scan", "structured", "uncorroborated"]
+__all__ = ["Hit", "ambient_dates", "anchor_numbers", "bare_runs", "new_message_scan", "structured", "uncorroborated"]

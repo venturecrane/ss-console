@@ -70,6 +70,7 @@ from . import (
     records_verbs,
     rule_record_verbs,
     smd_owed,
+    thread_recent,
 )
 from .medchron_verbs import medchron_dispatch
 from .reply_text import with_reply_text
@@ -348,6 +349,10 @@ VERBS: tuple[Verb, ...] = (
     # (msgraph_drafts.py: the Drafts-folder leak, ashton-price 2026-10-12).
     # Gateway-only: the relay is the only caller, and only a draft is deleted.
     Verb("msgraph_discard_draft", _only(GATEWAY), msgraph_drafts.discard_draft_verb),
+    # What this mailbox already sent in the thread of the turn's own email, and
+    # the drafting files delivered for it (thread_recent.py, 2026-11-23): the
+    # turn's context, so a reply never contradicts the thread. Gateway-only.
+    Verb("thread_recent", _only(GATEWAY), thread_recent.recent_verb),
     # ADR 0089 staff send-as: propose and decide transmit (the approval email;
     # the send AS a staff member), so they are gateway-only like the channels.
     # The reply notice goes to a fixed recipient about an already-sent draft and

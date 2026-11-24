@@ -33,10 +33,10 @@ from tests.test_reply import _draft, _record_origin, relay_mod  # noqa: F401 - f
 SESSION = "s1"
 SENDER = "greg@whitfield.example"
 TEXT = (
-    "Sure! To set this up properly, I need a few details:\n\n"
-    "1. Which day of the week works best?\n"
-    "2. What time should the reminder arrive?\n\n"
-    "Once I have those I will set it up."
+    "Sure! The reminder is set up with these details:\n\n"
+    "1. It goes out every Monday.\n"
+    "2. It arrives at 9 in the morning.\n\n"
+    "The first one goes out next week."
 )
 
 

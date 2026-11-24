@@ -181,6 +181,19 @@ RELAY: tuple[Case, ...] = (
             }
         },
     ),
+    # Step 5b (2026-11-23): an in-turn reply to firm staff that asks them something.
+    case(
+        "firm_question",
+        "guard",
+        knobs={
+            "args": {
+                "to": ["greg@whitfield.example"],
+                "subject": "Re: New matter",
+                "text": "How many interrogatories should each set be cut to?",
+                "html": "",
+            }
+        },
+    ),
     case("checklist_hold", "guard", _checklist_violations=("staff_ids", "name the matter")),
     case("advertising_hold", "guard", _advertising_violations=("rule_7_1", "remove the guarantee")),
     case("empty_body", "guard", relay__draft_body=("Re: x\n", "", "")),

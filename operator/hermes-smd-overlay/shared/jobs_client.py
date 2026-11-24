@@ -181,6 +181,12 @@ class JobsBrokerClient:
         """A note job's state and the text SMD recorded, to be sent word for word."""
         return self._request({"action": "note_job_status", "job_id": job_id})
 
+    # -- the turn's thread (ss-console operator/workspace_broker/thread_recent.py) --
+    def thread_recent(self, graph_message_id: str) -> dict[str, Any]:
+        """What this mailbox sent in the thread of the turn's own email, and the
+        drafting files delivered for it: times, previews and file names."""
+        return self._request({"action": "thread_recent", "graph_message_id": graph_message_id})
+
     def list_all(self) -> list[dict[str, Any]]:
         return list(self._request({"action": "medchron_job_list"}).get("jobs") or [])
 
