@@ -620,6 +620,23 @@ class SmokeballClient:
             body["parentFolderId"] = parent_folder_id
         return self.request("POST", f"/matters/{matter_id}/documents/folders", json=body)
 
+    def move_file(self, matter_id: str, file_id: str, folder_id: str, *, file_name: str) -> Any:
+        """Move a matter file into another folder of the SAME matter:
+        ``PATCH /matters/{id}/documents/files/{fileId}`` with ``folderId``.
+
+        Vendor contract (docs.smokeball.com, "Patch a file", read 2026-11-24):
+        a partial update of the file's metadata; "the file moves only when
+        /folderId is present in the request", and the destination "is not
+        validated for existence", so the caller proves the folder is on the
+        matter first (``file_placement.py``). ``fileName`` is listed as
+        required, so the file's own current name is sent back unchanged; the
+        extension cannot change through this call. Answers 202 with an
+        ``uploadUrl`` for an optional new version, which is never used here:
+        a move sends no bytes. The read-back (folder, name, sha256) is the
+        caller's."""
+        body = {"fileName": file_name, "folderId": folder_id}
+        return self.request("PATCH", f"/matters/{matter_id}/documents/files/{file_id}", json=body)
+
     def delete_file(self, matter_id: str, file_id: str) -> Any:
         """Delete a file from a matter (``DELETE /matters/{id}/documents/files/{fileId}``,
         async — returns the tracking Link). DESTRUCTIVE at the overlay."""
