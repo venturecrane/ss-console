@@ -246,6 +246,38 @@ def test_a_read_is_cached_by_rule_text_and_never_asked_again(tmp_path):
         reading.read(tmp_path, [*RULES, {"rule_id": "r4", "text": "Invented new rule."}], BOOK, None)
 
 
+def test_many_rules_are_read_a_batch_at_a_time_and_each_batch_is_kept(tmp_path, monkeypatch):
+    """One call for every rule outgrew the answer's token cap once the firm had
+    enough rules: the cut-off answer parsed as no object and every drafting job
+    failed rule_unchecked. Rules go a batch per call, each batch saved."""
+    monkeypatch.setattr(reading, "BATCH", 2)
+    full = {r["rule"]: r for r in _answer()["rules"]}
+    asked: list[list[str]] = []
+
+    def ask(stage, system, user, max_tokens):
+        ids = [rid for rid in full if f"[rule {rid}]" in user]
+        asked.append(ids)
+        return json.dumps({"rules": [full[r] for r in ids]})
+
+    clauses, _bk = reading.read(tmp_path, RULES, BOOK, ask)
+    assert [len(a) for a in asked] == [2, 1] and sorted(sum(asked, [])) == ["r1", "r2", "r3"]
+    assert {c.rule for c in clauses} == {"r1", "r2", "r3"}
+
+
+def test_a_refused_batch_keeps_the_batches_before_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(reading, "BATCH", 2)
+    full = {r["rule"]: r for r in _answer()["rules"]}
+
+    def ask(stage, system, user, max_tokens):
+        if "[rule r3]" in user and "[rule r1]" not in user:
+            return '{"rules": [ {"rule": "r3", "clau'  # cut off mid-answer
+        return json.dumps({"rules": [full["r1"], full["r2"]]})
+
+    with pytest.raises(reading.ReadRefused):
+        reading.read(tmp_path, RULES, BOOK, ask)
+    assert len(reading._cache(tmp_path)) == 2  # r1 and r2 are kept; a retry asks only r3
+
+
 # ---- the grid ------------------------------------------------------------------------------
 C_PRIV = Clause(
     "r1", 1, "add the privacy objection", True, ("rfp_response",), "add_objection", ("privacy",), ("privacy",)
