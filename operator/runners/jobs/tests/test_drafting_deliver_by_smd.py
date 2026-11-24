@@ -424,7 +424,8 @@ def test_after_it_a_two_draft_hand_delivery_is_revised_in_every_document(seat):
     broker, _client, lane, _db, _queue = seat
     jid = _ended(seat, "stopped")
     change = validate_envelope(_envelope(REPLY, "Please apply the new rules to the responses."))
-    assert broker.drafting._route(change, "", GATEWAY_PID) is None
+    # Before it: held for SMD's hand, never a fresh draft of the whole file (2026-11-24).
+    assert broker.drafting._route(change, "", GATEWAY_PID).code == "prior_filed_by_smd"
 
     dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=True))
 

@@ -273,17 +273,25 @@ def split_emails(rows: list[dict[str, Any]], data: Path, firm: DemandFirm, clien
 
 
 def run(
-    seat: Any, matter_id: str, firm: DemandFirm, client_emails: set[str], data: Path, log: Callable[[str], None]
+    seat: Any,
+    matter_id: str,
+    firm: DemandFirm,
+    client_emails: set[str],
+    data: Path,
+    log: Callable[[str], None],
+    *,
+    progress: bool = False,
 ) -> dict[str, Any]:
     """The pull, end to end. Returns the corpus rows and the wall's report;
-    raises PullError when a file a retry could fix is still not pulled."""
+    raises PullError when a file a retry could fix is still not pulled.
+    ``progress``: keep the pull's n of N in ``data`` (the drafting lane)."""
     data.mkdir(parents=True, exist_ok=True)
     docs = seat.list_files(matter_id)
     folders = seat.folder_tree(matter_id)
     (data / "manifest.json").write_text(json.dumps(docs, indent=1), encoding="utf-8")
     targets = select(docs, folder_paths(folders), firm)
     log(f"{len(docs)} documents listed, {len(targets)} selected")
-    rows = fetch_all(seat, matter_id, targets, data, log)
+    rows = fetch_all(seat, matter_id, targets, data, log, progress=progress)
     # The same final/retryable line `fetch_all` retries by: a 403 (a file
     # Smokeball will not serve) or a 404 (one it does not hold) is a finding
     # in the report, never a failed pull; a retry would not change it.

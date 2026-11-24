@@ -1,5 +1,5 @@
 {
-  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. #4011 (2026-11-13): the records and medchron ledgers gain reply_sent_at and reply_key (the reply-once mark, a defect Phase A pinned), so a records job row the broker returns carries both, null until replied. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker did not take is kept as record_pending and recorded on a later tick, while the firm's message goes as before (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes. 2026-11-19 (workspace_broker/medchron_progress.py): the medchron ledger gains the nullable kind, stage and expected_finish columns and the projection gains kind and stage, so a chronology job row the broker returns carries kind and stage, and a status read carries the job's clients. 2026-11-22 (fleet release never kills a job): the busy probe's job-child facts gain stale and before_boot (a pidfile is believed only when its pid is alive and it was written this boot), so each busy cell's busy_probe.facts.children entry carries both.",
+  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. #4011 (2026-11-13): the records and medchron ledgers gain reply_sent_at and reply_key (the reply-once mark, a defect Phase A pinned), so a records job row the broker returns carries both, null until replied. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker did not take is kept as record_pending and recorded on a later tick, while the firm's message goes as before (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes. 2026-11-19 (workspace_broker/medchron_progress.py): the medchron ledger gains the nullable kind, stage and expected_finish columns and the projection gains kind and stage, so a chronology job row the broker returns carries kind and stage, and a status read carries the job's clients. 2026-11-22 (fleet release never kills a job): the busy probe's job-child facts gain stale and before_boot (a pidfile is believed only when its pid is alive and it was written this boot), so each busy cell's busy_probe.facts.children entry carries both. And (2026-11-24): a drafting job's row carries where it is (workspace_broker/drafting_progress.py): the nullable stage, progress, expected_finish and stage_seconds_json columns, so the root status read of every drafting cell's job gains those four keys.",
   "records__broker_down_mid_run": [],
   "records__broker_unreachable": [],
   "records__busy": [
@@ -38,7 +38,11 @@
   ],
   "drafting__busy": [
     "1.readers.busy_probe.facts.children.0.before_boot",
-    "1.readers.busy_probe.facts.children.0.stale"
+    "1.readers.busy_probe.facts.children.0.stale",
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json"
   ],
   "litigation__busy": [
     "1.readers.busy_probe.facts.children.0.before_boot",
@@ -47,5 +51,135 @@
   "negotiation__busy": [
     "1.readers.busy_probe.facts.children.0.before_boot",
     "1.readers.busy_probe.facts.children.0.stale"
+  ],
+  "drafting__broker_down_mid_run": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__broker_unreachable": [
+    "2.wire.0.reply.job.expected_finish",
+    "2.wire.0.reply.job.progress",
+    "2.wire.0.reply.job.stage",
+    "2.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__delivered": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__failed": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json",
+    "1.wire.4.reply.job.expected_finish",
+    "1.wire.4.reply.job.progress",
+    "1.wire.4.reply.job.stage",
+    "1.wire.4.reply.job.stage_seconds_json"
+  ],
+  "drafting__held": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json",
+    "1.wire.4.reply.job.expected_finish",
+    "1.wire.4.reply.job.progress",
+    "1.wire.4.reply.job.stage",
+    "1.wire.4.reply.job.stage_seconds_json"
+  ],
+  "drafting__lane_unproven": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json",
+    "1.wire.2.reply.job.expected_finish",
+    "1.wire.2.reply.job.progress",
+    "1.wire.2.reply.job.stage",
+    "1.wire.2.reply.job.stage_seconds_json",
+    "3.wire.0.reply.job.expected_finish",
+    "3.wire.0.reply.job.progress",
+    "3.wire.0.reply.job.stage",
+    "3.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__machine_stop": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__no_verdict_usage": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json",
+    "1.wire.4.reply.job.expected_finish",
+    "1.wire.4.reply.job.progress",
+    "1.wire.4.reply.job.stage",
+    "1.wire.4.reply.job.stage_seconds_json"
+  ],
+  "drafting__queued_behind_same_lane": [
+    "2.wire.0.reply.job.expected_finish",
+    "2.wire.0.reply.job.progress",
+    "2.wire.0.reply.job.stage",
+    "2.wire.0.reply.job.stage_seconds_json",
+    "3.wire.2.reply.job.expected_finish",
+    "3.wire.2.reply.job.progress",
+    "3.wire.2.reply.job.stage",
+    "3.wire.2.reply.job.stage_seconds_json"
+  ],
+  "drafting__resume_failed": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json",
+    "1.wire.4.reply.job.expected_finish",
+    "1.wire.4.reply.job.progress",
+    "1.wire.4.reply.job.stage",
+    "1.wire.4.reply.job.stage_seconds_json",
+    "3.wire.0.reply.job.expected_finish",
+    "3.wire.0.reply.job.progress",
+    "3.wire.0.reply.job.stage",
+    "3.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__seat_paused": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__settings_missing": [
+    "2.wire.0.reply.job.expected_finish",
+    "2.wire.0.reply.job.progress",
+    "2.wire.0.reply.job.stage",
+    "2.wire.0.reply.job.stage_seconds_json",
+    "3.wire.2.reply.job.expected_finish",
+    "3.wire.2.reply.job.progress",
+    "3.wire.2.reply.job.stage",
+    "3.wire.2.reply.job.stage_seconds_json"
+  ],
+  "drafting__stopped_by_smd_running": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json"
+  ],
+  "drafting__wake_lost": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json",
+    "6.wire.2.reply.job.expected_finish",
+    "6.wire.2.reply.job.progress",
+    "6.wire.2.reply.job.stage",
+    "6.wire.2.reply.job.stage_seconds_json"
+  ],
+  "drafting__wake_paused": [
+    "1.wire.0.reply.job.expected_finish",
+    "1.wire.0.reply.job.progress",
+    "1.wire.0.reply.job.stage",
+    "1.wire.0.reply.job.stage_seconds_json"
   ]
 }

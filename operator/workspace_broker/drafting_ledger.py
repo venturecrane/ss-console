@@ -67,7 +67,7 @@ import sqlite3
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
-from . import drafting_attachments
+from . import drafting_attachments, drafting_progress
 from .cycle_window import cycle_window
 from .lane_ledger import RecentJobs, ReplyOnce, SpendMeter, StateRecord, require_cents
 
@@ -308,6 +308,7 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(drafting_jobs)")}
         if REVISE_COLUMN not in cols:
             conn.execute(ADD_REVISE_SQL)
+        drafting_progress.ensure(conn)  # the progress note's columns (2026-11-24)
 
     # -- the cycle's count -------------------------------------------------
     def allowance(
@@ -457,10 +458,15 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
             if dup is not None:
                 conn.rollback()
                 raise SubmitRefused(f"that request email already queued drafting job {dup['id']}", dup["id"])
+            # A revision of filed documents is not a second draft: a fresh draft of
+            # the same class running on the matter does not hold it back (the
+            # attorney's change to the delivered sets would otherwise land only in
+            # the running draft, 2026-11-24). Only another revision in flight does.
             twin = conn.execute(
                 "SELECT id FROM drafting_jobs WHERE matter_id=? AND document_class=? "
-                "AND state NOT IN ('delivered','failed','held') ORDER BY created_at DESC LIMIT 1",
-                (env["matter"]["id"], klass),
+                "AND state NOT IN ('delivered','failed','held') AND (? = 0 OR revise_of IS NOT NULL) "
+                "ORDER BY created_at DESC LIMIT 1",
+                (env["matter"]["id"], klass, int(revise is not None)),
             ).fetchone()
             if twin is not None:
                 conn.rollback()
@@ -515,6 +521,18 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
         return out
 
     # -- the runner's report -----------------------------------------------
+    def _check(self, state: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """The kept timings checked before any connection opens (never cast)."""
+        out = super()._check(state, fields)
+        drafting_progress.kept(fields)
+        return out
+
+    def _early(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+        """A progress note, answered without a transition (``drafting_progress``)."""
+        if not drafting_progress.is_note(state, fields):
+            return None
+        return drafting_progress.apply_note(self, job_id, fields)
+
     def _guard(self, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any]) -> None:
         require_cents(fields)
 
@@ -547,6 +565,7 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
                 job_id,
             ),
         )
+        drafting_progress.keep(conn, job_id, fields)  # an ending's timings outlive the run dir
 
 
 __all__ = [

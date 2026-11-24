@@ -11,7 +11,22 @@ of 2026-11-04.
 A discovery response revises EVERY document its request filed, one unit per
 file id (``drafting_revise_units``, 2026-11-21); any other class revises its
 one filed draft, and a delivery of several drafts of another class drafts
-afresh, as before.
+afresh, as before, except propounded discovery (below).
+
+SMD'S HAND, NOT A FRESH DRAFT (2026-11-24). Two replies on one day in the thread
+of propounded special interrogatories SMD had filed by hand (the Operator's own
+job for them had failed, and the hand filing was never recorded as its delivery)
+found no delivered draft in the thread and went on as fresh requests: one pulled
+502 files to draft the sets again, the next had its words carried only into that
+running redraft, and the filed sets the attorney was reading were never touched.
+So a reply in the thread of a FAILED job of its class on the matter, with nothing
+delivered there, is held for SMD (``prior_filed_by_smd``), and so is a reply to a
+propounded-discovery delivery of several sets (``prior_several_drafts``: the
+revise runner edits one filed draft, and redrafting every set is not what a
+change asks for). Both are SMD's causes: recorded as owed in the same step, the
+requester given the one sentence SMD's own work gets. SMD revises the filed
+documents, or records the hand filing (``jobs.drafting.deliver_by_smd``) so the
+next reply in the thread revises them in place.
 """
 
 from __future__ import annotations
@@ -43,6 +58,35 @@ def _unanswered() -> RouteRefused:
     )
 
 
+#: A reply SMD takes by hand (both are in ``drafting_verbs.REFUSAL_OUR_CODES``).
+FILED_BY_SMD = "prior_filed_by_smd"
+SEVERAL_DRAFTS = "prior_several_drafts"
+#: The class whose delivery files one draft per propounded set.
+PROPOUNDED_CLASS = "discovery_set"
+#: The failed jobs of a class on a matter read for a thread match, newest first.
+_FAILED_SQL = (
+    "SELECT id, request_ref FROM drafting_jobs WHERE matter_id=? AND document_class=? AND state='failed' "
+    "ORDER BY created_at DESC LIMIT 10"
+)
+
+
+def _failed_on_matter(db: Any, matter_id: str, klass: str) -> list[dict[str, Any]]:
+    conn = db._connect()
+    try:
+        return [dict(r) for r in conn.execute(_FAILED_SQL, (matter_id, klass))]
+    finally:
+        conn.close()
+
+
+def _filed_by_smd(job_id: str) -> RouteRefused:
+    return RouteRefused(
+        f"this email is in the thread of drafting job {job_id}, which failed and whose documents SMD filed by "
+        "hand; nothing delivered by the Operator is on record to revise, so SMD revises the filed documents "
+        f"(or records the hand filing: python -m jobs.drafting.deliver_by_smd {job_id}); nothing was queued",
+        FILED_BY_SMD,
+    )
+
+
 def route(
     db: Any,
     lookup: Callable[[], Callable[[str], str] | None],
@@ -56,7 +100,8 @@ def route(
     delivered = db.delivered_on_matter(
         envelope["matter"]["id"], envelope["document_class"], revise_units.MAX_JOBS if whole_set else 10
     )
-    thread_of = lookup() if delivered else None
+    failed = [] if revise_of else _failed_on_matter(db, envelope["matter"]["id"], envelope["document_class"])
+    thread_of = lookup() if (delivered or failed) else None
     if revise_of:
         if peer_uid != 0:
             return RouteRefused("revise_of is accepted from root only; nothing was queued", "revise_of_root_only")
@@ -72,10 +117,20 @@ def route(
         try:
             here = thread_of(envelope["request_ref"])
             prior = next((r for r in delivered if here and thread_of(r["request_ref"]) == here), None)
+            # The failed job's own email asked again is that request, as before
+            # (a failed job does not hold its email): only a LATER email is about it.
+            later = [r for r in failed if r["request_ref"] != envelope["request_ref"]]
+            hand = (
+                next((r for r in later if here and thread_of(r["request_ref"]) == here), None)
+                if prior is None
+                else None
+            )
         except ThreadUnknown:
             return _unanswered()
         if prior is None:
-            return None
+            # A failed job's thread with nothing delivered in it: the documents
+            # the reply is about were filed by SMD's hand, never a fresh redraft.
+            return _filed_by_smd(str(hand["id"])) if hand is not None else None
     if whole_set:
         return _route_set(db, delivered, prior, thread_of)
     files = db.proven_files(prior["id"])
@@ -88,6 +143,14 @@ def route(
     if sum(1 for f in files if f.get("role") == "draft") != 1:
         # This runner edits ONE filed draft (revise/run.py). Several drafts in one
         # delivery are a discovery response's sets, revised whole by _route_set.
+        # Several propounded sets have no revise runner: SMD's, never a redraft.
+        if envelope["document_class"] == PROPOUNDED_CLASS:
+            return RouteRefused(
+                f"this email asks about the {sum(1 for f in files if f.get('role') == 'draft')} propounded sets "
+                f"filed as job {prior['id']}; one revision edits one filed draft, so SMD revises the sets; "
+                "nothing was queued",
+                SEVERAL_DRAFTS,
+            )
         return None
     return {"prior_job_id": prior["id"], "folder_id": prior["folder_id"], "files": files}
 
@@ -177,4 +240,4 @@ def _prior_holders(
     return {job: names for job, names in named.items() if job not in {str(r["id"]) for r in threaded}}
 
 
-__all__ = ["RouteRefused", "route"]
+__all__ = ["FILED_BY_SMD", "SEVERAL_DRAFTS", "RouteRefused", "route"]

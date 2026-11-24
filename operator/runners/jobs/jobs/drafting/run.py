@@ -262,6 +262,8 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
             return
         stop_request.check(name)  # the Machine-stop checkpoint: every earlier stage is on disk
         t0 = time.time()
+        # The stage now running, for the daemon's progress note (drafting/progress.py).
+        self._put("current", {"stage": name, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t0))})
         self.log(f"[{name}] start")
         fn()
         self._done(name, seconds=round(time.time() - t0, 1))
@@ -430,7 +432,13 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
         self._stage(
             "pull",
             lambda: pull.run(
-                self.seat, self.job.matter_id, self.dview, set(f.get("client_emails") or []), self.data, self.log
+                self.seat,
+                self.job.matter_id,
+                self.dview,
+                set(f.get("client_emails") or []),
+                self.data,
+                self.log,
+                progress=True,  # the pull's n of N, for the progress note (drafting/progress.py)
             ),
         )
         self._stage("preflight", self._preflight)

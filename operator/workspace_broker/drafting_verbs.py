@@ -54,12 +54,12 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof, drafting_additions, library_setup_verbs, page_store_meta, smd_owed
+from . import delivery_proof, drafting_additions, drafting_progress, library_setup_verbs, page_store_meta, smd_owed
 from .audit_ledger import _iso_utc
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .drafting_intake import operator_library_number, resolve_request_graph_id
-from .drafting_route import RouteRefused, route
+from .drafting_route import FILED_BY_SMD, SEVERAL_DRAFTS, RouteRefused, route
 from .drafting_threads import ThreadUnknown, graph_thread_of
 from .drafting_ledger import (
     ALLOWANCE_KEY,
@@ -90,8 +90,12 @@ AUDIT_TYPES = {
 }
 #: A person asked the runner to re-run a failed job. NOT a transition.
 RESUME_AUDIT_TYPE = "DRAFTING_JOB_RESUME_REQUESTED"
+#: A running job's progress note moved its stage or count. NOT a transition.
+PROGRESS_AUDIT_TYPE = "DRAFTING_JOB_PROGRESS"
 if AUDIT_TYPES != AUDIT_TYPE:
     raise RuntimeError("drafting_verbs.AUDIT_TYPES and drafting_ledger.AUDIT_TYPE disagree")
+if PROGRESS_AUDIT_TYPE != drafting_progress.AUDIT_TYPE:
+    raise RuntimeError("drafting_verbs.PROGRESS_AUDIT_TYPE and drafting_progress.AUDIT_TYPE disagree")
 
 #: The skill setting naming the library matter's id (the same key and value
 #: the demand lane authors), the one matter a rehearsal may file on.
@@ -165,8 +169,13 @@ REFUSAL_OUR_CODES = frozenset(
         "mailbox_unanswered",
         "prior_unidentified",
         "request_graph_unresolved",
+        FILED_BY_SMD,
+        SEVERAL_DRAFTS,
     }
 )
+#: SMD's hand work on filed documents (``drafting_route``): the refusal's sentence,
+#: which names job ids only, rides on the owed item so SMD sees which job.
+REFUSAL_HAND_CODES = frozenset({FILED_BY_SMD, SEVERAL_DRAFTS})
 #: The same request email already queued a job: not a refusal of the request.
 REFUSAL_DUPLICATE_CODE = "already_queued"
 REFUSAL_CODES = REFUSAL_FIRM_CODES | REFUSAL_OUR_CODES | {REFUSAL_DUPLICATE_CODE}
@@ -365,7 +374,8 @@ class DraftingVerbs:
             # corrects it. Owed only when the same email fails validation again.
             extra["correct_call"] = True
         elif code in REFUSAL_OUR_CODES:
-            extra["smd_told"] = smd_owed.owe_drafting(db_path, self._audit_append, raw, code)
+            note = reason if code in REFUSAL_HAND_CODES else ""
+            extra["smd_told"] = smd_owed.owe_drafting(db_path, self._audit_append, raw, code, note=note)
         return {"ok": True, "accepted": False, "reason": reason, "code": code, **extra}
 
     def _submit(self, request: dict[str, Any], peer_uid: int | None = None) -> dict[str, Any]:
@@ -420,9 +430,14 @@ class DraftingVerbs:
                 "library matter for a rehearsal; that filing target is neither, so nothing was queued",
                 "filing_target",
             )
+        # A draft of this class still running on the matter: an email about the
+        # filed documents reaches it too (the overlay carries the words there,
+        # ``underway_job_id``), whether the filed ones are revised or SMD's.
+        running = self._db.active_on_matter(envelope["matter"]["id"], klass)
+        also = {"underway_job_id": running} if running else {}
         revise = self._route(envelope, revise_of, peer_uid)
         if isinstance(revise, RouteRefused):
-            return refused(str(revise), revise.code)
+            return refused(str(revise), revise.code, **(also if revise.code in REFUSAL_HAND_CODES else {}))
         if revise is not None:
             envelope = drafting_additions.with_carried_words(envelope, self._db.read(revise["prior_job_id"]))
         # A revision is the delivered draft finished as asked: no draft is
@@ -441,7 +456,8 @@ class DraftingVerbs:
             return self._ledger_refused(refused, exc)
         # A job for the same email and class answers an owed item recorded for it.
         smd_owed.close_for_job(self._db._db_path, envelope["request_ref"], klass, envelope["matter"]["number"], job_id)
-        return self._accepted(job_id, envelope, state["remaining"], revise)
+        out = self._accepted(job_id, envelope, state["remaining"], revise)
+        return {**out, **also} if revise is not None else out
 
     def _ledger_refused(self, refused: Callable[..., dict[str, Any]], exc: SubmitRefused) -> dict[str, Any]:
         """The ledger's own refusal, decided in its write transaction."""
@@ -500,6 +516,14 @@ class DraftingVerbs:
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("drafting_job_record requires job_id, a known state, and a fields object")
         fields = dict(fields)
+        if drafting_progress.is_note(state, fields):
+            # Where a running job is (``drafting_progress``): an audit row only
+            # when the stage or the count moved, so a frozen count reads as a stall.
+            row = self._db.record(job_id, state, fields)
+            if row.get("moved"):
+                note = {"job_id": job_id, "stage": row.get("stage"), "progress": row.get("progress")}
+                self._audit(PROGRESS_AUDIT_TYPE, note, row["matter_id"])
+            return {"ok": True, "job": DraftingLedger.project(row)}
         store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
         row = self._db.record(job_id, state, dict(fields))
         if row.get("prev_state") == state:

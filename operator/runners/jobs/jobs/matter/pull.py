@@ -33,6 +33,7 @@ pages to the agent's tools, not files to a job's disk.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import time
 from dataclasses import dataclass
@@ -227,32 +228,78 @@ def refused(row: dict[str, Any]) -> bool:
 
 
 def pull_rows(
-    seat: Any, matter_id: str, todo: list[dict[str, Any]], raw: Path, seen: dict[str, str], log_path: Path, log: Any
+    seat: Any,
+    matter_id: str,
+    todo: list[dict[str, Any]],
+    raw: Path,
+    seen: dict[str, str],
+    log_path: Path,
+    log: Any,
+    progress: Callable[[int], None] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """``fetch_row`` over every target, each row appended to ``log_path``."""
+    """``fetch_row`` over every target, each row appended to ``log_path``;
+    ``progress(pulled so far)`` after each batch."""
     rows: dict[str, dict[str, Any]] = {}
 
     def one(b: dict[str, Any], minted: dict[str, Any]) -> None:
         rows[b["id"]] = fetch_row(seat, b, minted, raw, seen)
         append_jsonl(log_path, rows[b["id"]])
 
-    pull(seat, matter_id, todo, one, log=log, done=lambda i: log(f"pulled {min(i + BATCH, len(todo))}/{len(todo)}"))
+    def done(i: int) -> None:
+        n = min(i + BATCH, len(todo))
+        log(f"pulled {n}/{len(todo)}")
+        if progress is not None:
+            progress(n)
+
+    pull(seat, matter_id, todo, one, log=log, done=done)
     return rows
 
 
+#: How far a pull has got, n of N files, rewritten after each batch: the
+#: daemon's progress note reads it (``drafting/progress.py``), so a long pull
+#: (502 files, 2026-11-24, its ledger row frozen for 26 minutes) reads as moving.
+PROGRESS = "pull-progress.json"
+
+
+def write_progress(data: Path, done: int, total: int) -> None:
+    """``{"done", "total", "at"}``, written whole; a write that fails is skipped."""
+    tmp = data / f".{PROGRESS}.tmp"
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    try:
+        tmp.write_text(json.dumps({"done": int(done), "total": int(total), "at": at}), encoding="utf-8")
+        tmp.replace(data / PROGRESS)
+    except OSError:
+        pass
+
+
 def fetch_all(
-    seat: Any, matter_id: str, targets: list[dict[str, Any]], data: Path, log: Callable[[str], None]
+    seat: Any,
+    matter_id: str,
+    targets: list[dict[str, Any]],
+    data: Path,
+    log: Callable[[str], None],
+    *,
+    progress: bool = False,
 ) -> list[dict[str, Any]]:
     """Resumable: a row already ``ok`` in ``pulled.jsonl`` is not fetched again.
     A row that failed for a reason time fixes is tried again, ``RETRY_PASSES``
-    times after a pause, within this call."""
+    times after a pause, within this call. ``progress``: keep ``PROGRESS`` in
+    ``data`` (the drafting lane's progress note reads it; no other lane does)."""
     raw = data / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     log_path = data / "pulled.jsonl"
     rows = {r["id"]: r for r in read_jsonl(log_path)}
     seen = {r["sha256"]: r["id"] for r in rows.values() if r.get("ok") and r.get("path")}
     todo = [t for t in targets if not (rows.get(t["id"]) or {}).get("ok")]
-    rows.update(pull_rows(seat, matter_id, todo, raw, seen, log_path, log))
+    already = len(targets) - len(todo)
+    if progress:
+        write_progress(data, already, len(targets))
+
+    def moved(n: int) -> None:
+        if progress:
+            write_progress(data, already + n, len(targets))
+
+    rows.update(pull_rows(seat, matter_id, todo, raw, seen, log_path, log, moved))
     for n in range(1, RETRY_PASSES + 1):
         again = [t for t in todo if retryable(rows.get(t["id"]) or {})]
         if not again:

@@ -17,6 +17,16 @@ second while a job runs. When it does not answer in time the marker is taken
 back, so nothing can land after the requester was told it did not; a marker the
 daemon had already taken gets a short while longer.
 
+ABOUT FILED DOCUMENTS (``about_filed``, 2026-11-24). An email in the thread of
+documents already filed on the matter (a delivered job of the same class, or a
+failed one SMD filed by hand) that comments on them reaches every draft of that
+class still running on the matter too: the attorney's "the interrogatories need
+follow-up questions" is about the kind of set, not only the five he was reading.
+The overlay sends it after its submit (``underway_job_id``) or when this verb
+answers ``filed_in_thread``. Then the job's own thread and requester are not
+required; instead the email's thread must hold a filed job of the target's class
+on the target's matter that the sender asked for (``filed_job``).
+
 WORDS THE DOOR REFUSED are kept on the job's row (``additions_not_covered`` in
 the delivery report, the same place the markers live), so the delivery reply
 names them and a revision in the same thread can carry them. An audit row never
@@ -118,6 +128,42 @@ def note_addition(
         conn.close()
 
 
+#: A filed job of a class on a matter: delivered, or failed and filed by SMD's hand.
+_FILED_SQL = (
+    "SELECT id, request_ref, requester FROM drafting_jobs WHERE matter_id=? AND document_class=? AND id != ? "
+    "AND state IN ('delivered','failed') ORDER BY created_at DESC LIMIT 50"
+)
+
+
+def filed_job(db: DraftingLedger, row: dict[str, Any], thread: set[str], by: str = "") -> str:
+    """The id of a filed job (delivered, or failed: SMD's hand) of ``row``'s class
+    on its matter whose request email is in ``thread``, asked for by ``by`` when
+    given; "" when none."""
+    conn = db._connect()
+    try:
+        found = conn.execute(_FILED_SQL, (row["matter_id"], row["document_class"], row["id"])).fetchall()
+    finally:
+        conn.close()
+    for r in found:
+        if _bare(r["request_ref"]) in thread and (not by or str(r["requester"]).strip().lower() == by):
+            return str(r["id"])
+    return ""
+
+
+def _whose(db: DraftingLedger, row: dict[str, Any], ref: str, by: str, thread: set[str], about: bool) -> str:
+    """The refusal of an email that may not reach this job, or "". ``about``: the
+    email is about documents already filed, and reaches a draft of their kind on
+    the matter when its thread holds one the sender asked for."""
+    if not about and by != str(row["requester"]).strip().lower():
+        return "not_requester"
+    if _bare(ref) == _bare(row["request_ref"]):
+        return "same_email"
+    if not ref or _bare(ref) not in thread:
+        return "other_thread"
+    held = filed_job(db, row, thread, by) if about else _bare(row["request_ref"]) in thread
+    return "" if held else "other_thread"
+
+
 def add_to_request(
     db: DraftingLedger,
     audit: Callable[[str, dict[str, Any], str | None], None],
@@ -143,19 +189,22 @@ def add_to_request(
     if row is None:
         return out("no_such_job")
     named = {"matter_number": row["matter_number"], "document_class": row["document_class"], "job_id": job_id}
-    if by != str(row["requester"]).strip().lower():
-        return out("not_requester", **named)
-    if _bare(ref) == _bare(row["request_ref"]):
-        return out("same_email", **named)
-    if not ref or _bare(ref) not in thread or _bare(row["request_ref"]) not in thread:
-        return out("other_thread", **named)
+    about = request.get("about_filed") is True
+    refused = _whose(db, row, ref, by, thread, about)
+    if refused:
+        return out(refused, **named)
+    if not about and not row.get("revise_of") and filed_job(db, row, thread):
+        # The thread also holds filed documents of this class, and this draft
+        # is not their revision: the overlay submits the email too, so the
+        # filed ones are revised (or SMD's).
+        named = {**named, "filed_in_thread": True, "matter_id": row["matter_id"]}
     if not words:
         return out("no_words", **named)
     if len(words) > MAX_WORDS:
         return out("too_long", **named)
 
     def ended(state: Any, **extra: Any) -> dict[str, Any]:
-        if state == "failed":
+        if state == "failed" and not about:
             # The addition cannot reach a failed draft. It is work SMD owes,
             # recorded in this step, and the answer says whether it was.
             extra["smd_told"] = bool(owe is not None and owe(row, ref, "failed"))
@@ -202,4 +251,12 @@ def with_carried_words(envelope: dict[str, Any], prior: dict[str, Any] | None) -
     return {**envelope, "request_text": text} if len(text) <= MAX_REQUEST_TEXT else envelope
 
 
-__all__ = ["AUDIT_TYPE", "MAX_WORDS", "WAIT_SECONDS", "add_to_request", "carried_words", "with_carried_words"]
+__all__ = [
+    "AUDIT_TYPE",
+    "MAX_WORDS",
+    "WAIT_SECONDS",
+    "add_to_request",
+    "carried_words",
+    "filed_job",
+    "with_carried_words",
+]
