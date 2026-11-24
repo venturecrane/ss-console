@@ -4,7 +4,8 @@ it, and where the two disagree.
 A court document's caption is the authority for a pleading's caption: the
 latest complaint, amended complaint or cross-complaint; failing one, an answer
 (whose attorney block is opposing counsel's, so its attorney fields are never
-used); failing that, the latest court notice, order or summons. The caption
+used); failing that, the latest summons, then court notice or order, and a
+filing's paperwork (a fee summary, a receipt) only last. The caption
 itself is read off that document's page 1 by ``caption_read``; this module
 compares it to the Smokeball matter record:
 
@@ -38,7 +39,19 @@ from . import caption_rules as rules
 
 ANSWER_NAME = re.compile(r"(?i)\banswer\b")
 PLEADING_NAME = re.compile(r"(?i)\b(first |second |third |fourth )?(amended )?(cross-?\s?)?complaint\b")
-NOTICE_NAME = re.compile(r"(?i)\b(notice|minute order|order|summons)\b")
+NOTICE_NAME = re.compile(r"(?i)\b(notice|minute order|order)\b")
+SUMMONS_NAME = re.compile(r"(?i)\bsummons\b")
+#: A filing's paperwork, not the pleading it names ("Complaint Fee Summary", "Filing Receipt"): it
+#: prints a short caption (2026-11-23: a fee summary's caption carried one of four defendants and
+#: outranked the complaint by its later date), so it is read only when nothing else carries a caption.
+#: Paperwork even when it names a pleading: the paperwork words themselves.
+PAPERWORK_NAME = re.compile(
+    r"(?i)\b(fees?\s+(?:summary|receipt|schedule)|receipt|cover\s+sheet|transmittal|invoice"
+    r"|filing\s+(?:summary|confirmation|envelope))\b"
+)
+#: Paperwork only when no pleading or answer word is present: "Complaint for Damages and Attorney
+#: Fees" and "First Amended Complaint; Proof of Service" are pleadings.
+FILING_NAME = re.compile(r"(?i)\b(fees?|proof\s+of\s+service)\b")
 #: The label is case-blind; the value is not: upper-case letters, digits and
 #: hyphens, with at least one digit ("Case No. pending" is no case number).
 CASE_NO = re.compile(r"(?i:\bcase\s+(?:no|number)\.?\s*:?\s*)([A-Z0-9][A-Z0-9-]{4,30})\b")
@@ -47,8 +60,8 @@ COURT = re.compile(r"(?i)superior court of")
 RENDERABLE = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff")
 CASE_KEY = "Matter/CaseDetails/StandardCaseDetails/CaseNumber"
 HEAD_CHARS = 6000
-#: Ranked: a complaint over an answer over a court notice.
-RANKS = {"pleading": 3, "answer": 2, "notice": 1}
+#: Ranked: a complaint over an answer over a summons over a court notice over a filing's paperwork.
+RANKS = {"pleading": 4, "answer": 3, "summons": 2, "notice": 1, "filing": 0}
 
 Report = Callable[..., None]
 
@@ -71,17 +84,33 @@ def _dated(row: dict[str, Any]) -> str:
 
 
 def _kind(name: str) -> str | None:
+    """The kind of court paper a document's name says it is (``RANKS``): a
+    pleading or answer word wins over a summons, fee or service word in the
+    same name, except the paperwork words (``PAPERWORK_NAME``); a fee or
+    service word wins over a summons word. ``plan_early.settled`` ranks by it too."""
+    if PAPERWORK_NAME.search(name):
+        return "filing"
     if ANSWER_NAME.search(name):
         return "answer"
     if PLEADING_NAME.search(name):
         return "pleading"
+    if FILING_NAME.search(name):
+        return "filing"  # "Proof of Service of Summons" is paperwork: its form prints a short title
+    if SUMMONS_NAME.search(name):
+        return "summons"
     return "notice" if NOTICE_NAME.search(name) else None
 
 
 def source_document(data: Path) -> dict[str, Any] | None:
-    """The latest complaint, else the latest answer, else the latest court
-    notice, whose text carries a court caption and whose page 1 can be
-    rendered; None when the file has none. The row gains ``kind``."""
+    """The first of ``source_documents``; None when the file has none."""
+    docs = source_documents(data)
+    return docs[0] if docs else None
+
+
+def source_documents(data: Path) -> list[dict[str, Any]]:
+    """Every court document whose text carries a court caption and whose page 1
+    can be rendered, best first: the latest complaint, then answer, summons,
+    court notice, and a filing's paperwork last. Each row gains ``kind``."""
     rows = [json.loads(ln) for ln in (data / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if ln]
     cands = []
     for r in rows:
@@ -95,9 +124,7 @@ def source_document(data: Path) -> dict[str, Any] | None:
         kind = _kind(name)
         if kind:
             cands.append((RANKS[kind], _dated(r), name, {**r, "kind": kind}))
-    if not cands:
-        return None
-    return max(cands, key=lambda c: (c[0], c[1], c[2]))[3]
+    return [c[3] for c in sorted(cands, key=lambda c: (c[0], c[1], c[2]), reverse=True)]
 
 
 def _court(s: str) -> list[str]:

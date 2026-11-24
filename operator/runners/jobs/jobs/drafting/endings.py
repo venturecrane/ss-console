@@ -41,8 +41,11 @@ FIRM_MESSAGES: dict[str, str] = {
         "{item}: left as drafted and marked for you; the firm's standard wording has no sentence for this objection"
     ),
     "exhibit_unresolved": "{item}: the exhibit it names could not be matched to a file, so it is left as drafted",
+    # A statement, never a question (no client loops, 2026-11-23): a change sent in
+    # reply to the delivery is made to that draft (``workspace_broker/drafting_route``).
     "prior_draft_routed": (
-        "{item}: a draft of these responses is already on the matter; reply with the changes you want made to it"
+        "{item}: a draft of these responses is already on the matter, so no new one was made; "
+        "changes sent in reply to this email are made to that draft"
     ),
 }
 

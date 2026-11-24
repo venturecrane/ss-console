@@ -69,6 +69,8 @@ DEADLINES_CLASS = "deadlines"
 REASSIGN_CLASS = "reassign"
 DISCOVERY12_CLASS = "discovery12"
 REVISE_PREFIX = "revise_"
+#: Amended discovery responses (``drafting/amended.py``).
+AMENDED_CLASS = "amended_discovery_response"
 #: A drafting-lane "set up our ..." job (``library_setup_lane``): its own proof,
 #: never a document class's. A dark one (``live`` false) sends and writes
 #: nothing, so it is admitted without one; a live one waits for its proof.
@@ -92,6 +94,11 @@ def lane_key(lane: str, envelope: dict[str, Any]) -> str:
     if lane == "drafting":
         cls = str(envelope.get("document_class") or "")
         cls = cls if _CLASS_RE.match(cls) else "unknown"
+        if cls == "discovery_response" and envelope.get("amended") is True:
+            # 2026-11-23: amended responses after the other side's letter are their
+            # own kind of job; the runner marks the envelope when it takes that path
+            # (drafting/amended.py), so the proof result and any re-admission read it.
+            return f"{skill}.{AMENDED_CLASS}"
         if isinstance(envelope.get("revise"), dict):
             # 2026-11-04: revising a filed brief in place WRITES new versions
             # over the firm's files, so it waits for its own proof run, never

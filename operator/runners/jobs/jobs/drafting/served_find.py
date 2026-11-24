@@ -38,9 +38,12 @@ What code decides, and what the one model call per set returns:
    are read first, so a form's asking party can come from those served with it.
 4. A served set answered by a later response paper of ours (same type, number
    and asking party) that shows it was SERVED (``served_papers.was_served``) is
-   dropped; a draft never answers, and a draft of a set still owed (the
-   Operator's, or any "DRAFT ... Responses to <kind>, Set <n>") is a revision
-   (``served_prior_draft``). A form set the read says our client propounded is
+   dropped; a draft never answers. A set still owed whose only draft on the
+   matter is one an earlier Operator job delivered for that same served set
+   (type, number and asking party) is named with it and not drafted again
+   (``with_priors``, 2026-11-23); any other draft of a set still owed (a hand
+   "DRAFT ... Responses to <kind>, Set <n>", another party's, a second one),
+   or a delivered draft of every Operator set, stops ``served_prior_draft``. A form set the read says our client propounded is
    dropped; one whose read does not name our client as responding stops.
 
 Every stop is a FAILED job before any large spend (``served.FIND_STOPS``),
@@ -53,14 +56,14 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
-from . import parties
+from . import amended, parties
 from . import served as served_mod
 from .outcome import DraftingFailed
-from .served import OTHER, SET_TYPES, ServedSet, found_drafted_by
+from .served import OPERATOR, OTHER, SET_TYPES, ServedSet, found_drafted_by
 from . import served_formset as formset, served_papers as papers
 from .served_docs import EXCERPT_CHARS as EXCERPT_CHARS, Doc, docs as docs, load as _load, other_side as other_side
 from .served_slice import RESPONDING as _RESPONDING, slice_requests as _slice
@@ -107,6 +110,10 @@ class Found:
     rows: list[dict[str, Any]] = field(default_factory=list)
     keep: list[ServedSet] = field(default_factory=list)
     dates: list[str | None] = field(default_factory=list)
+    #: Who drafts a found form set: the firm's answer (``forms.lane_hook.by_operator``).
+    form_by_operator: bool = False
+    #: The served sets a later served response of ours answers, with that response (``amended.py``).
+    answered: list[tuple[ServedSet, Doc]] = field(default_factory=list)
 
     def note(self, doc: Doc | None, kind: str, kept: bool, why: str, **more: Any) -> None:
         head = {"id": doc.id, "name": doc.name, "folder": doc.folder, "copies": doc.copies} if doc else {}
@@ -262,25 +269,38 @@ def _form_set(d: Doc, v: dict, clients: list[str], other: list[str], ctx: formse
 request_kinds = papers.draft_kinds
 
 
-def prior_drafts(data: Path, title: str) -> dict[tuple[str, int], str]:
-    """(set type, set number) -> the name of a draft of it already on the matter:
-    the Operator's ("<title> - Responses to <kind>, Set <n> - ...", ``finish._names``)
-    or any file named "DRAFT ... Responses to <kind>, Set <n>"."""
+def _stem(name: str) -> str:
+    return re.sub(r"(?i)\.docx?$", "", " ".join(name.split())).casefold()
+
+
+def prior_drafts(data: Path, title: str) -> dict[tuple[str, int], list[str]]:
+    """(set type, set number) -> the names of the drafts of it already on the
+    matter, one per distinct name: the Operator's ("<title> - Responses to
+    <kind>, Set <n> - ...", ``finish._names``) or any file named "DRAFT ...
+    Responses to <kind>, Set <n>". A copy of one name in a second folder is
+    one draft."""
     kinds = {label.lower(): k for k, (label, _r) in SET_TYPES.items()}
     rx = re.compile(rf"^{re.escape(title)} - Responses to (?P<kind>.+?), Set (?P<n>\w+) - ")
-    out: dict[tuple[str, int], str] = {}
-    for r in _load(Path(data) / "manifest.json", []):
-        m = rx.match(str(r.get("name") or "")) if isinstance(r, dict) else None
-        if not m or m.group("kind").lower() not in kinds:
-            continue
-        w = m.group("n")
-        n = int(w) if w.isdigit() else _WORDS.get(w.lower())
-        if n:
-            out[(kinds[m.group("kind").lower()], n)] = str(r["name"])
-    for r in _load(Path(data) / "manifest.json", []):
-        got = papers.draft_of(str(r.get("name") or "")) if isinstance(r, dict) else None
+    out: dict[tuple[str, int], list[str]] = {}
+
+    def add(key: tuple[str, int], name: str) -> None:
+        got = out.setdefault(key, [])
+        if _stem(name) not in {_stem(n) for n in got}:
+            got.append(name)
+
+    rows = [r for r in _load(Path(data) / "manifest.json", []) if isinstance(r, dict)]
+    for r in rows:
+        name = str(r.get("name") or "")
+        m = rx.match(name)
+        if m and m.group("kind").lower() in kinds:
+            w = m.group("n")
+            n = int(w) if w.isdigit() else _WORDS.get(w.lower())
+            if n:
+                add((kinds[m.group("kind").lower()], n), name)
+                continue
+        got = papers.draft_of(name)
         if got:
-            out.setdefault(got, str(r["name"]))
+            add(got, name)
     return out
 
 
@@ -473,6 +493,8 @@ def _read_all(
         kept.append((i, s, when or d.listed))
         f.note(d, "served", True, "served on our client", set_type=kind, label=s.label, **extra)
     for _i, s, when in sorted(kept, key=lambda x: x[0]):  # the matter file's order, as before
+        if s.set_type == "form_interrogatories":
+            s = replace(s, drafted_by=found_drafted_by(s.set_type, f.form_by_operator))
         f.keep.append(s)
         f.dates.append(when)
 
@@ -492,6 +514,7 @@ def _answered(f: Found, got: Sorted) -> None:
         later = [r for r in hits if when and r[0].listed and r[0].listed > when]
         if later:
             f.note(later[0][0], "response", True, f"answers {s.label}, served {when}; that set is dropped")
+            f.answered.append((s, later[0][0]))
             continue
         keep.append(s)
         dates.append(when)
@@ -507,16 +530,17 @@ def find(
     clients: list[str],
     other_side: list[str] | None = None,
     title: str = "Discovery Responses",
+    form_by_operator: bool = False,
 ) -> Found | None:
     """The served sets, found and written as ``served.json``; None (nothing
     done) when the hand file is already there. Raises ``Stop`` on every stop;
     ``found-report.json`` is written either way."""
     if (Path(job_dir) / served_mod.FILE).exists():
         return None
-    f = Found()
+    f = Found(form_by_operator=form_by_operator)
     stop: Stop | None = None
     try:
-        _walk(f, data, request, reader, list(clients), list(other_side or []), title)
+        _walk(f, data, request, reader, list(clients), list(other_side or []), title, Path(job_dir))
     except Stop as exc:
         stop = exc
         raise
@@ -532,9 +556,10 @@ def candidates(f: Found, data: Path, request: str, clients: list[str]) -> Sorted
     kinds = request_kinds(request)
     got = sort_docs(f, docs(data), clients)
     _narrow(f, got, kinds)
-    if papers.asks_amended(request):
-        # Amended, further or supplemental responses are SMD's, whether or not a
-        # served response is on file (else the lane drafts first-time responses).
+    if papers.asks_amended(request) and not (got.responses and amended.proven()):
+        # Amended, further or supplemental responses are drafted only from a served
+        # response of ours and only where the amended lane is proven (amended.py);
+        # otherwise they are SMD's, before any read.
         raise Stop("served_amended", "the request asks for amended, further or supplemental responses")
     _before_spend(f, got, kinds)
     return got
@@ -549,19 +574,123 @@ def planned_reads(data: Path, request: str, clients: list[str]) -> list[str]:
         return []
 
 
-def _walk(f: Found, data: Path, request: str, reader: Reader, clients: list[str], other: list[str], title: str) -> None:
+def _walk(
+    f: Found,
+    data: Path,
+    request: str,
+    reader: Reader,
+    clients: list[str],
+    other: list[str],
+    title: str,
+    job_dir: Path | None = None,
+) -> None:
     got = candidates(f, data, request, clients)
     prior = prior_drafts(data, title)
     _read_all(f, got, reader, clients, other, {n for k, n in prior if k == "form_interrogatories"})
     _answered(f, got)
+    if _amended(f, data, request):
+        return
     if not f.keep:
         raise Stop("served_none", "every served set in the matter file is answered by a later response of ours")
+    f.keep = with_priors(f, prior, delivered_drafts(job_dir) if job_dir is not None else [])
+
+
+def _amended(f: Found, data: Path, request: str) -> bool:
+    """Amended responses (``amended.py``): the request asks for them, or every set
+    it names is answered by a served response of ours and a later letter from the
+    other side is in the pull. The job then drafts the answered sets; the
+    letters are read in the next step (``served_plan``). A stop is ``served_amended``."""
+    letters = amended.find_letters(data, f.answered) if f.answered else []
+    verdict = amended.decide(request, bool(f.keep), f.answered, letters)
+    if verdict == amended.NOT:
+        return False
+    if verdict != amended.AMENDED:
+        raise Stop("served_amended", verdict)
+    amended.write(data, f.answered, letters, "asked" if papers.asks_amended(request) else "file")
+    f.keep, f.dates = amended.keep_sets(f.answered), [d.listed for _s, d in f.answered]
+    for d in letters:
+        f.note(d, "letter", True, "the other side's meet-and-confer letter: read for the amended responses")
+    return True
+
+
+@dataclass(frozen=True)
+class Delivered:
+    """A draft an earlier Operator job delivered for one served set."""
+
+    set_type: str
+    set_number: int
+    propounding_party: str
+    document: str
+    job_id: str
+
+
+def delivered_drafts(job_dir: Path) -> list[Delivered]:
+    """Every draft an earlier Operator job on this matter DELIVERED, by the
+    served set it answers (type, number, asking party): the sibling job
+    directories' ``served-plan.json`` beside their ``served-outcomes.json``,
+    which the runner writes only after the filed files are read back
+    (``run._file``). A set SMD filed (``drafted_by`` smd) and a set the job
+    itself named as already drafted are not the Operator's draft."""
+    own = _load(Path(job_dir) / "job.json", {})
+    matter = str(own.get("matter_id") or "") if isinstance(own, dict) else ""
+    out: list[Delivered] = []
+    if not matter:
+        return out
+    try:
+        dirs = sorted(p for p in Path(job_dir).parent.iterdir() if p.is_dir() and p != Path(job_dir))
+    except OSError:
+        return out
+    for d in dirs:
+        job = _load(d / "job.json", {})
+        if not isinstance(job, dict) or str(job.get("matter_id") or "") != matter:
+            continue
+        plan, rows = _load(d / "data" / served_mod.PLAN, {}), _load(d / "data" / served_mod.OUTCOMES, {})
+        sets = plan.get("sets") if isinstance(plan, dict) else None
+        done = rows.get("sets") if isinstance(rows, dict) else None
+        if not isinstance(sets, list) or not isinstance(done, list) or len(sets) != len(done):
+            continue
+        for s, r in zip(sets, done):
+            if (isinstance(s, dict) and isinstance(r, dict) and r.get("status") == served_mod.FILED
+                    and r.get("drafted_by") == OPERATOR and not r.get(served_mod.PRIOR) and r.get("document")):  # fmt: skip
+                out.append(Delivered(str(s.get("set_type")), int(s.get("set_number") or 0),
+                                     str(s.get("propounding_party") or ""), str(r["document"]), d.name))  # fmt: skip
+    return out
+
+
+def with_priors(f: Found, prior: dict[tuple[str, int], list[str]], delivered: list[Delivered]) -> list[ServedSet]:
+    """The kept sets, each with the draft of it an earlier Operator job
+    delivered for the SAME served set (type, number and asking party) and that
+    is on the matter as its only draft: named in the reply, revised from the
+    delivery's thread, never drafted again (2026-11-23). Any other draft of a
+    kept set (a hand "DRAFT ...", a draft for another party's set, a second
+    draft) stops the job for SMD (``served_prior_draft``), as before; so does a
+    job whose every Operator set already has a delivered draft."""
+    out, other = [], []
     for s in f.keep:
-        if (s.set_type, s.set_number) in prior:
-            raise Stop(
-                "served_prior_draft",
-                f"{s.label} has a prior draft on the matter ({prior[(s.set_type, s.set_number)]!r}): a revision",
-            )
+        names = prior.get((s.set_type, s.set_number)) or []
+        if not names:
+            out.append(s)
+            continue
+        ours = [
+            d for d in delivered
+            if (d.set_type, d.set_number) == (s.set_type, s.set_number)
+            and parties.same(d.propounding_party, s.propounding_party) and _stem(d.document) == _stem(names[0])
+        ]  # fmt: skip
+        if len(names) == 1 and ours:
+            out.append(replace(s, prior_draft=names[0], prior_job=ours[-1].job_id))
+            f.note(None, "prior_draft", True, f"{s.label}: the Operator's delivered draft is on the matter; named, "
+                   "not drafted", document=names[0], job=ours[-1].job_id)  # fmt: skip
+            continue
+        other.append(f"{s.label} ({' and '.join(repr(n) for n in names)})")
+    if other:
+        raise Stop("served_prior_draft", "a draft the Operator did not deliver for this set is on the matter: "
+                   + "; ".join(other) + "; a revision, by hand")  # fmt: skip
+    if any(s.prior_draft for s in out) and not any(s.drafted_by == OPERATOR and not s.prior_draft for s in out):
+        named = "; ".join(f"{s.label} ({s.prior_draft!r})" for s in out if s.prior_draft)
+        raise Stop(
+            "served_prior_draft", f"every set the Operator drafts has a draft on the matter: {named}; a revision"
+        )
+    return out
 
 
 def _report(job_dir: Path, f: Found, stop: Stop | None, reader: Reader) -> None:

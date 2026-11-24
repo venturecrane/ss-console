@@ -56,7 +56,7 @@ from ...matter import pull as matter_pull
 from .. import review as review_mod
 from ..outcome import DraftingFailed, DraftingHold, Verdict
 from ..rulebook import hook as rule_hook
-from . import checklist as ck, responses as rs, rules as rules_mod, set_units as su, versions
+from . import book_run as br, checklist as ck, responses as rs, rules as rules_mod, set_units as su, versions
 from .run import ReviseRun
 
 STAGES = (
@@ -121,10 +121,11 @@ class ReviseSetRun(ReviseRun):
         )
         p = self.data / firm_wording.FILE
         frozen = list(json.loads(p.read_text(encoding="utf-8")).get("rules") or []) if p.is_file() else []
-        can, cannot = rules_mod.writable(frozen)
+        # The firm-rules stage applies rules with or without quoted words: none is set aside.
+        can, cannot = (frozen, []) if br.on(self) else rules_mod.writable(frozen)
         self._write("rules-in-force.json", {"rules": can, "without_wording": [r["rule_id"] for r in cannot]})
         self._write("checklist.json", {"items": [i.to_dict() for i in ck.rule_items(can)]})
-        if not can:
+        if not can and not br.on(self):
             raise DraftingHold(
                 "revise_unchanged: no new versions were filed, because no standing rule of the firm's for "
                 "discovery responses gives the exact wording to use"
@@ -149,6 +150,7 @@ class ReviseSetRun(ReviseRun):
         except su.BaseUnproven as exc:
             raise DraftingFailed(f"revise_base_unproven: {u['name']}: {exc}; nothing was edited or filed") from None
         if doc.is_index:
+            (d / "base.md").write_text(md, encoding="utf-8")  # its lines follow its production document's
             self._keep_index(k, u, before)
             return
         if u["set_type"] and doc.set_type != u["set_type"]:
@@ -200,6 +202,9 @@ class ReviseSetRun(ReviseRun):
         flags = [on and not b.get("index") for on, b in zip(su.in_scope(self.job.request_text, kinds), bases)]
         for k, on in enumerate(flags):
             self._uwrite(k, "base.json", {**self._ujson(k, "base.json"), "in_scope": on})
+        if br.on(self):
+            br.pair_indexes(self)
+            br.notes_base(self)
         if not any(flags):
             raise DraftingHold(
                 "revise_unchanged: no new versions were filed, because the request names no kind of response "
@@ -209,10 +214,16 @@ class ReviseSetRun(ReviseRun):
 
     def _estimate_set(self) -> None:
         rules = self._rules_in_force()
-        chars = sum(rules_mod.plan_chars(rules, self._doc(k)) for k in self._scoped())
+        if br.on(self):
+            chars = br.estimate(self)
+        else:
+            chars = sum(rules_mod.plan_chars(rules, self._doc(k)) for k in self._scoped())
         self._project(chars, "the set revision", calls=2 * len(self._scoped()), documents=len(self._scoped()))
 
     def _values(self) -> None:
+        if br.on(self):
+            br.values(self)
+            return
         rules = self._rules_in_force()
         ask = self._ask(self.firm.model("audit"))
         for k in self._scoped():
@@ -253,7 +264,7 @@ class ReviseSetRun(ReviseRun):
         return rec
 
     def _render_set(self) -> None:
-        recs = {k: self._render_unit(k) for k in self._scoped()}
+        recs = br.render_set(self) if br.on(self) else {k: self._render_unit(k) for k in self._scoped()}
         self._write_notes()
         if not any(r["out"] for r in recs.values()):
             why = [s for r in recs.values() for s in r["skipped"]] + [
@@ -274,6 +285,9 @@ class ReviseSetRun(ReviseRun):
 
     def _write_notes(self) -> None:
         """The job's notes: per document what changed, what was left and why."""
+        if br.on(self):
+            self._atomic(NOTES, br.notes(self))
+            return
         lines = ["# The firm's standing rules, made in the filed responses", ""]
         left = self._json("rules-in-force.json").get("without_wording") or []
         if left:
@@ -297,7 +311,7 @@ class ReviseSetRun(ReviseRun):
         self._atomic(NOTES, "\n".join(lines).rstrip() + "\n")
 
     def _changed_units(self) -> list[int]:
-        return [k for k in self._scoped() if (self._ujson(k, "render.json") or {}).get("out")]
+        return [k for k in range(len(self.units)) if (self._ujson(k, "render.json") or {}).get("out")]
 
     def _manifest_set(self) -> None:
         files = [("draft", Path(self._ujson(k, "render.json")["out"])) for k in self._changed_units()]
@@ -311,6 +325,8 @@ class ReviseSetRun(ReviseRun):
             base = self._ujson(k, "base.json")
             if sent.get(f"unit-{k}", {}).get("sent") or self._version(self.units[k]["file_id"]) == base["version"]:
                 return
+            if br.on(self):
+                br.hold_rebase(self, k)  # the stage's plan was made on the version read; never replayed on another
             self.log(f"  {self.units[k]['name']} was saved again since it was read: reading it again")
             self._base_unit(k)
             self._uwrite(k, "base.json", {**self._ujson(k, "base.json"), "rebased": int(base.get("rebased") or 0) + 1})
@@ -344,11 +360,12 @@ class ReviseSetRun(ReviseRun):
                     "base_version": base["version"],
                 }
             )
-        return plan
+        notes = br.notes_plan(self, (self.data / NOTES).read_text(encoding="utf-8")) if plan and br.on(self) else None
+        return [*plan, notes] if notes else plan
 
     def _file(self) -> Verdict:
         plan = self._plan()
-        files = [{"name": p["name"], "size": p["bytes"], "role": "draft"} for p in plan]
+        files = [{"name": p["name"], "size": p["bytes"], "role": p["role"]} for p in plan]
         if proof_mode.active():
             return Verdict(proof_mode.OUTCOME, stage="file", files=files)
         proven: list[dict[str, Any]] = []

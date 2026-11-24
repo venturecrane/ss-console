@@ -79,6 +79,16 @@ def test_a_blank_text_form_is_found_from_the_pixel_read_and_the_record_not_stopp
     assert "pixel" in row["request_count"] and "only form set" in row["set_number_source"]
 
 
+def test_a_firm_with_a_form_policy_has_its_found_form_set_drafted_by_the_operator(tmp_path, pixel):
+    data, jd = matter(tmp_path, [_form_doc(tmp_path), {**SROG, "created": "2026-09-01T09:00:00"}])
+    _caption(data)
+    served_find.find(data, jd, "Please draft responses.", Fake({"DISC-001": BLANK, **SI}).reader(),
+                     clients=[CLIENT], other_side=served_find.other_side(data), form_by_operator=True)  # fmt: skip
+    sets = json.loads((jd / served.FILE).read_text())["sets"]
+    (s,) = [s for s in sets if s["set_type"] == "form_interrogatories"]
+    assert s["drafted_by"] == "operator" and s["source"]  # the box read (read_stage) fills the rest
+
+
 # ---- 1b. the asking party of a drawn form, from the text sets served with it ------------------
 
 OMEGA = "OMEGA EXAMPLE LLC"

@@ -192,7 +192,7 @@ def read_found(
     data: Path, job_dir: Path, doorway: Any, model: str, *, by_operator: bool, log: Callable[[str], None]
 ) -> list[int]:
     """The ``find`` stage's form read: every served form set the Operator drafts
-    (``drafted_by`` operator, which needs ``served.FORM_SETS_BY_OPERATOR``) and
+    (``drafted_by`` operator, which needs ``lane_hook.by_operator`` for the firm) and
     that names its matter document (``source``) but no ``checked`` yet is read
     by ``read_served_form``, so ``served.json`` carries ``form``,
     ``form_revision`` and ``checked`` before the plan. Off (``by_operator``

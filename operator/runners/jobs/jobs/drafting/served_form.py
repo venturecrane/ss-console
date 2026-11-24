@@ -16,9 +16,9 @@ The numbers, their order and the boxes are checked against the catalogue
 
 An SMD-drafted form set may leave all five out (SMD drafts it by hand as
 before); given one, it gives all five. An Operator-drafted form set gives all
-five, and is still refused (``served_invalid``) unless the drafting answers
-form sets (``served.FORM_SETS_BY_OPERATOR``, off until the answer path lands)
-and it has no additions (attached interrogatories are answered by SMD).
+five, and is still refused (``served_invalid``) unless the Operator drafts
+the firm's form sets (``forms.lane_hook.by_operator``: the firm authored
+``form_responses`` and ``served.FORM_SETS_BY_OPERATOR`` is on) and it has no additions (attached interrogatories are answered by SMD).
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def _strings(v: Any) -> bool:
 def fields(i: int, raw: dict[str, Any], problems: list[str], *, by_operator: bool) -> dict[str, Any]:
     """The set's form keys, checked; ``{}`` for a set that gives none. Every
     problem is a sentence appended to ``problems``. ``by_operator``: whether
-    the drafting answers form sets yet (``served.FORM_SETS_BY_OPERATOR``)."""
+    the Operator drafts this firm's form sets (``forms.lane_hook.by_operator``)."""
     given = [k for k in FORM_KEYS if k in raw]
     st, drafter = raw.get("set_type"), raw.get("drafted_by")
     if st != FORM_TYPE:

@@ -13,18 +13,26 @@ empty)::
       not_applicable_numbers:   {<role>: [<number>, ...]}                answered by code, no model call
       client_confirm_numbers:   [<number>, ...]                          always carry the client marker
       no_admissions_17_1:       <sentence>        17.1 when no requests for admission were served
-      preamble:                 [<paragraph>, ...]
-      closing:                  [<paragraph>, ...]
+      preamble:                 [<paragraph>, ...]                       may be [] (the shell holds it)
+      closing:                  [<paragraph>, ...]                       may be []
       label:                    "FORM INTERROGATORY NO. {n}:"
       response_label:           "RESPONSE TO FORM INTERROGATORY NO. {n}:"
       client_marker:            <what the attorney confirms with the client, one line>
       skeleton:                 <path in inputs: the form-response shell, one {{FORM RESPONSES}} line>
-      rules:                    {apply: [<rule id>], not_for_form_sets: [<rule id>]}
+      rules:                    {apply: [<rule id>], not_for_form_sets: [<rule id>]}   OPTIONAL overrides
 
-``rules`` places each of the firm's installed wording rules: a rule the firm
-wrote for special interrogatories (the "compilation" objection) is not a form
-set's rule, so the form path applies only the rules listed under ``apply``,
-and a frozen rule in neither list stops the job ``rule_unplaced`` before spend.
+WHICH OF THE FIRM'S WORDING RULES A FORM SET FOLLOWS (:func:`placed`) is read
+from each rule's own record, not from this section (2026-11-23: a hand list per
+rule id meant every rule the firm stated after the policy was written stopped
+every form job ``rule_unplaced`` until SMD edited the vault). A frozen rule
+applies when its recorded ``doc_kinds`` name ``discovery_response``, the kind
+a response job freezes its rules for. ``rules`` stays as the firm's override in
+both directions: ``not_for_form_sets`` keeps out a rule written for another set
+(the "compilation" objection is for special interrogatories only), ``apply``
+takes in one whose kinds do not say so. Only a rule that records no document
+kind and that no list names stops the job ``rule_unplaced``. A misplaced rule
+cannot write into a form answer either way: the answer call returns values
+with cites only, and every sentence and objection on the paper is this policy's.
 """
 
 from __future__ import annotations
@@ -52,6 +60,10 @@ KEYS = (
     "skeleton",
     "rules",
 )
+#: Keys a policy may leave out.
+OPTIONAL = ("rules",)
+#: The document kind a response job's wording rules are frozen for (``firm_wording.freeze``).
+RESPONSE_KIND = "discovery_response"
 RULE_KEYS = ("apply", "not_for_form_sets")
 
 
@@ -85,8 +97,8 @@ def _line(v: Any, where: str, out: list[str]) -> str:
 
 
 def _paragraphs(v: Any, where: str, out: list[str]) -> tuple[str, ...]:
-    if not isinstance(v, list) or not v:
-        out.append(f"{KEY}.{where}: expected a non-empty list of paragraphs")
+    if not isinstance(v, list):
+        out.append(f"{KEY}.{where}: expected a list of paragraphs (may be empty)")
         return ()
     return tuple(_line(p, f"{where}[{i}]", out) for i, p in enumerate(v))
 
@@ -110,7 +122,7 @@ def _parse(body: Any, cat: Catalogue) -> tuple[ResponsePolicy | None, list[str]]
     if not isinstance(body, Mapping):
         return None, [f"{KEY}: expected a map"]
     out = [f"{KEY}.{k}: unknown key (closed key set)" for k in body if k not in KEYS]
-    out += [f"{KEY}.{k}: required" for k in KEYS if k not in body]
+    out += [f"{KEY}.{k}: required" for k in KEYS if k not in body and k not in OPTIONAL]
     if out:
         return None, out
     try:
@@ -125,12 +137,13 @@ def _parse(body: Any, cat: Catalogue) -> tuple[ResponsePolicy | None, list[str]]
         not_app: tuple[str, ...] = ()
     else:
         not_app = _numbers(na[role], f"not_applicable_numbers.{role}", cat, out)
-    rules = body["rules"]
-    if not isinstance(rules, Mapping) or sorted(rules) != sorted(RULE_KEYS):
-        out.append(f"{KEY}.rules: expected exactly {list(RULE_KEYS)}")
+    rules = body.get("rules", {})
+    if not isinstance(rules, Mapping) or not set(rules) <= set(RULE_KEYS):
+        out.append(f"{KEY}.rules: expected a map with only {list(RULE_KEYS)}")
         apply, skip = (), ()
     else:
-        apply, skip = _ids(rules["apply"], "apply", out), _ids(rules["not_for_form_sets"], "not_for_form_sets", out)
+        apply = _ids(rules.get("apply", []), "apply", out)
+        skip = _ids(rules.get("not_for_form_sets", []), "not_for_form_sets", out)
         out += [f"{KEY}.rules: {r} is listed both to apply and not to" for r in sorted(set(apply) & set(skip))]
     skeleton = body["skeleton"]
     if not isinstance(skeleton, str) or not skeleton.strip():
@@ -182,7 +195,28 @@ def load_policy(firm_data: Mapping[str, Any], cat: Catalogue | None = None) -> R
     return pol
 
 
-def unplaced(policy: ResponsePolicy, rule_ids: list[str]) -> list[str]:
-    """The frozen rules the policy places nowhere (each stops the job before spend)."""
-    placed = set(policy.rules_apply) | set(policy.rules_skip)
-    return [r for r in rule_ids if r not in placed]
+def authored(firm_data: Mapping[str, Any]) -> bool:
+    """The firm wrote a form-response policy: its form sets are the Operator's
+    (``lane_hook.by_operator``). A section present but broken still counts, so
+    the job stops ``policy_missing`` for SMD rather than passing quietly to SMD."""
+    return isinstance(firm_data, Mapping) and KEY in firm_data
+
+
+def placed(policy: ResponsePolicy, rules: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """(the frozen rules a form set follows, the ids of rules nothing places).
+
+    The firm's override lists win; otherwise a rule follows its own recorded
+    ``doc_kinds``. Order is the frozen order (oldest first)."""
+    apply, skip = set(policy.rules_apply), set(policy.rules_skip)
+    keep: list[dict[str, Any]] = []
+    left: list[str] = []
+    for r in rules:
+        rid = str(r.get("rule_id"))
+        kinds = r.get("doc_kinds")
+        if rid in skip:
+            continue
+        if rid in apply or (isinstance(kinds, list) and RESPONSE_KIND in kinds):
+            keep.append(r)
+        elif not kinds:
+            left.append(rid)
+    return keep, left

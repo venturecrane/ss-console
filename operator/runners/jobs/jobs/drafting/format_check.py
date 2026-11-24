@@ -19,7 +19,10 @@ assertion reads the rendered .docx:
   target and bracket only as ``{{ATTORNEY}}`` markers;
 * discovery: item labels in the authored label style, labels and requests at
   the rules' spacing; a set's Definitions section; the proof of service last;
-  the section 2030.050 declaration iff the cumulative rule (``render``) says so.
+  the section 2030.050 declaration iff the cumulative rule (``render``) says so,
+  and on a set of requests for admission the section 2033.050 declaration by
+  the same rule: required where the firm authored that form (``attachments``),
+  allowed only where the count needs it.
 
 Two kinds of finding, because they are fixed in different places: CONTENT
 (the model's document lacks a section, the court lines, the item labels, the
@@ -371,6 +374,7 @@ def check_discovery(
     digest: str,
     corpus: Any = None,
     pitch: bool = False,
+    attachments: Any = None,
 ) -> None:
     from docx.shared import Inches, Pt
 
@@ -404,10 +408,15 @@ def check_discovery(
         if not any(t.strip().strip(":").upper() == "DEFINITIONS" for t in texts):
             res.model("definitions: no Definitions section")
         d = decl_decision(doc_text(doc), digest, corpus)
-        if (decl_at is not None) != d.attach:
-            want = "required" if d.attach else "not allowed"
+        has = None if decl_at is None else ("2033.050" if "2033.050" in texts[decl_at] else "2030.050")
+        # Required where the firm authored the form (2030.050 always is); allowed only where the count needs it.
+        authored = d.key == "decl_2030_050" or (d.key is not None and d.key in set(attachments or ()))
+        want = d.section if authored else None
+        if has != want and not (has == d.section and d.attach):
+            sec = has or d.section
+            verdict = "required" if has is None else "not allowed"
             res.fails.append(
-                f"attachments: section 2030.050 declaration {want} ({d.total} special interrogatories to this "
+                f"attachments: section {sec} declaration {verdict} ({d.total} {d.words} to this "
                 f"party, {d.this_set} in this set; {len(d.unreadable)} prior count(s) not readable)"
             )
     elif decl_at is not None:
@@ -433,12 +442,15 @@ def check(
     corpus: Any = None,
     paper: str = "plain",
     cites: Any = None,
+    attachments: Any = None,
 ) -> Result:
     """``digest`` carries the DISCOVERY-SETS index and ``corpus`` the document
     texts the cumulative section 2030.050 rule reads (``render.decl_decision``,
     the rule the attach used). ``paper`` is ``pleading`` when the request asked
     for pleading paper (``pleading.py``): the paper's own geometry and line
-    pitch are checked in place of the plain-paper spacing rules."""
+    pitch are checked in place of the plain-paper spacing rules.
+    ``attachments`` is the firm's authored attachment keys; without them a
+    section 2033.050 declaration is never required."""
     from . import pleading
     import docx
 
@@ -472,7 +484,7 @@ def check(
     if cls == "mediation_brief":
         check_mediation(doc, fmt, res)
     if cls in ("discovery_set", "discovery_response"):
-        check_discovery(doc, cls, fmt, rules, res, digest, corpus, pitch)
+        check_discovery(doc, cls, fmt, rules, res, digest, corpus, pitch, attachments)
     if cls in wording_served():
         check_wording(doc, cls, res)
     return res

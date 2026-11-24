@@ -13,6 +13,9 @@ A job in the thread whose delivery cannot be paired with its proof by file id
 refuses the whole request (``prior_unidentified``): revising the documents
 that can be identified and leaving the rest, silently, is not what was asked.
 
+The newest delivery that filed attorney notes names them once (``notes``): the
+runner files a new version of them with the revision's changes on top.
+
 Each unit carries a set type hint from the delivery's own served-set rows, or
 the file's name; "" when neither says. The runner reads the file's headings and
 refuses a file whose headings disagree with a hint.
@@ -49,18 +52,26 @@ def set_type_of(name: str, served_rows: list[Any]) -> str:
 
 
 def collect(
-    db: Any, delivered: list[dict[str, Any]], in_thread: Callable[[dict[str, Any]], bool]
+    db: Any,
+    delivered: list[dict[str, Any]],
+    in_thread: Callable[[dict[str, Any]], bool],
+    notes_from: Callable[[dict[str, Any]], bool] | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     """(the runner's ``revise`` block, "") or (None, the job id that cannot be
-    identified by file id). ``delivered`` is newest first."""
+    identified by file id). ``delivered`` is newest first. ``notes_from``: the
+    jobs whose attorney notes may be named (the thread's own, never a job that
+    only holds a draft of the same set); None names none."""
     jobs = [r for r in delivered if in_thread(r)]
     units: dict[str, dict[str, Any]] = {}
+    notes: dict[str, Any] | None = None
     for row in jobs:
         files = db.proven_files(row["id"])
         if not files or not row.get("folder_id"):
             return None, str(row["id"])
         served = (json.loads(row.get("delivery_json") or "{}") or {}).get("served_sets") or []
         for f in files:
+            if notes is None and notes_from is not None and notes_from(row) and f.get("role") == "attorney_notes":
+                notes = {k: f[k] for k in ("file_id", "name", "size", "sha256")} | {"folder_id": str(row["folder_id"])}
             if f.get("role") != "draft" or f["file_id"] in units:
                 continue  # an older job's copy of a file a newer job re-filed
             units[f["file_id"]] = {
@@ -74,11 +85,14 @@ def collect(
             }
     if not units:
         return None, str(jobs[0]["id"]) if jobs else ""
-    return {
+    block: dict[str, Any] = {
         "prior_job_id": str(jobs[0]["id"]),
         "folder_id": str(jobs[0]["folder_id"]),
         "units": list(units.values()),
-    }, ""
+    }
+    if notes is not None and notes["file_id"] not in units:
+        block["notes"] = notes  # the newest delivery's attorney notes: the runner files their new version
+    return block, ""
 
 
 __all__ = ["MAX_JOBS", "SET_CLASS", "collect", "set_type_of"]

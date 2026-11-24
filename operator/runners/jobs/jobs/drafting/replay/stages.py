@@ -19,6 +19,9 @@ instead of failing on an ImportError:
 * ``form-read``: ``forms.read_stage.pixel_read(pdf) -> {"checked",
   "unregistered", "definition_boxes", "form", "form_revision",
   "unreadable_pages"}``, the pixel checkbox read alone (no model).
+* ``exhibits``: ``exhibit_plan.place(files, table, walled) -> {"exhibits",
+  "left_out", "walled"}`` over the scope step's record; with a production
+  response, ``exhibit_index.index_lines`` gives each index line's request numbers.
 
 A produced body's per-response kind is read only from a JSON body (the answer
 stage's own output); a text or .docx body's kinds are reported unread.
@@ -39,6 +42,7 @@ EXPECTED: dict[str, tuple[str, str]] = {
     "scope": ("jobs.drafting.response_scope", "scope"),
     "cost": ("jobs.drafting.response_cost", "project"),
     "form-read": ("jobs.drafting.forms.read_stage", "pixel_read"),
+    "exhibits": ("jobs.drafting.exhibit_plan", "place"),
 }
 
 

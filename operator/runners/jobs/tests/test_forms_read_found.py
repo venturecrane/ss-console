@@ -1,5 +1,5 @@
 """The find stage reads a found form set's boxes only when the Operator drafts
-form sets (``served.FORM_SETS_BY_OPERATOR``); off, nothing is read or spent.
+form sets (``lane_hook.by_operator``, the firm's answer); off, nothing is read or spent.
 Every name and value here is invented."""
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 
-from jobs.drafting import served as served_mod
 from jobs.drafting.forms import read_stage
 from jobs.drafting.outcome import DraftingFailed
 
@@ -37,10 +36,9 @@ def _spy(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Any, ...]]:
 
 
 def test_off_reads_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert served_mod.FORM_SETS_BY_OPERATOR is False
     data, _ = _job(tmp_path, "operator")
     calls = _spy(monkeypatch)
-    got = read_stage.read_found(data, tmp_path, None, "m", by_operator=served_mod.FORM_SETS_BY_OPERATOR, log=print)
+    got = read_stage.read_found(data, tmp_path, None, "m", by_operator=False, log=print)
     assert got == [] and calls == []
 
 

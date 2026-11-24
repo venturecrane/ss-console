@@ -230,18 +230,84 @@ def test_the_other_sides_response_to_our_discovery_is_ignored(tmp_path):
     assert not row["kept"] and "other side's response" in row["why"]
 
 
-def test_a_prior_operator_draft_of_a_set_still_owed_is_a_revision(tmp_path):
-    data, jd = matter(tmp_path, three_docs())
+OPERATOR_SI = "Discovery Responses - Responses to Special Interrogatories, Set One - 100001 - 11-01-26.docx"
+
+
+def _list(data: Path, *names: str) -> None:
     listing = json.loads((data / "manifest.json").read_text())
-    listing.append(
-        {
-            "id": "o1",
-            "name": "Discovery Responses - Responses to Special Interrogatories, Set One - 100001 - 11-01-26.docx",
-        }
-    )
+    listing += [{"id": f"o{i}", "name": n} for i, n in enumerate(names, 1)]
     (data / "manifest.json").write_text(json.dumps(listing))
+
+
+def priors(jd: Path) -> dict[str, tuple[str, str]]:
+    """Each set the finder wrote, by label, with the draft and job it named ("" when none)."""
+    return {s.label: (s.prior_draft, s.prior_job) for s in served.read(jd, [CLIENT])}
+
+
+def _delivered(jd: Path, kind: str, doc: str, party: str = f"Defendant {DEF}", job: str = "01PRIORJOB") -> None:
+    """An earlier Operator job on the same matter that delivered ``doc`` for one served set."""
+    (jd / "job.json").write_text(json.dumps({"matter_id": "m-1"}))
+    d = jd.parent / job
+    (d / "data").mkdir(parents=True, exist_ok=True)
+    (d / "job.json").write_text(json.dumps({"matter_id": "m-1"}))
+    (d / "data" / served.PLAN).write_text(json.dumps({"sets": [
+        {"set_type": kind, "set_number": 1, "propounding_party": party}]}))  # fmt: skip
+    (d / "data" / served.OUTCOMES).write_text(json.dumps({"sets": [
+        {"set": "x", "drafted_by": "operator", "status": "filed", "document": doc}]}))  # fmt: skip
+
+
+def test_a_draft_an_operator_job_delivered_for_the_same_set_is_named_and_the_rest_drafted(tmp_path):
+    """A1 (2026-11-23): never drafted again; the reply names it; the other sets go on."""
+    data, jd = matter(tmp_path, three_docs())
+    _list(data, OPERATOR_SI)
+    _delivered(jd, "special_interrogatories", OPERATOR_SI)
+    run(data, jd, Fake(THREE))
+    sets = served.read(jd, [CLIENT])
+    assert priors(jd)["Responses to Special Interrogatories, Set One"] == (OPERATOR_SI, "01PRIORJOB")
+    assert [u["label"] for u in served.plan_units(sets)] == ["Responses to Requests for Production, Set One"]
+
+
+def test_a_draft_delivered_for_another_partys_set_stops_for_smd(tmp_path):
+    """Review 11-23: two defendants each serve SROG Set One; A's draft is never B's."""
+    data, jd = matter(tmp_path, three_docs())
+    _list(data, OPERATOR_SI)
+    _delivered(jd, "special_interrogatories", OPERATOR_SI, party="Defendant OTHER EXAMPLE LLC")
     assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
     assert not (jd / served.FILE).exists()
+
+
+def test_a_draft_no_operator_job_delivered_stops_for_smd(tmp_path):
+    data, jd = matter(tmp_path, three_docs())
+    _list(data, OPERATOR_SI)
+    assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
+
+
+def test_a_second_draft_beside_the_delivered_one_stops_for_smd_naming_both(tmp_path):
+    data, jd = matter(tmp_path, three_docs())
+    hand = "DRAFT - Pltf Responses to Special Interrogatories, Set One.docx"
+    _list(data, OPERATOR_SI, hand)
+    _delivered(jd, "special_interrogatories", OPERATOR_SI)
+    assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
+    reason = json.loads((jd / served_find.REPORT).read_text())["reason"]
+    assert OPERATOR_SI in reason and hand in reason
+
+
+def test_one_name_in_two_folders_is_one_draft(tmp_path):
+    data, jd = matter(tmp_path, three_docs())
+    _list(data, OPERATOR_SI, OPERATOR_SI.removesuffix(".docx"))
+    _delivered(jd, "special_interrogatories", OPERATOR_SI)
+    run(data, jd, Fake(THREE))
+    assert priors(jd)["Responses to Special Interrogatories, Set One"][0] == OPERATOR_SI
+
+
+def test_a_delivered_draft_of_every_operator_set_is_a_revision_and_stops_for_smd(tmp_path):
+    data, jd = matter(tmp_path, three_docs())
+    rfp = "Discovery Responses - Responses to Requests for Production, Set One - 100001 - 11-01-26.docx"
+    _list(data, OPERATOR_SI, rfp)
+    _delivered(jd, "special_interrogatories", OPERATOR_SI)
+    _delivered(jd, "requests_for_production", rfp, job="01PRIORJOB2")
+    assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
+    assert "every set the Operator drafts" in json.loads((jd / served_find.REPORT).read_text())["reason"]
 
 
 def test_the_request_naming_one_kind_plans_only_that_kind(tmp_path):

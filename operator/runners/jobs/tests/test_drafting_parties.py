@@ -412,3 +412,81 @@ def test_smds_hand_line_after_a_signature_is_still_read():
     assert parties.resolve(SIGNED + "\n\nSMD: Northfield Joint Union High School District only.", N_VALUES).planned == [
         N_DISTRICT
     ]
+
+
+# ---- individuals the caption prints surname first (2026-11-23) ---------------------------------
+# A request named four individuals given name first; the caption printed each "SURNAME, GIVEN",
+# so no name matched, the job fell to the every-defendant path and stopped after it was paid.
+# Invented names throughout.
+
+PEOPLE = "QUILLFEATHER, ORSON; MARROWDALE, PETRA; VANTREKKER, HOLLIS; ZEBULON-ASH, WREN"
+FOUR = (
+    "Please prepare special interrogatories, requests for admission and requests for production to "
+    "Orson Quillfeather, Petra Marrowdale, Hollis Vantrekker and Wren Zebulon-Ash."
+)
+PEOPLE_PLANNED = ["QUILLFEATHER, ORSON", "MARROWDALE, PETRA", "VANTREKKER, HOLLIS", "ZEBULON-ASH, WREN"]
+
+
+def test_four_individuals_surname_first_on_the_caption_are_named_given_first_in_the_request():
+    res = parties.resolve(FOUR, [f"{PEOPLE}, and DOES 1 through 50, inclusive"])
+    assert res.planned == PEOPLE_PLANNED  # the caption's printed form is what is planned
+    assert sets.variants(FOUR) and len(sets.variants(FOUR)) == 3
+
+
+def test_a_middle_initial_on_one_side_only_still_names_the_person():
+    caption = ["QUILLFEATHER, ORSON T.; MARROWDALE, PETRA"]
+    assert parties.resolve("SROG to Orson Quillfeather and Petra Marrowdale.", caption).planned == [
+        "QUILLFEATHER, ORSON T.",
+        "MARROWDALE, PETRA",
+    ]
+    caption = ["QUILLFEATHER, ORSON; MARROWDALE, PETRA"]
+    assert parties.resolve("SROG to Orson T. Quillfeather and Petra J Marrowdale.", caption).planned == [
+        "QUILLFEATHER, ORSON",
+        "MARROWDALE, PETRA",
+    ]
+    # an initial agrees with its full middle name; a different middle name is another person
+    assert parties.resolve(
+        "SROG to Orson Tobias Quillfeather and Petra Marrowdale.", ["QUILLFEATHER, ORSON T.; MARROWDALE, PETRA"]
+    ).planned == ["QUILLFEATHER, ORSON T.", "MARROWDALE, PETRA"]
+    with pytest.raises(parties.PartyUnknown):
+        parties.resolve("SROG to Orson Bertram Quillfeather.", ["QUILLFEATHER, ORSON T.; MARROWDALE, PETRA"])
+
+
+def test_an_entity_beside_individuals_printed_surname_first():
+    values = ["GLIMMERWOOD HOLDINGS, LLC; QUILLFEATHER, ORSON; MARROWDALE, PETRA"]
+    req = "RFA to Glimmerwood Holdings, Orson Quillfeather and Petra Marrowdale."
+    # the entity as the request prints it (its suffix piece stays out), the people as the caption prints them
+    assert parties.resolve(req, values).planned == [
+        "GLIMMERWOOD HOLDINGS",
+        "QUILLFEATHER, ORSON",
+        "MARROWDALE, PETRA",
+    ]
+
+
+def test_a_request_name_matching_no_caption_person_still_stops():
+    with pytest.raises(parties.PartyUnknown, match="names none"):
+        parties.resolve("SROG to Ingrid Halvorsen.", [PEOPLE])
+    # given and surname from two different caption people is no one
+    with pytest.raises(parties.PartyUnknown, match="names none"):
+        parties.resolve("SROG to Orson Marrowdale.", [PEOPLE])
+
+
+def test_the_surname_first_reading_is_only_for_a_comma_between_two_person_pieces():
+    assert parties._surname_first("QUILLFEATHER, ORSON") == ("ORSON", "QUILLFEATHER")
+    assert parties._surname_first("GLIMMERWOOD HOLDINGS, LLC") is None  # a suffix
+    assert parties._surname_first("CITY OF EXAMPLETOWN, STATE OF CA") is None  # entity words
+    assert parties._surname_first("ORSON; QUILLFEATHER") is None  # a semicolon divides parties
+
+
+def test_bind_swaps_and_checks_a_person_written_given_first():
+    doc = (
+        "RESPONDING PARTY: Defendant ORSON QUILLFEATHER\n\n"
+        "SPECIAL INTERROGATORIES TO DEFENDANT ORSON QUILLFEATHER, SET ONE\n\n"
+    )
+    out, notes, problems = parties.bind(doc, "MARROWDALE, PETRA", PEOPLE_PLANNED)
+    assert "PETRA MARROWDALE" in out and "QUILLFEATHER" not in out
+    assert notes and problems == []
+    # the party's own given-first spelling already names it: nothing is changed
+    same, none, _ = parties.bind(out, "MARROWDALE, PETRA", PEOPLE_PLANNED)
+    assert same == out and none == []
+    assert parties._names("YOU means Orson Quillfeather.", "QUILLFEATHER, ORSON")

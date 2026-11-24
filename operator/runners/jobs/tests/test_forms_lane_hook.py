@@ -88,15 +88,12 @@ def test_two_agreeing_reads_and_the_pixel_read_give_the_checked_list(tmp_path: P
     assert _read(tmp_path, Door(), None) == WANT  # never read twice
 
 
-def test_what_the_read_writes_is_a_served_set_the_plan_accepts(
-    tmp_path: Path, blank: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(served_mod, "FORM_SETS_BY_OPERATOR", True)
+def test_what_the_read_writes_is_a_served_set_the_plan_accepts(tmp_path: Path, blank: Any) -> None:
     doc = json.loads((_job(tmp_path) / "served.json").read_text())
     doc["sets"][0]["source"] = "f1"  # as the finder writes a form set: its file, no request text
     (tmp_path / "served.json").write_text(json.dumps(doc))
     _read(tmp_path, Door(_reply(WANT), _reply(WANT)), _mark(blank, [*WANT, "4(a)(1)"]))
-    (s,) = served_mod.read(tmp_path, ["Pat Example"])
+    (s,) = served_mod.read(tmp_path, ["Pat Example"], form_by_operator=True)
     assert s.drafted_by == "operator" and list(s.checked) == WANT and s.additions is False
 
 
@@ -168,8 +165,9 @@ class Run:
         return self._units
 
 
-def _rules(run: Run, ids: list[str]) -> None:
-    rules = [{"rule_id": r, "text": f"rule {r}", "wording": [f"wording of {r}"], "doc_kinds": ["x"]} for r in ids]
+def _rules(run: Run, ids: list[str], kinds: list[str] | None = None) -> None:
+    kinds = ["discovery_response"] if kinds is None else kinds
+    rules = [{"rule_id": r, "text": f"rule {r}", "wording": [f"wording of {r}"], "doc_kinds": kinds} for r in ids]
     (run.data / "wording-rules.json").write_text(json.dumps({"rules": rules}), encoding="utf-8")
 
 
@@ -178,14 +176,27 @@ def on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(served_mod, "FORM_SETS_BY_OPERATOR", True, raising=False)
 
 
-def test_the_switch_is_off_by_default(tmp_path: Path) -> None:
+def test_a_firm_that_authored_its_policy_gets_the_operator(tmp_path: Path, on: None) -> None:
     run = Run(tmp_path, {policy.KEY: copy.deepcopy(POLICY)})
-    assert lane_hook.enabled() is False and not lane_hook.takes(run, run.units()[0])
-    lane_hook.before_spend(run)  # nothing checked while off
+    assert lane_hook.by_operator(run.firm.data) is True and lane_hook.takes(run, run.units()[0])
 
 
-def test_a_missing_policy_stops_before_any_spend(tmp_path: Path, on: None) -> None:
+def test_a_firm_with_no_policy_stays_smds_and_nothing_is_checked(tmp_path: Path, on: None) -> None:
     run = Run(tmp_path, {})
+    assert lane_hook.by_operator(run.firm.data) is False and not lane_hook.takes(run, run.units()[0])
+    lane_hook.before_spend(run)  # SMD's set: no policy, no boxes, no rules read
+    assert lane_hook.first_set_gate(run, []) is False
+
+
+def test_the_global_switch_turns_every_firm_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(served_mod, "FORM_SETS_BY_OPERATOR", False, raising=False)
+    run = Run(tmp_path, {policy.KEY: copy.deepcopy(POLICY)})
+    assert lane_hook.by_operator(run.firm.data) is False and not lane_hook.takes(run, run.units()[0])
+    lane_hook.before_spend(run)
+
+
+def test_an_authored_but_broken_policy_stops_before_any_spend(tmp_path: Path, on: None) -> None:
+    run = Run(tmp_path, {policy.KEY: {}})
     with pytest.raises(DraftingFailed, match=r"^policy_missing: .*nothing was spent") as e:
         lane_hook.before_spend(run)
     assert REASON.match(str(e.value))
@@ -197,19 +208,39 @@ def test_a_form_unit_without_checked_boxes_stops(tmp_path: Path, on: None) -> No
         lane_hook.before_spend(run)
 
 
-def test_the_compilation_rule_is_not_applied_and_an_unplaced_rule_stops(tmp_path: Path, on: None) -> None:
-    run = Run(tmp_path, {policy.KEY: copy.deepcopy(POLICY)})
-    _rules(run, ["r-plain", "r-compilation"])
-    lane_hook.before_spend(run)
+def _block(run: Run) -> str:
     pol = policy.load_policy(run.firm.data)
     u = run.units()[0]
     run._json = lambda _n: {"medicals": []}  # type: ignore[attr-defined]
     run._context = lambda: ["- client: Pat Example"]  # type: ignore[attr-defined]
-    inp = lane_hook._inputs(run, u, lane_hook._served(run, u), pol)
-    assert "r-plain" in inp.rules_block and "r-compilation" not in inp.rules_block
-    _rules(run, ["r-plain", "r-compilation", "r-other"])
-    with pytest.raises(DraftingFailed, match=r"^rule_unplaced: .*r-other"):
+    return lane_hook._inputs(run, u, lane_hook._served(run, u), pol).rules_block
+
+
+def test_a_new_rule_is_placed_by_its_own_kinds_and_the_override_keeps_one_out(tmp_path: Path, on: None) -> None:
+    run = Run(tmp_path, {policy.KEY: copy.deepcopy(POLICY)})
+    _rules(run, ["r-plain", "r-compilation", "r-stated-after-the-policy"])
+    lane_hook.before_spend(run)  # the new rule is in no list of the policy, and nothing stops
+    block = _block(run)
+    assert "r-plain" in block and "r-stated-after-the-policy" in block and "r-compilation" not in block
+
+
+def test_a_policy_with_no_rule_lists_places_every_response_rule(tmp_path: Path, on: None) -> None:
+    pol = {k: v for k, v in copy.deepcopy(POLICY).items() if k != "rules"}
+    assert policy.validate(pol) == []
+    run = Run(tmp_path, {policy.KEY: pol})
+    _rules(run, ["r-a", "r-b"])
+    lane_hook.before_spend(run)
+    block = _block(run)
+    assert "r-a" in block and "r-b" in block
+
+
+def test_only_a_rule_with_no_kind_and_no_list_stops(tmp_path: Path, on: None) -> None:
+    run = Run(tmp_path, {policy.KEY: copy.deepcopy(POLICY)})
+    _rules(run, ["r-kindless"], kinds=[])
+    with pytest.raises(DraftingFailed, match=r"^rule_unplaced: .*r-kindless"):
         lane_hook.before_spend(run)
+    _rules(run, ["r-compilation"], kinds=[])  # named by the firm's list: placed, no stop
+    lane_hook.before_spend(run)
 
 
 class _Draft(finish_mod.Finish):

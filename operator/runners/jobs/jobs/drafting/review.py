@@ -68,8 +68,6 @@ DISCOVERY_PAPERS_MAX_CHARS = 300_000
 HOLD_CHECKS = (1, 2, 3, 5, 6, 7, 8, 9)
 #: PLACE_PROMPT's; 5 (his own text, flagged) never holds.
 PLACE_HOLD_CHECKS = (1, 2, 3, 4)
-_DECL_2033 = re.compile(r"(?i)declaration\b[^\n]{0,80}2033\.050|2033\.050[^\n]{0,80}declaration")
-_PARA5 = re.compile(r"(?i)contains\s+a\s+total\s+of\s+(\d+)\s+specially\s+prepared")
 _POS = re.compile(r"(?im)^\W*proof of service\W*$")
 _DISCOVERY_PAPER = re.compile(
     r"(?i)(special(?:ly prepared)?|form)\s+interrogatories|requests?\s+for\s+(admission|production)|"
@@ -225,34 +223,9 @@ def _f(grade: str, check: str, finding: str, where: str) -> Finding:
 
 
 def _decl_findings(where: str, text: str, digest: str, corpus: Mapping[str, str]) -> list[Finding]:
-    """A section 2030.050 declaration only over a PROVEN count, and counting the
-    set it is attached to; a section 2033.050 declaration never."""
-    out: list[Finding] = []
-    if render.DECL_LINE.search(text):
-        d = render.decl_decision(text, digest, corpus)
-        if not d.attach:
-            out.append(
-                _f(
-                    MUST,
-                    "1 section 2030.050 declaration",
-                    f"{where} carries a section 2030.050 declaration, but the proven cumulative count is {d.total} "
-                    f"({d.this_set} in this set, {d.prior_special} in served prior sets), not over 35",
-                    where,
-                )
-            )
-        m = _PARA5.search(text)
-        if m and int(m.group(1)) != d.this_set:
-            out.append(
-                _f(
-                    MUST,
-                    "1 section 2030.050 declaration",
-                    f"{where}: the declaration counts {m.group(1)}; the set has {d.this_set}",
-                    where,
-                )
-            )
-    if _DECL_2033.search(text):
-        out.append(_f(MUST, "1 section 2033.050 declaration", f"{where} carries a section 2033.050 declaration", where))
-    return out
+    """A section 2030.050 or 2033.050 declaration only where the set's PROVEN
+    count needs that one, counting the set it is attached to (``render.decl_problems``)."""
+    return [_f(MUST, c, x, where) for c, x in render.decl_problems(where, text, digest, corpus)]
 
 
 def _set_findings(where: str, text: str, digest: str, corpus: Mapping[str, str]) -> list[Finding]:
@@ -327,7 +300,7 @@ _NO = r"\s+NO\.?\s*(\d+(?:\.\d+)?)"
 #: a lettered subpart and closing punctuation. "Response to this interrogatory
 #: will be supplemented." is a sentence, never a response.
 _RESPONSE_HEAD = re.compile(
-    r"(?i)^[\W_]*RESPONSE(?:\s+TO\b[^\n.:]{0,80}?)?\s+NO\.?\s*(?P<n>\d+(?:\.\d+)?)\s*(?P<sub>\(\s*[a-z0-9]{1,3}\s*\))?"
+    r"(?i)^[\W_]*(?:(?:AMENDED|FURTHER|SUPPLEMENTAL)\s+)?RESPONSE(?:\s+TO\b[^\n.:]{0,80}?)?\s+NO\.?\s*(?P<n>\d+(?:\.\d+)?)\s*(?P<sub>\(\s*[a-z0-9]{1,3}\s*\))?"
     r"\s*[:.]?[\s*_]*$"
 )
 _RESPONSE_BARE = re.compile(r"(?i)^[\W_]*RESPONSE\s*[:.]?[\s*_]*$")
@@ -379,19 +352,20 @@ def _scan(text: str, label: str) -> tuple[list[str], list[str], dict[str, str]]:
     return requests, responses, {k: " ".join(" ".join(v).split()) for k, v in restated.items()}
 
 
-def _sequence_problems(got: list[str], n: int, form: bool, what: str) -> list[str]:
+def _sequence_problems(got: list[str], n: int, form: bool, what: str, want: list[str] | None = None) -> list[str]:
     """``got`` is 1..n in order, each once (a form set's dotted numbers: n of
-    them, each once, ascending)."""
+    them, each once, ascending); ``want``: exactly these numbers, in order (an
+    amended set answers only its challenged numbers)."""
     out: list[str] = []
     dup = sorted({x for x in got if got.count(x) > 1}, key=_num_key)
     out += [f"two or more {what}s to number {x}" for x in dup]
-    if form:
+    if form and want is None:
         if len(set(got)) != n:
             out.append(f"{len(set(got))} {what}s, but the served set has {n}")
         if got != sorted(got, key=_num_key):
             out.append(f"the {what}s are out of order")
         return out
-    want = [str(i) for i in range(1, n + 1)]
+    want = want if want is not None else [str(i) for i in range(1, n + 1)]
     missing = [x for x in want if x not in got]
     extra = sorted({x for x in got if x not in want}, key=_num_key)
     out += [f"no {what} to number {x}" for x in missing[:12]]
@@ -437,9 +411,10 @@ def response_findings(papers: list[Paper], served: Mapping[str, Mapping[str, Any
             out += _form_findings(p, s)
             continue
         requests, responses, restated = _scan(p.text, label)
-        problems = _sequence_problems(responses, n, form, "response")
+        want = [str(x) for x in s["numbers"]] if s.get("numbers") else None
+        problems = _sequence_problems(responses, n, form, "response", want)
         if requests:
-            problems += _sequence_problems(requests, n, form, "restated request")
+            problems += _sequence_problems(requests, n, form, "restated request", want)
         given = {str(k): " ".join(str(v).split()) for k, v in (s.get("requests") or {}).items()}
         problems += [
             f"request {k} is not restated as served" for k, t in restated.items() if k in given and t != given[k]

@@ -51,6 +51,7 @@ Outcomes (the drafting ledger, the same edges as demand's):
 from __future__ import annotations
 
 import json
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -84,11 +85,14 @@ from .forms import lane_hook as form_hook
 from .placing import Placing
 from .run_free import RESPONSE as RESPONSE, FreeStages
 from .served_plan import DiscoveryPlan
+from . import plan_early
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
 
 
 CHUNK_CHARS = 120_000
 CONCURRENCY = 4
+#: state.json and the job-level artifacts are written one at a time (units draft at once).
+_STATE_LOCK = threading.RLock()
 DIGEST_MAX_TOKENS = 64_000
 SHORT = "stage_unfinished: file: the read-back is short after its retries; the files may still be materializing"
 #: The digest compose reads, condensed under this many characters (about 400K
@@ -213,11 +217,13 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
         return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
 
     def _put(self, key: str, value: Any) -> None:
-        st = self._state()
-        st[key] = value
-        tmp = self.data / "state.json.tmp"
-        tmp.write_text(json.dumps(st, indent=1), encoding="utf-8")
-        tmp.replace(self.data / "state.json")
+        # Units draft at once (finish.UNITS_AT_ONCE): one read-modify-write of state.json at a time.
+        with _STATE_LOCK:
+            st = self._state()
+            st[key] = value
+            tmp = self.data / "state.json.tmp"
+            tmp.write_text(json.dumps(st, indent=1), encoding="utf-8")
+            tmp.replace(self.data / "state.json")
 
     def _done(self, stage: str, **info: Any) -> None:
         self._put(stage, {"status": "done", "at": time.strftime("%Y-%m-%dT%H:%M:%S"), **info})
@@ -243,9 +249,10 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
 
     def _atomic(self, name: str, text: str) -> None:
         """Every artifact a resume trusts is written whole or not at all."""
-        tmp = self.data / f".{name}.tmp"
-        tmp.write_text(text, encoding="utf-8")
-        tmp.replace(self.data / name)
+        with _STATE_LOCK:
+            tmp = self.data / f".{name}.tmp"
+            tmp.write_text(text, encoding="utf-8")
+            tmp.replace(self.data / name)
 
     def _write(self, name: str, obj: Any) -> None:
         self._atomic(name, json.dumps(obj, indent=1))
@@ -319,6 +326,7 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
                 self.job.requester,
                 self.log,
                 roster=roster_for(self),  # the job's one roster read (attorneys/seat.py)
+                request=self.job.request_text,  # a party it names that the caption omits: read the next document
             )
         except caption_mod.RecordUnreadable as exc:
             raise DraftingFailed(f"record_unreadable: the matter record's caption fields: {exc}") from None
@@ -400,6 +408,7 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
         return Verdict(
             "delivered",
             stage="file",
+            reason=served_mod.prior_reason(rows or []),  # a set already drafted on the matter, named in the reply
             folder_id=str(rec.get("folder_id")),
             files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
             proof=proof,
@@ -442,6 +451,12 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
             self._estimate()
             # A response job's served sets, before anything is paid (served_plan.py).
             self._plan_before_spend()
+            if self.cls == "discovery_set" and plan_early.settled(self.data):
+                # The caption and the party plan before the file is read, when the
+                # paper read now is the one read after (plan_early.py): a party the
+                # matter does not have stops after one caption read.
+                self._stage("caption", self._caption)
+                self._stage("plan", self.units)
         transcribing = not self._is_done("transcribe")
         self._stage(
             "transcribe",

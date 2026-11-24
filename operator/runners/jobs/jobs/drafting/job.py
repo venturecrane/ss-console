@@ -12,7 +12,8 @@ The envelope (the broker's ``drafting_job_submit`` writes exactly this)::
                  "files": [{"role", "file_id", "name", "size", "sha256"}]}}
                  (revise mode: the broker named the filed files from its delivery proof)
      or "revise"?: {"prior_job_id", "folder_id", "units": [{"file_id", "name", "size", "sha256",
-                    "set_type", "prior_job_id", "folder_id"}]}
+                    "set_type", "prior_job_id", "folder_id"}],
+                    "notes"?: {"file_id", "name", "size", "sha256", "folder_id"}}
                  (a discovery response's revision: every filed draft of the request, by file id)
 
 Re-validated here rather than imported from the broker, whose package is not on
@@ -210,8 +211,8 @@ def _unit_ok(u: Any) -> bool:
 def _revise_units(raw: dict[str, Any]) -> dict[str, Any]:
     """A discovery set's revision (``revise/set_run.py``): every filed draft of
     the request, one unit per file id, each from the newest delivery proof."""
-    if set(raw) != {"prior_job_id", "folder_id", "units"}:
-        raise DraftingJobError("revise carries exactly prior_job_id, folder_id and units")
+    if not {"prior_job_id", "folder_id", "units"} <= set(raw) <= {"prior_job_id", "folder_id", "units", "notes"}:
+        raise DraftingJobError("revise carries exactly prior_job_id, folder_id and units, and notes when filed")
     if not (isinstance(raw["prior_job_id"], str) and _ULID.match(raw["prior_job_id"])):
         raise DraftingJobError("revise.prior_job_id must be the prior job's ULID")
     if not (isinstance(raw["folder_id"], str) and _FILE_ID.match(raw["folder_id"])):
@@ -223,7 +224,26 @@ def _revise_units(raw: dict[str, Any]) -> dict[str, Any]:
         )
     if len({u["file_id"] for u in units}) != len(units):
         raise DraftingJobError("revise.units names each file once")
-    return {"prior_job_id": raw["prior_job_id"], "folder_id": raw["folder_id"], "units": [dict(u) for u in units]}
+    out = {"prior_job_id": raw["prior_job_id"], "folder_id": raw["folder_id"], "units": [dict(u) for u in units]}
+    if "notes" in raw:
+        out["notes"] = _revise_notes(raw["notes"], {u["file_id"] for u in units})
+    return out
+
+
+def _revise_notes(n: Any, drafts: set[str]) -> dict[str, Any]:
+    """The newest delivery's attorney notes, filed again as a new version with
+    the revision's changes on top (``revise/book_run.py``)."""
+    keys = ("file_id", "name", "size", "sha256")
+    if not (
+        isinstance(n, dict)
+        and set(n) == {*keys, "folder_id"}
+        and _revise_file_ok({"role": "attorney_notes", **{k: n[k] for k in keys}})
+        and isinstance(n["folder_id"], str)
+        and bool(_FILE_ID.match(n["folder_id"]))
+        and n["file_id"] not in drafts
+    ):
+        raise DraftingJobError("revise.notes is the filed notes' {file_id, name, size, sha256, folder_id}")
+    return dict(n)
 
 
 def _count(v: Any) -> int | None:

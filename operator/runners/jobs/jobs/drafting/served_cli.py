@@ -148,7 +148,9 @@ def _write_root(jd: Path, name: str, text: str) -> Path:
 
 def _validated(source: Path, jd: Path) -> list[ServedSet]:
     try:
-        return parse(Path(source).read_bytes(), Path(source).resolve().parent, clients_of(jd / "data"))
+        # An Operator form set is accepted here; the job re-checks it against the
+        # firm's form policy when it freezes the plan (served.frozen).
+        return parse(Path(source).read_bytes(), Path(source).resolve().parent, clients_of(jd / "data"), True)
     except DraftingFailed as exc:
         raise SystemExit(f"served: not written: {exc}") from None
 
