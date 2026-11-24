@@ -161,7 +161,7 @@ def _shortfall(out: dict[str, Any], status: str) -> None:
 
 
 def test_a_clean_upload_reads_back_by_id_size_and_sha(tenant: Tenant) -> None:
-    out = server.add_file(M, "note.txt", content_text="the note")
+    out = server.add_file(M, "note.csv", content_text="the note")
     assert out["readback"] == "confirmed" and out["uploaded"] is True
     assert out["readbackSha256"] and "status" not in out
 
@@ -175,7 +175,7 @@ def test_a_file_that_never_appears_is_link_not_visible(tenant: Tenant, monkeypat
         return fid
 
     monkeypatch.setattr(tenant.store, "add", add_hidden)
-    out = server.add_file(M, "note.txt", content_text="the note")
+    out = server.add_file(M, "note.csv", content_text="the note")
     _shortfall(out, "link_not_visible")
     assert out["fileId"]  # the upload's own keys are kept
 
@@ -189,7 +189,7 @@ def test_a_file_stored_at_the_wrong_size_is_a_mismatch(tenant: Tenant, monkeypat
         return fid
 
     monkeypatch.setattr(tenant.store, "add", add_short)
-    out = server.add_file(M, "note.txt", content_text="the note")
+    out = server.add_file(M, "note.csv", content_text="the note")
     _shortfall(out, "readback_mismatch")
     assert "3 bytes" in out["readback_detail"]
 
@@ -203,7 +203,7 @@ def test_a_file_stored_with_other_bytes_is_a_mismatch(tenant: Tenant, monkeypatc
         return fid
 
     monkeypatch.setattr(tenant.store, "add", add_swapped)
-    out = server.add_file(M, "note.txt", content_text="the note")
+    out = server.add_file(M, "note.csv", content_text="the note")
     _shortfall(out, "readback_mismatch")
     assert "downloaded bytes differ" in out["readback_detail"]
 
@@ -224,7 +224,7 @@ def test_a_file_over_the_download_limit_is_proven_by_size_and_says_so(
     tenant: Tenant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(readback, "HASH_LIMIT_BYTES", 4)
-    out = server.add_file(M, "big.txt", content_text="more than four bytes")
+    out = server.add_file(M, "big.csv", content_text="more than four bytes")
     assert out["readback"] == "confirmed" and "not hashed" in out["readback_detail"]
 
 
