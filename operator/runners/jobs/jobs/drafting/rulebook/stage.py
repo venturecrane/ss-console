@@ -117,7 +117,8 @@ def _instructions(doc: StageDoc, dtype: str, book: Book) -> list[Clause]:
             continue
         keys = tuple(k for k in ins.keys if k in book.entries)
         numbers = tuple(str(x) for x in ins.numbers)
-        out.append(Clause(ins.source, n, ins.quote, True, (dtype,), act, keys, (), "numbers", numbers))
+        grounds = ins.grounds if act == "add_objection" else ()
+        out.append(Clause(ins.source, n, ins.quote, True, (dtype,), act, keys, grounds, "numbers", numbers))
     return out
 
 

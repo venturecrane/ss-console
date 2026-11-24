@@ -191,6 +191,21 @@ def test_an_instruction_removing_an_objection_by_key(tmp_path):
     assert "is overbroad" not in res.md and res.notes == ("Response 1: a sentence removed, as the request asks.",)
 
 
+def test_an_email_objection_the_book_has_no_sentence_for_is_written_for_its_number_only(tmp_path):
+    """An emailed ground with no book entry goes through the written path (checked), never a refusal."""
+    ins = Instruction("email", "for No. 2 add a cumulative objection", ("2",), "requests_for_production",
+                      "add_objection", (), ("cumulative",))  # fmt: skip
+    ok = {"sentences": [{"item": "2", "ground": "cumulative", "sentence": f"{LEAD} is cumulative."}]}
+    model = Model(**{written.STAGE: ok})
+    res = stage.run(_job(tmp_path / "a", model, rules=[]), _doc(instructions=(ins,)))
+    assert model.stages() == [written.STAGE]
+    assert res.md.count(f"{LEAD} is cumulative.") == 1
+    assert res.notes[0].startswith("Response 2: an objection was written for this request")
+    bad = {"sentences": [{"item": "2", "ground": "cumulative", "sentence": f"{LEAD} is cumulative of 14 visits."}]}
+    res = stage.run(_job(tmp_path / "b", Model(**{written.STAGE: bad}), rules=[]), _doc(instructions=(ins,)))
+    assert res.md == MD and [(x.item, x.reason) for x in res.left] == [("2", "phrase_missing")]
+
+
 def test_the_estimate_counts_the_read_and_each_grid_before_any_call(tmp_path):
     job = _job(tmp_path, None)
     assert stage.plan_chars(job, [_doc()]) > len(MD)

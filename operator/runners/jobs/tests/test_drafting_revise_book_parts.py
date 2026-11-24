@@ -326,3 +326,22 @@ def test_an_email_that_opens_with_a_hash_number_is_covered_by_its_own_quote() ->
     assert uncovered(text, ["#22: always give the full date."]) == []
     assert uncovered(text, ["22: always give the full date."]) == []
     assert uncovered(text, []) != []
+
+
+def test_an_emailed_objection_may_name_a_ground_the_book_lacks_but_only_in_his_words() -> None:
+    email = "For RFP No. 9 add a cumulative objection."
+    ok = _item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"], grounds=["cumulative"])
+    got, problems = ins.check({"items": [ok]}, email, DOCS, BOOK)
+    assert problems == [] and got.instructions["01"][0].grounds == ("cumulative",)
+    assert ins.Read.from_dict(got.to_dict()) == got
+    for item, frag in [
+        (_item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"], grounds=["harassing"]), "not named"),
+        (_item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"]), "key or ground"),
+        (_item(quote="For RFP No. 9 add a cumulative objection", numbers=["9"], action="use_phrase",
+               grounds=["cumulative"]), "phrase-book key"),
+    ]:  # fmt: skip
+        _got, problems = ins.check({"items": [item]}, email, DOCS, BOOK)
+        assert any(frag in p for p in problems), problems
+    old = {"instructions": {"01": [{"source": "email", "quote": "q", "numbers": ["9"], "doc_type": "",
+                                    "act": "add_objection", "keys": ["privacy"]}]}}  # fmt: skip
+    assert ins.Read.from_dict(old).instructions["01"][0].grounds == ()

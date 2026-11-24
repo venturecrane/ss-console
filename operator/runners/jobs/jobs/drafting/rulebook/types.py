@@ -31,6 +31,9 @@ class Instruction:
     doc_type: str = ""
     act: str = ""
     keys: tuple[str, ...] = ()
+    #: Objection grounds named in the quote that the book has no sentence for
+    #: (written for the request, ``written.py``), folded.
+    grounds: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

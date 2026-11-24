@@ -39,6 +39,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from ..rulebook.book import fold
 from ..rulebook.types import Instruction
 from ..verify.items import parse_json
 from . import numbers as num, set_units as su
@@ -87,7 +88,8 @@ class Read:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "instructions": {k: [vars(i) | {"numbers": list(i.numbers), "keys": list(i.keys)} for i in v]
+            "instructions": {k: [vars(i) | {"numbers": list(i.numbers), "keys": list(i.keys),
+                                            "grounds": list(i.grounds)} for i in v]
                              for k, v in self.instructions.items()},
             "facts": [vars(f) for f in self.facts],
         }  # fmt: skip
@@ -95,7 +97,17 @@ class Read:
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> "Read":
         ins = {
-            k: tuple(Instruction(**{**i, "numbers": tuple(i["numbers"]), "keys": tuple(i["keys"])}) for i in v)
+            k: tuple(
+                Instruction(
+                    **{
+                        **i,
+                        "numbers": tuple(i["numbers"]),
+                        "keys": tuple(i["keys"]),
+                        "grounds": tuple(i.get("grounds") or ()),
+                    }
+                )
+                for i in v
+            )
             for k, v in (raw.get("instructions") or {}).items()
         }
         return Read(ins, tuple(Fact(**f) for f in raw.get("facts") or []))
@@ -125,7 +137,8 @@ SYSTEM = (
     'requests_for_production, requests_for_admission; else "">, "action": one of use_phrase (use the firm\'s '
     "standard disposition wording), add_objection, remove_objection, remove_sentence, add_fact (he states a fact "
     'the response must say), "keys": [<for use_phrase and add_objection: the key of each phrase-book entry his '
-    'words ask for, from the list given>], "text": <add_fact only: one sentence stating his fact, using only his '
+    'words ask for, from the list given>], "grounds": [<add_objection only: each objection ground he asks for that no '
+    'phrase-book entry covers, in his own words as the quote says it>], "text": <add_fact only: one sentence stating his fact, using only his '
     "words, names and figures>}. List every instruction that names a response number; leave out general rules "
     "that name none."
 )
@@ -161,11 +174,22 @@ def _home(nums: tuple[str, ...], docs: list[Doc], set_type: str) -> tuple[Doc | 
     return next(d for d in pool if d.key in homes), ""
 
 
-def _keys_ok(act: str, keys: tuple[str, ...], quote: str, book: Any) -> str:
+def _grounds_ok(act: str, grounds: tuple[str, ...], quote: str) -> str:
+    if grounds and act != "add_objection":
+        return "grounds are given only for an objection"
+    for g in grounds:
+        if not g or f" {_words(g)} " not in f" {_words(quote)} ":
+            return f"ground {g!r} is not named in the quote"
+    return ""
+
+
+def _keys_ok(act: str, keys: tuple[str, ...], quote: str, book: Any, grounds: tuple[str, ...] = ()) -> str:
     if act in ("remove_sentence", "add_fact"):
         return "keys are given only for a phrase or an objection" if keys else ""
-    if act in ("use_phrase", "add_objection") and not keys:
+    if act == "use_phrase" and not keys:
         return f"{act} names at least one phrase-book key"
+    if act == "add_objection" and not keys and not grounds:
+        return f"{act} names at least one phrase-book key or ground"
     for k in keys:
         e = (book.entries if book is not None else {}).get(k)
         if e is None:
@@ -233,14 +257,20 @@ def _item(n: int, it: Any, request_text: str, docs: list[Doc], book: Any) -> tup
     if home is None:
         return None, f"{where}: {why}"
     keys = tuple(str(k) for k in it.get("keys") or [])
-    bad = _keys_ok(str(act), keys, quote, book) or _sense_ok(str(act), quote)
+    raw_g = it.get("grounds") or []
+    grounds = tuple(fold(str(g)) for g in raw_g) if isinstance(raw_g, list) else ()
+    bad = (
+        _keys_ok(str(act), keys, quote, book, grounds)
+        or _grounds_ok(str(act), grounds, quote)
+        or _sense_ok(str(act), quote)
+    )
     if bad:
         return None, f"{where}: {bad}"
     if act == "add_fact":
         text = " ".join(str(it.get("text") or "").split())
         bad = _fact_ok(text, quote) or ("" if len(read) == 1 else "a fact is stated for one response")
         return (None, f"{where}: {bad}") if bad else ((home.key, Fact(home.key, read[0], text, quote)), "")
-    return (home.key, Instruction(SOURCE, quote, read, home.set_type, str(act), keys)), ""
+    return (home.key, Instruction(SOURCE, quote, read, home.set_type, str(act), keys, grounds)), ""
 
 
 def _spans(quote: str, text: str) -> list[tuple[int, int]]:
