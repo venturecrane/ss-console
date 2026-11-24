@@ -48,11 +48,22 @@ def _quoted(value: str) -> str:
 
 
 def inbox_id(ops: MsGraphOps) -> str:
-    """The Inbox folder's id in this mailbox. Raises when it cannot be read."""
+    """The Inbox folder's id in this mailbox. Raises when it cannot be read.
+
+    Kept on ``ops`` once read: a folder id does not change for a mailbox, and
+    the turn's thread read (``thread_recent``) runs under a short client
+    timeout, so it must not spend a Graph read on it every turn."""
+    cached = getattr(ops, "_inbox_id_cache", "")
+    if isinstance(cached, str) and cached:
+        return cached
     found = _read(ops, ops._mail_path("mailFolders", "inbox") + "?$select=id")
     value = str(found.get("id") or "") if isinstance(found, dict) else ""
     if not value:
         raise MsGraphTransportError("could not read this mailbox's Inbox id")
+    try:
+        ops._inbox_id_cache = value
+    except AttributeError:  # an ops object that takes no attribute just reads again
+        pass
     return value
 
 

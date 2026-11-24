@@ -13,29 +13,36 @@ The rule was skill prose until now, and prose did not hold. This reads the
 reply's own words, once, before it goes: :func:`question_in` returns the first
 sentence that asks the reader something, or ``""``. The relay
 (``plugins/hermes-smd-reply/relay_checks.question_held``) holds such a reply and
-tells the model to redraft it as statements: the most reasonable reading, done
-and stated, or :data:`LOOK_INTO` alone, which pages SMD when it goes
-(``shared.reply_could_not``: ``cannot_complete``).
+tells the model to redraft it as statements, or as :data:`LOOK_INTO` alone,
+which pages SMD when it goes (``shared.reply_could_not``).
+
+A FALSE HOLD IS WORSE THAN A MISSED QUESTION: a held delivery to an attorney is
+silence where the work should be. So every ask pattern is narrow, and each has a
+test showing a statement with the same words that still passes.
 
 WHAT COUNTS AS ASKING
 * a sentence that ends with a question mark;
-* an ask phrase (:data:`_ASK_RE`): "reply with", "let me know which", "please
-  confirm", "which would you prefer", "would you like me to", "should I" ...;
-* a line that offers an option ("Option A:", "Choice 2 -").
+* a narrow ask (:func:`_asks`): "Reply with the number", sentence-initial
+  "Reply yes to proceed", "let me know which / whether / the ...", "please
+  confirm the ..." (never "please confirm receipt was ..."), "please choose",
+  "tell me which", sentence-initial "Confirm the ...", "Please provide the",
+  "Send me the", "which would you prefer", "would you prefer X or Y";
+* options offered: an "Option A:" line, two or more adjacent "A) ..." lines, or
+  numbered lines right after a line that offers a choice.
 
 WHAT DOES NOT
 * quoted history: lines starting ``>`` and everything from an "On ... wrote:",
   "-----Original Message-----" or "From: " line down;
-* words inside quotation marks (the attorney's own question, quoted back);
-* reported speech: a sentence with "asked" or "wondered" in it ("You asked
-  whether the set is filed: it is.");
+* quoted discovery: a line or sentence starting with a discovery label and a
+  number ("Request No. 4:", "Special Interrogatory No. 7:", "Form Interrogatory
+  2.5:", "- No. 2:", "INTERROGATORY NO. 2:" and the lines under it to the next
+  blank line), and "Q:" / "A:" lines;
+* a one-line label ("FAQ: ...?"), words inside quotation marks (single or
+  double, across lines), web addresses, reported speech ("You asked whether");
+* invitations: "Let me know if you'd like any changes", "Reply with any edits",
+  conditionals ("Should we receive the records, we'll file them");
 * every line of a required block the turn's tools or hooks wrote
   (``shared.turn_says``): code's sentences are code's to word.
-
-RISK, stated. False positives cost one redraft; a sentence like "Let me know if
-you need anything else" is NOT an ask (it is not in :data:`_ASK_RE`). False
-negatives: an ask phrased as a plain statement ("I need the number before I can
-start") does not fire.
 """
 
 from __future__ import annotations
@@ -43,33 +50,66 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 
-#: The one sentence a reply may be when no reading of the email is reasonable.
-#: It pages SMD when it goes (``shared.reply_could_not`` reads it as
-#: ``cannot_complete``), so the Operator owns the follow-up in the thread.
-LOOK_INTO = "Let me look into that. I'll reply in this thread."
+from shared.reply_could_not import LOOK_INTO
 
 _QUOTE_START_RE = re.compile(
     r"^\s*(?:on\b.{0,200}\bwrote:\s*$|-{2,}\s*original message\s*-{2,}|from:\s)",
     re.IGNORECASE,
 )
-#: Text inside double quotation marks, straight or curly.
-_QUOTED_RE = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”")
+_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+#: Quoted words: double quotes (straight or curly, across lines) and single
+#: quotes that are not an apostrophe inside a word.
+_DOUBLE_QUOTED_RE = re.compile(r"\"[^\"]*\"|“[^”]*”")
+_SINGLE_QUOTED_RE = re.compile(r"(?<![\w'])'[^'\n]+'(?![\w'])|‘[^’\n]+’")
 _REPORTED_RE = re.compile(r"\b(?:asked|wondered|wonders|asks)\b", re.IGNORECASE)
-_SENTENCE_RE = re.compile(r"[^.?!\n]+[.?!]*")
-_ASK_RE = re.compile(
-    r"\b(?:"
-    r"reply\s+(?:with|yes|no|back\s+with|in\s+this\s+thread\s+with)"
-    r"|respond\s+with"
-    r"|let\s+(?:me|us)\s+know\s+(?:which|whether|how\s+(?:many|much)|what|when|if\s+you(?:'d|\s+would)?\s+(?:like|prefer|want))"
-    r"|(?:please|can\s+you|could\s+you|kindly)\s+(?:confirm|advise|choose|select|clarify|specify|indicate)"
-    r"|which\s+(?:would|do)\s+you\s+prefer"
-    r"|which\s+(?:one|option)\s+(?:would|do|should)"
-    r"|(?:would|do)\s+you\s+(?:like|want)\s+(?:me|us)\s+to"
-    r"|(?:should|shall)\s+(?:i|we)\b"
-    r")",
+#: A discovery label and its number: "Request No. 4:", "Special Interrogatory
+#: No. 7:", "Form Interrogatory 2.5:", "- No. 2:", "RFP 12 (".
+_DISCOVERY_RE = re.compile(
+    r"^\s*(?:[-*•]\s*)?(?:(?:special|form)\s+)?"
+    r"(?:request(?:s)?(?:\s+for\s+(?:admission|production)s?)?|interrogator(?:y|ies)|rogs?|rfas?|rfps?|no\.?|number)"
+    r"\s*(?:no\.?\s*|number\s*)?#?\s*\d+(?:\.\d+)?\s*[:\-–(]",
     re.IGNORECASE,
 )
-_OPTION_LINE_RE = re.compile(r"^\s*(?:option|choice)\s+(?:[a-e]|[1-9])\b", re.IGNORECASE)
+_QA_RE = re.compile(r"^\s*[QA]\s*:\s", re.IGNORECASE)
+#: A one-line label: one to three words and a colon opening the line.
+_LABEL_RE = re.compile(r"^\s*[A-Za-z][\w&/-]*(?:\s+[A-Za-z][\w&/-]*){0,2}\s*:\s")
+#: Sentence ends: punctuation then whitespace, never inside "No. 4" or "2.5".
+_SPLIT_RE = re.compile(r"(?<=[.?!])\s+")
+_ABBREV_RE = re.compile(
+    r"\b(?:no|nos|mr|mrs|ms|dr|vs|v|st|inc|e\.g|i\.e|etc|jr|sr|p|pp)\.$", re.IGNORECASE
+)
+
+_ASK_RES: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        # "Reply with the number, for example 35": a choice is asked for.
+        # "Reply with any edits and I'll revise" and "We'll reply with the
+        # final draft" are not.
+        r"^(?:please\s+)?(?:reply|respond)\s+(?:back\s+)?with\s+(?:the|a|your|one)\s+"
+        r"(?:number|count|choice|option|answer|one|matter|figure|date)\b",
+        # Sentence-initial "Reply yes to proceed" (checked before quotes are stripped).
+        r"^(?:please\s+)?(?:reply|respond)\s+[\"“']?(?:yes|no|ok|approve|confirm)\b",
+        r"\blet\s+(?:me|us)\s+know\s+(?:which|whether|how\s+(?:many|much)|what|the|your)\b",
+        # An object check: "please confirm the caption", "please advise which";
+        # never "please advise opposing counsel" or "please confirm receipt was".
+        r"\b(?:please|can\s+you|could\s+you|kindly)\s+(?:confirm|advise|clarify|specify|indicate)"
+        r"(?:\s+(?:which|whether|if|how|what|when|who|you|your|me|us|the)\b|\s*[.!]?$)",
+        r"\b(?:please|can\s+you|could\s+you|kindly)\s+(?:choose|select|pick)\b",
+        r"^(?:please\s+)?tell\s+(?:me|us)\s+(?:which|whether|how|what|when|the|your)\b",
+        r"^confirm\s+(?:the|which|whether|that|your)\b",
+        r"^(?:please\s+)?(?:provide|send)\s+(?:me\s+|us\s+)?(?:the|your)\b",
+        r"\bwhich\s+(?:would|do)\s+you\s+prefer\b",
+        r"\bwhich\s+(?:one|option)\s+(?:would|do|should)\b",
+        r"\bwould\s+you\s+(?:prefer|rather)\b.*\bor\b",
+    )
+)
+_OPTION_LINE_RE = re.compile(r"^\s*(?:option|choice)\s+(?:[a-e]|[1-9])\s*[:)\-–]", re.IGNORECASE)
+_LETTER_ITEM_RE = re.compile(r"^\s*(?:\(?[A-Ea-e]\)|[A-E]\.)\s+\S")
+_NUMBER_ITEM_RE = re.compile(r"^\s*(?:\(?[1-9]\)|[1-9][.:])\s+\S")
+_CHOICE_CUE_RE = re.compile(
+    r"\b(?:choose|pick|prefer|option|options|which|either|one of)\b", re.IGNORECASE
+)
+_INLINE_CHOICE_RE = re.compile(r"\b[A-E]\)\s.+\bor\b.*\b[A-E]\)\s")
 
 
 def _norm(line: str) -> str:
@@ -77,12 +117,80 @@ def _norm(line: str) -> str:
     return " ".join(text.split()).lower()
 
 
-def _own_lines(text: str) -> list[str]:
+def _own_text(text: str) -> str:
     out: list[str] = []
     for line in (text or "").splitlines():
         if _QUOTE_START_RE.match(line):
             break
         if line.lstrip().startswith(">"):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def _sentences(line: str) -> list[str]:
+    out: list[str] = []
+    for piece in _SPLIT_RE.split(line):
+        if out and _ABBREV_RE.search(out[-1]):
+            out[-1] = f"{out[-1]} {piece}"
+        else:
+            out.append(piece)
+    return [s.strip() for s in out if s.strip()]
+
+
+def _asks(sentence: str) -> bool:
+    return any(p.search(sentence) for p in _ASK_RES)
+
+
+def _offers(lines: list[str]) -> str:
+    """The first line of an offer of choices, or ``""``."""
+    for i, line in enumerate(lines):
+        if _OPTION_LINE_RE.match(line) or _INLINE_CHOICE_RE.search(line):
+            return line.strip()
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if _LETTER_ITEM_RE.match(line) and _LETTER_ITEM_RE.match(nxt):
+            return line.strip()
+        cue = lines[i - 1] if i > 0 else ""
+        if (
+            _NUMBER_ITEM_RE.match(line)
+            and _NUMBER_ITEM_RE.match(nxt)
+            and _CHOICE_CUE_RE.search(cue)
+        ):
+            return line.strip()
+    return ""
+
+
+_REPLY_FIRST_RE = re.compile(r"^(?:please\s+)?(?:reply|respond)\b", re.IGNORECASE)
+
+
+def _ask_in_line(line: str) -> str:
+    """The first asking sentence of one line (quotes already stripped), or ``""``."""
+    bare = _SINGLE_QUOTED_RE.sub("''", line)
+    for sentence in _sentences(bare):
+        if _REPORTED_RE.search(sentence) or _DISCOVERY_RE.match(sentence) or _QA_RE.match(sentence):
+            continue
+        if sentence.endswith("?") or _asks(sentence):
+            return sentence
+    return ""
+
+
+def _readable(lines: list[str], fixed: set[str]) -> list[str]:
+    """The lines a question is looked for in: no block line, no label line, no
+    Q:/A: line, and no discovery block (a labelled line to the next blank line)."""
+    out: list[str] = []
+    discovery = False
+    for line in lines:
+        if not line.strip():
+            discovery = False
+            continue
+        if _norm(line) in fixed:
+            continue
+        if _DISCOVERY_RE.match(line):
+            discovery = True
+            continue
+        if discovery or _QA_RE.match(line):
+            continue
+        if _LABEL_RE.match(line) and not _OPTION_LINE_RE.match(line):
             continue
         out.append(line)
     return out
@@ -102,34 +210,63 @@ def question_in(text: str, blocks: Iterable[str] = ()) -> str:
         for line in block.splitlines()
         if line.strip()
     }
-    for line in _own_lines(text):
-        if not line.strip() or _norm(line) in fixed:
-            continue
-        if _OPTION_LINE_RE.match(line):
-            return line.strip()[:200]
-        bare = _QUOTED_RE.sub('""', line)
-        for sentence in _SENTENCE_RE.findall(bare):
-            said = sentence.strip()
-            if not said or _REPORTED_RE.search(said):
-                continue
-            if said.endswith("?") or _ASK_RE.search(said):
-                return said[:200]
+    own = _URL_RE.sub("", _own_text(text))
+    # "Reply "yes" to proceed" is read before quoted words are stripped.
+    for line in _readable(own.splitlines(), fixed):
+        for sentence in _sentences(line):
+            if _REPLY_FIRST_RE.match(sentence) and _asks(sentence):
+                return sentence[:200]
+    lines = _readable(_DOUBLE_QUOTED_RE.sub('""', own).splitlines(), fixed)
+    offer = _offers(lines)
+    if offer:
+        return offer[:200]
+    for line in lines:
+        found = _ask_in_line(line)
+        if found:
+            return found[:200]
     return ""
 
 
 #: The seat verticals whose staff are never asked a question.
 FIRM_VERTICALS = frozenset({"law-firm"})
-#: Redrafts a hold quotes the question for; after them the model is told to stop.
+#: Redrafts a hold quotes the question for; after them the model is told to send
+#: :data:`LOOK_INTO` and nothing else.
 MAX_REDRAFTS = 2
 #: What the model reads on a hold under the cap.
 REDRAFT = (
     'firm_question: nothing was sent and the one reply is still yours. The reply asks the firm a question ("{q}"). '
     "A reply to the firm never asks them anything and never offers them choices. Draft it again as statements: "
-    "take the most reasonable reading of what they wrote, do it, and say plainly what you did or will do. "
-    "Read the earlier messages in this thread first and never contradict them; if what they asked is already "
-    "done, say so in one line. If no reading is reasonable, the whole reply is exactly: "
+    "say plainly what you did or will do. Read the earlier messages in this thread first and never contradict "
+    "them; if what they asked is already done, say so in one line. Never guess which matter is meant: if the "
+    "matter is unclear, or no reading of the request is plain, the whole reply is exactly: "
     + LOOK_INTO
 )
+#: Added when the turn has required sentences.
+KEEP_BLOCKS = (
+    " Keep every required sentence of this turn exactly as written, each as its own paragraph."
+)
+#: What the model reads past the cap: one line, and nothing else, so the person
+#: is never left with silence.
+AT_CAP = (
+    "firm_question: nothing was sent. This reply has been held too many times for asking the firm a question. "
+    "Draft it once more with exactly this line as the whole body, nothing else: " + LOOK_INTO
+)
+
+
+def _owed_act_line(session_id: str) -> str:
+    """The confirmation line of an act this session proposed and still owes
+    (``shared.pending_acts``), or "": code's words that a Named Administrator
+    must answer, never a question the model asked."""
+    if not session_id:
+        return ""
+    try:
+        from shared.pending_acts import PENDING_ACTS
+
+        pending = PENDING_ACTS.peek(session_id)
+    except Exception:  # noqa: BLE001 - no act read is no exemption
+        return ""
+    line = getattr(pending, "readback", "") or "" if pending is not None else ""
+    return line if isinstance(line, str) else ""
 
 
 def hold(
@@ -141,12 +278,14 @@ def hold(
     say: object,
     count: Callable[[], int],
     stop_detail: str,
+    session_id: str = "",
 ) -> tuple[str, str] | None:
     """The relay's step-5b decision for one reply: ``(rule, detail)`` to hold
     it, or None. Only an in-turn reply (not ``bound``) on a firm seat, to anyone
     but SMD's own address, is read; ``say`` is the turn's required blocks (a
     ``turn_says.FORBID`` entry is not a block). ``count`` notes this email's hold
-    and returns how many it has had."""
+    and returns how many it has had; past :data:`MAX_REDRAFTS` the detail is
+    ``stop_detail``, which tells the model to send :data:`LOOK_INTO` alone."""
     from shared.heartbeat import _is_smd_address
     from shared.turn_says import FORBID, html_lines
 
@@ -160,12 +299,28 @@ def hold(
         else ()
     )
     blocks = tuple(b for b in said if isinstance(b, str) and not b.startswith(FORBID))
-    asked = question_in(text, blocks) or question_in(html_lines(html or ""), blocks)
+    act = _owed_act_line(session_id)
+    read_blocks = blocks + ((act,) if act else ())
+    if act:
+        # The act's own ask ("Reply "yes, delete them" to proceed.") is code's,
+        # even on a line the model edited around it.
+        ask = re.split(r"(?<=[.?!])\s+", act.strip())[-1]
+        text, html = text.replace(ask, ""), (html or "").replace(ask, "")
+    asked = question_in(text, read_blocks) or question_in(html_lines(html or ""), read_blocks)
     if not asked:
         return None
     if count() > MAX_REDRAFTS:
         return "firm_question_cap", stop_detail
-    return "firm_question", REDRAFT.format(q=asked.replace('"', "'"))
+    detail = REDRAFT.format(q=asked.replace('"', "'"))
+    return "firm_question", detail + (KEEP_BLOCKS if blocks else "")
 
 
-__all__ = ["FIRM_VERTICALS", "LOOK_INTO", "MAX_REDRAFTS", "REDRAFT", "hold", "question_in"]
+__all__ = [
+    "AT_CAP",
+    "FIRM_VERTICALS",
+    "LOOK_INTO",
+    "MAX_REDRAFTS",
+    "REDRAFT",
+    "hold",
+    "question_in",
+]

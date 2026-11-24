@@ -165,12 +165,6 @@ MECHANICS_STOP = (
     "mechanics_named: nothing was sent. This reply has been held too many times for describing "
     "how the work is done. Do not draft it again; SMD has been told."
 )
-#: The same, for a reply to firm staff held too often for asking them a
-#: question (relay_checks step 5b).
-FIRM_QUESTION_STOP = (
-    "firm_question: nothing was sent. This reply has been held too many times for asking the firm a "
-    "question. Do not draft it again; SMD has been told."
-)
 _STOP_GUIDANCE = "Do not draft this reply again."
 #: How the relay's step-5a refusal begins (``shared.turn_says.REFUSAL_LEAD``,
 #: pinned equal by test): such a hold is told the paragraph rule, never the
@@ -230,7 +224,7 @@ def render(notice: HoldNotice) -> str:
         return _SENT_TRACE_INCOMPLETE_TEXT.format(recipient=recipient)
     exact = reason in _EXACT_REDRAFT_REASONS
     if exact:
-        stopped = notice.detail in (FIXED_WORDING_STOP, MECHANICS_STOP, FIRM_QUESTION_STOP)
+        stopped = notice.detail in (FIXED_WORDING_STOP, MECHANICS_STOP)
         paragraphs = reason == "fixed_wording" and notice.detail.startswith(SAY_REFUSAL_LEAD)
         hint = _REASON_HINTS["fixed_wording_paragraphs" if paragraphs else reason]
         guidance = _STOP_GUIDANCE if stopped else hint

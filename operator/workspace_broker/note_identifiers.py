@@ -173,12 +173,36 @@ _RANGE_RE = re.compile(
     r"(?<![\d\-\u2013])(\d{1,10})(?:\s*[-\u2013]\s*|\s+(?:to|through|thru)\s+)(\d{1,10})(?![\d\-\u2013])",
     re.IGNORECASE,
 )
+#: A range counts only as a COUNT the requester asked for: a cutting verb
+#: before it and a discovery noun in the same sentence ("reduce the special
+#: rogs to the most important 120-125"). "pages 1-500" and "RFP 1-45" are
+#: references to items, not counts, and vouch for nothing between their ends.
+_COUNT_VERB_RE = re.compile(r"\b(?:cut|trim|reduce|limit|narrow|pare|down\s+to)\b", re.IGNORECASE)
+_COUNT_NOUN_RE = re.compile(
+    r"\b(?:interrogator(?:y|ies)|rogs?|requests?|rfas?|rfps?|questions)\b",
+    re.IGNORECASE,
+)
+#: The word right before a range that makes it a reference ("RFP 1-45", "pages
+#: 1-500", "Nos. 3-9"), never a count.
+_REFERENCE_BEFORE_RE = re.compile(
+    r"(?:\b(?:rfps?|rfas?|requests?|interrogator(?:y|ies)|rogs?|pages?|pp?\.?|nos?\.?|numbers?|items?|lines?)|#)\s*$",
+    re.IGNORECASE,
+)
+_SENTENCE_BREAK_RE = re.compile(r"[.!?\n]")
+#: What before a digit run makes it an identifier, never a run-together count:
+#: "Matter 203795", "Case No. 203795", "#203795", "phone 6025551".
+_ID_BEFORE_RE = re.compile(
+    r"(?:\b(?:matter|case|file|claim|policy|account|acct|invoice|order|ref|reference|no|number|phone|tel|"
+    r"fax|cell|mobile|ph|ext)\b\.?|#)\s*[:#.\-]?\s*$",
+    re.IGNORECASE,
+)
 
 
 def _split_readings(run: str) -> tuple[str, str] | None:
-    """A run-together figure read as two numbers of equal length, the first no
-    larger than the second ("120125" -> 120 and 125), or None."""
-    if len(run) % 2 or len(run) < 2:
+    """A run-together figure of 4 to 6 digits read as two numbers of equal
+    length, the first no larger than the second ("120125" -> 120 and 125), or
+    None."""
+    if len(run) % 2 or not 4 <= len(run) <= 6:
         return None
     half = len(run) // 2
     lo, hi = run[:half], run[half:]
@@ -187,30 +211,48 @@ def _split_readings(run: str) -> tuple[str, str] | None:
     return lo, hi
 
 
+def _sentence_around(text: str, start: int, end: int) -> tuple[str, str]:
+    """The text of the match's own sentence before it and after it."""
+    breaks = [m.end() for m in _SENTENCE_BREAK_RE.finditer(text, 0, start)]
+    head = text[breaks[-1] if breaks else 0 : start]
+    after = _SENTENCE_BREAK_RE.search(text, end)
+    return head, text[end : after.start() if after else len(text)]
+
+
 def anchor_numbers(anchor: str) -> tuple[set[str], list[tuple[int, int]]]:
     """``(runs, ranges)``: every digit run the anchor carries, with the two
-    readings of a run-together figure, and every range the anchor states.
+    readings of a run-together count, and every count range the anchor states.
 
     WHY (A&P, 2026-11-23). An attorney asked to cut a set to "the most important
     120125", meaning 120 to 125; SMD's note saying "cut to the 120 most
     important" was refused because 120 is not literally in his email. A number
-    read from his own figure, or one inside a range he wrote, is his number."""
+    read from his own figure (its two halves only), or one inside a count range
+    he wrote, is his number. A matter, case or phone number is never split, and
+    a reference range ("pages 1-500") vouches for nothing between its ends."""
     text = anchor or ""
     runs = {m.group(0) for m in _BARE_RUN_RE.finditer(text)}
     ranges: list[tuple[int, int]] = []
+    shaped = [h.span for h in structured(text)]
     for m in re.finditer(r"(?<![0-9])\d+(?![0-9])", text):
         split = _split_readings(m.group(0))
-        if split:
-            runs.update(split)
-            ranges.append((int(split[0]), int(split[1])))
-    shaped = [h.span for h in structured(text)]
+        if not split or _inside(m.span(), shaped):
+            continue
+        if _ID_BEFORE_RE.search(text[max(0, m.start() - 30) : m.start()]):
+            continue
+        runs.update(split)
     for m in _RANGE_RE.finditer(text):
         lo, hi = int(m.group(1)), int(m.group(2))
         # A count range, not a date or case number, and not a phone number's
         # tail: endpoints of one length, or both under a thousand.
         same = len(m.group(1)) == len(m.group(2)) or hi < 1000
-        if lo <= hi and same and not _inside(m.span(), shaped):
-            ranges.append((lo, hi))
+        if not (lo <= hi and same) or _inside(m.span(), shaped):
+            continue
+        head, tail = _sentence_around(text, m.start(), m.end())
+        if _REFERENCE_BEFORE_RE.search(head) or not _COUNT_VERB_RE.search(head):
+            continue
+        if not (_COUNT_NOUN_RE.search(head) or _COUNT_NOUN_RE.search(tail)):
+            continue
+        ranges.append((lo, hi))
     return runs, ranges
 
 
@@ -219,7 +261,7 @@ def uncorroborated(note: str, anchor: str, *, now: datetime.datetime | None = No
     body as text) does not carry. Empty means every identifier corroborates.
 
     A bare number corroborates when the anchor carries it as a digit run, as one
-    reading of a run-together figure, or inside a range the anchor states
+    half of a run-together count, or inside a count range the anchor states
     (``anchor_numbers``)."""
     note_hits = structured(note)
     anchor_hits = structured(anchor)

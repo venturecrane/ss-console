@@ -488,6 +488,13 @@ def test_a_v1_table_gains_the_new_columns_and_keeps_its_rows(tmp_path: Path) -> 
 
 # -- a number the requester wrote as a range or run together (A&P 2026-11-23) --
 
+CUT_120 = "The special interrogatories on matter 900417 are cut to the 120 most important."
+CUT_122 = "The special interrogatories on matter 900417 are cut to the 122 most important."
+
+
+def _body(tmp_path: Path, body: str):
+    return _seat(tmp_path, subject="Matter 900417", body={"contentType": "text", "content": body})[0]
+
 
 @pytest.mark.parametrize(
     "body",
@@ -497,40 +504,69 @@ def test_a_v1_table_gains_the_new_columns_and_keeps_its_rows(tmp_path: Path) -> 
         "Reduce the special rogs to the most important 120 to 125",
     ],
 )
-def test_a_number_read_from_the_requesters_range_corroborates(tmp_path: Path, body: str) -> None:
-    """FALSIFIER: before the range readings, "120" was refused because the
-    email carries only "120125" (or 120 and 125, never 122)."""
-    broker, _ = _seat(tmp_path, subject="Matter 900417", body={"contentType": "text", "content": body})
-    assert (
-        _preview(broker, text="The special interrogatories on matter 900417 are cut to the 120 most important.")[
-            "accepted"
-        ]
-        is True
-    )
-    assert (
-        _preview(broker, text="The special interrogatories on matter 900417 are cut to the 122 most important.")[
-            "accepted"
-        ]
-        is True
-    )
+def test_a_half_of_the_requesters_figure_corroborates(tmp_path: Path, body: str) -> None:
+    """FALSIFIER: before the readings, "120" was refused because the email
+    carries only "120125"."""
+    assert _preview(_body(tmp_path, body), text=CUT_120)["accepted"] is True
+
+
+@pytest.mark.parametrize(
+    "body", ["Reduce the special rogs to the most important 120-125", "Trim the RFAs down to 120 to 125"]
+)
+def test_a_number_inside_a_count_range_the_requester_wrote_corroborates(tmp_path: Path, body: str) -> None:
+    assert _preview(_body(tmp_path, body), text=CUT_122)["accepted"] is True
+
+
+def test_a_run_together_figure_vouches_for_its_halves_only(tmp_path: Path) -> None:
+    out = _preview(_body(tmp_path, "Reduce the special rogs to the most important 120125"), text=CUT_122)
+    assert out["accepted"] is False and "122" in out["reason"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Matter 203795: please trim the rogs",
+        "Case No. 203795, please trim the rogs",
+        "Call me at #203795 about the rogs",
+    ],
+)
+def test_a_matter_case_or_phone_number_is_never_split(tmp_path: Path, body: str) -> None:
+    """Review of #4220: "Matter 203795" read as 203 to 795 let "500" through."""
+    for number in ("500", "203", "795"):
+        out = _preview(_body(tmp_path, body), text=f"Matter 900417: cut to the {number} most important.")
+        assert out["accepted"] is False and number in out["reason"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Please read pages 1-500 and trim the rogs",
+        "Reduce RFP 1-45 in the set",
+        "The rogs are 1-500 long",
+    ],
+)
+def test_a_reference_range_vouches_for_nothing_between_its_ends(tmp_path: Path, body: str) -> None:
+    """Review of #4220: "pages 1-500" let any number up to 500 through."""
+    out = _preview(_body(tmp_path, body), text="Matter 900417: cut to the 300 most important.")
+    assert out["accepted"] is False and "300" in out["reason"]
 
 
 @pytest.mark.parametrize(
     "body, number",
     [
-        ("Reduce the special rogs to the most important 120125", "130"),
         ("Call me at 602-555-1234 about matter 900417", "700"),
         ("Matter 900417, hearing 06-08-2026", "900"),
         ("Matter 900417: keep the most important 125120", "121"),
     ],
 )
 def test_a_number_outside_any_range_the_requester_wrote_is_refused(tmp_path: Path, body: str, number: str) -> None:
-    broker, _ = _seat(tmp_path, subject="Matter 900417", body={"contentType": "text", "content": body})
-    out = _preview(broker, text=f"Matter 900417: cut to the {number} most important.")
+    out = _preview(_body(tmp_path, body), text=f"Matter 900417: cut to the {number} most important.")
     assert out["accepted"] is False and number in out["reason"]
 
 
 def test_the_readings_of_a_run_together_figure() -> None:
-    runs, ranges = note_identifiers.anchor_numbers("the most important 120125")
-    assert {"120", "125", "120125"} <= runs and (120, 125) in ranges
-    assert note_identifiers.anchor_numbers("keep 125120")[1] == []
+    runs, ranges = note_identifiers.anchor_numbers("trim the rogs to the most important 120125")
+    assert {"120", "125", "120125"} <= runs and ranges == []
+    runs, _ = note_identifiers.anchor_numbers("keep 125120")
+    assert "125" not in runs
+    assert note_identifiers.anchor_numbers("cut the rogs to 120-125")[1] == [(120, 125)]

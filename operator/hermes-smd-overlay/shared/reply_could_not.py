@@ -29,10 +29,13 @@ pattern set over the reply's own lines (quoted history removed), or ``None``:
 * ``not_permitted``: "I'm not permitted / allowed / authorized to".
 * ``none_available``: "none of the/those/these ... (could be|were|are|was|is)
   (found|located|attached|available|accessible)", within one sentence.
-* ``cannot_complete``: also "let me look into that / this / it", the one reply
-  a firm reply may be when no reading of the email is reasonable
-  (``shared.firm_question.LOOK_INTO``, 2026-11-23): the person did not get what
-  they asked this turn, so SMD sees the follow-up through.
+* ``cannot_complete``: also a reply on a law-firm seat whose own words are
+  exactly :data:`LOOK_INTO` (a greeting line and a short sign-off aside), the
+  one reply a firm reply may be when no reading of the email is plain
+  (``shared.firm_question``, 2026-11-23): the person did not get what they
+  asked this turn, so SMD sees the follow-up through. The sentence inside a
+  longer answer ("Filed. On the lien question, let me look into that.") is not
+  it and pages nothing.
 
 Three exclusions keep ordinary answers from firing:
 
@@ -201,10 +204,12 @@ _NOT_PERMITTED_RE = re.compile(
     rf"{_SUBJECT}(?:'m|'re|\s+am|\s+are)\s+not\s+(?:permitted|allowed|authorized|authorised)\s+to\b"
 )
 
-#: The Operator's own "I will follow up" (``shared.firm_question.LOOK_INTO``,
-#: 2026-11-23): the person did not get what they asked this turn, so SMD is
-#: paged to see the follow-up through.
-_LOOK_INTO_RE = re.compile(r"\blet\s+me\s+look\s+into\s+(?:that|this|it)\b")
+#: The Operator's own "I will follow up", the whole reply when a firm reply
+#: has no plain reading (``shared.firm_question``, 2026-11-23). ONE constant:
+#: firm_question imports it.
+LOOK_INTO = "Let me look into that. I'll reply in this thread."
+#: Seat verticals on which that reply pages SMD.
+_LOOK_INTO_VERTICALS = frozenset({"law-firm"})
 
 _NONE_OF_RE = re.compile(
     r"\bnone\s+of\s+(?:the|those|these|them|your)\b[^.?!\n]{0,100}?"
@@ -269,7 +274,6 @@ def classify(text: object) -> str | None:
         (_NO_ACCESS_RE, "cannot_access"),
         (_NOT_PERMITTED_RE, "not_permitted"),
         (_NONE_OF_RE, "none_available"),
-        (_LOOK_INTO_RE, "cannot_complete"),
     ):
         for match in pattern.finditer(own):
             if _HYPOTHETICAL_RE.search(_sentence_before(own, match.start())):
@@ -281,11 +285,42 @@ def classify(text: object) -> str | None:
     return min(hits)[1]
 
 
+def _norm(line: str) -> str:
+    return " ".join(line.replace("’", "'").split()).lower()
+
+
+def is_look_into(text: object) -> bool:
+    """Is the reply's own text exactly :data:`LOOK_INTO`? A first line ending in
+    a comma (the greeting) and trailing lines of three words or fewer (the
+    sign-off and name) are set aside; nothing else may be there."""
+    if not isinstance(text, str):
+        return False
+    lines = [ln.strip() for ln in _own_text(text).splitlines() if ln.strip()]
+    if lines and lines[0].endswith(",") and len(lines[0].split()) <= 4:
+        lines = lines[1:]
+    while len(lines) > 1 and len(lines[-1].split()) <= 3:
+        lines = lines[:-1]
+    return _norm(" ".join(lines)) == _norm(LOOK_INTO)
+
+
+def _seat_vertical() -> str:
+    """The live seat's vertical, or "" when it cannot be read."""
+    from shared import seat_doc
+
+    try:
+        doc = seat_doc.live_doc()
+    except Exception:  # noqa: BLE001 - unreadable authors no vertical
+        return ""
+    return str(doc.get("vertical") or "") if isinstance(doc, dict) else ""
+
+
 def metadata(text: object) -> dict[str, str]:
     """``{"could_not": code}`` for a decline, ``{}`` otherwise: spread into a
     ``REPLY_SENT`` row's metadata. Never raises."""
     try:
         code = classify(text)
+        if code is None and is_look_into(text) and _seat_vertical() in _LOOK_INTO_VERTICALS:
+            code = "cannot_complete"
     except Exception:  # noqa: BLE001 — a classifier fault never costs the send's audit row
         return {}
     return {METADATA_KEY: code} if code else {}

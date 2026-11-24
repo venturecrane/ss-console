@@ -362,7 +362,7 @@ def body_and_facts(
         return None
     if mechanics_held(origin, reply_to, send_text, send_html):
         return None
-    if question_held(cfg, origin, bound, reply_to, send_text, send_html, say):
+    if question_held(cfg, origin, bound, reply_to, send_text, send_html, say, session_id):
         return None
     if facts is not None and not facts_hold:
         # The invariant, checked on the body that would go: no marker, and
@@ -524,10 +524,11 @@ def mechanics_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -
 # The standing rule (the Captain, after A&P 2026-11-23): any message we cause in
 # an attorney's thread asks nothing. An in-turn reply on a law-firm seat that
 # asks its reader a question, or offers choices (``shared.firm_question``), is
-# held and redrafted as statements: the most reasonable reading, done and
-# stated, or ``firm_question.LOOK_INTO`` alone, which pages SMD when it goes.
-# Its own redraft counter; past the cap the reply stays held, and the hold
-# pages SMD as ``reply_held:firm_question``.
+# held and redrafted as statements of what was or will be done, or as
+# ``firm_question.LOOK_INTO`` alone (always, when the matter is unclear), which
+# pages SMD when it goes. Its own redraft counter; past the cap the model is
+# told to send exactly that line, and a hold left unsent pages SMD as
+# ``reply_held:firm_question``.
 #
 # Not checked: a bound reply (a job's delivery, an SMD note, a chronology
 # hold's one question: words the broker or a job wrote), a reply to SMD's own
@@ -540,7 +541,7 @@ def mechanics_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -
 # file-work-requests (which plaintiff), medical-chronology-maintainer (which
 # date of birth or incident date), combined-post-intake and
 # vendor-invoice-intake (which matter). None is allowed past it: the rule has
-# no exception, and "which matter" becomes the most reasonable reading or the
+# no exception. A matter is never guessed: "which matter" becomes the
 # look-into sentence with SMD paged.
 
 #: The hold reason, its own counter and cap (``firm_question.MAX_REDRAFTS``),
@@ -548,7 +549,13 @@ def mechanics_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -
 QUESTION_HOLD_REASON = "firm_question"
 _QUESTION_HOLDS = held_notice.HoldCounter()
 QUESTION_MAX_REDRAFTS = firm_question.MAX_REDRAFTS
-QUESTION_STOP_DETAIL = notice.FIRM_QUESTION_STOP
+#: Past the cap the model is told to send exactly ``firm_question.LOOK_INTO``
+#: and nothing else (A&P authors no held notice, so silence would be all the
+#: attorney got).
+QUESTION_STOP_DETAIL = firm_question.AT_CAP
+#: The counter's key for an email with no id (``HoldCounter.note`` counts
+#: nothing for an empty key, so the cap would never fire).
+_NO_MESSAGE_ID = "<no message id>"
 
 
 def question_held(
@@ -559,6 +566,7 @@ def question_held(
     send_text: str,
     send_html: str,
     say: Any = None,
+    session_id: str = "",
 ) -> bool:
     """Step 5b: hold an in-turn reply to firm staff that asks them something.
     False to go on."""
@@ -569,8 +577,9 @@ def question_held(
         send_text,
         send_html,
         say,
-        lambda: _QUESTION_HOLDS.note(origin.message_id),
+        lambda: _QUESTION_HOLDS.note(origin.message_id or _NO_MESSAGE_ID),
         QUESTION_STOP_DETAIL,
+        session_id,
     )
     if hold is not None:
         _plugin._held(QUESTION_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])

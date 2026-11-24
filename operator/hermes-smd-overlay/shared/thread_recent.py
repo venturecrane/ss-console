@@ -56,7 +56,8 @@ def render(answer: dict[str, Any] | None) -> str:
             continue
         text = " ".join(str(sent.get("text") or "").split())[:_TEXT_MAX].replace('"', "'")
         files = [str(f) for f in sent.get("files") or [] if f]
-        line = f'- {_when(sent.get("at", ""))}: "{text}"'
+        to = ", ".join(str(a) for a in sent.get("to") or [] if a)
+        line = f'- {_when(sent.get("at", ""))}{f" to {to}" if to else ""}: "{text}"'
         if files:
             line += " Attached: " + ", ".join(files) + "."
         lines.append(line)
