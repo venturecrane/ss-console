@@ -34,7 +34,7 @@ from typing import Any, Optional
 
 import yaml
 
-from bin.lib import job_lanes, seat_purpose
+from bin.lib import job_lanes, seat_purpose, work_health_drafting
 
 CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "work-health.yaml"
 
@@ -541,7 +541,8 @@ def job_items(
                     f"{job.lane}:{job.job_id}:{state}:{len(job.events)}",
                     ts,
                     f"The {name} {ENDED_BAD[state]}{why} at {hhmm(ts)}.",
-                    "Decide: rerun, release, or tell the requester why; nothing reaches them until someone does.",
+                    work_health_drafting.next_step(job.lane, reason)
+                    or "Decide: rerun, release, or tell the requester why; nothing reaches them until someone does.",
                     job=job.job_id,
                 )
             )

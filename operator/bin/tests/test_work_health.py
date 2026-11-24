@@ -171,6 +171,22 @@ def test_a_held_job_shows_only_its_reason_token_never_the_sentence():
     assert "Smith" not in items[0].what and "2030" not in items[0].what
 
 
+def test_a_failed_drafting_job_gets_its_reason_codes_triage_line():
+    """The next step comes from the drafting triage table by reason code
+    (bin/lib/work_health_drafting.py); a code with no row keeps the generic line."""
+    from bin.lib import work_health_drafting as triage
+
+    def failed(reason: str) -> list:
+        rows = [
+            _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), matter_number="201208"),
+            _job("DRAFTING", "FAILED", NOW - timedelta(hours=1), reason=reason),
+        ]
+        return wh.job_items(SEAT, rows, CFG, NOW)
+
+    assert failed("served_amended: an invented sentence")[0].todo == triage.STEPS["smd_hand"]
+    assert failed("not_a_drafting_code: an invented sentence")[0].todo.startswith("Decide: rerun")
+
+
 def test_a_bad_ending_answered_by_a_later_delivery_on_the_matter_drops_off():
     rows = [
         _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=3), job_id="A", matter_number="201208"),
