@@ -246,8 +246,15 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
 
     def _close_request(self) -> None:
         """From here the request is read, so it stops taking additions; what was
-        added before this is in the job file (``request_additions.py``)."""
-        request_additions.close_door(self.job.job_dir)
+        added before this is in the job file (``request_additions.py``).
+
+        A door this process cannot open (2026-11-24: a root-made lock, mode 0640)
+        is a named, resumable failure: every paid stage is kept, and the next
+        attempt opens it because the daemon hands the job dir to the child first."""
+        try:
+            request_additions.close_door(self.job.job_dir)
+        except request_additions.DoorUnopenable as exc:
+            raise DraftingFailed(f"request_door_unopenable: {exc.strerror}; resume keeps the paid stages") from None
         self.job = job_mod.load(self.job.job_dir)
 
     def _is_done(self, stage: str) -> bool:

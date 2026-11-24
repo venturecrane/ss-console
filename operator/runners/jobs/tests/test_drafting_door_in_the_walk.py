@@ -5,9 +5,14 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
+
+import pytest
 
 from drafting_testkit import envelope, make_inputs, make_job, seat_with, standard_docs
 from jobs import request_additions as ra
+from jobs.drafting import endings
+from jobs.drafting.outcome import REASON, DraftingFailed
 from jobs.drafting.revise.run import ReviseRun
 from jobs.drafting.run import DraftingRun
 
@@ -51,3 +56,24 @@ def test_every_walk_closes_the_door_before_the_request_is_read() -> None:
     assert fresh.count("self._close_request()") == 2
     revise = inspect.getsource(ReviseRun._walk)
     assert revise.index("self._close_request()") < revise.index("self._estimate_revise")
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root opens any file; the unopenable lock needs another uid")
+def test_a_door_lock_this_process_cannot_open_is_a_named_resumable_failure(tmp_path, pricing_path) -> None:
+    """2026-11-24, A&P: the root daemon made the lock 0640 root:root when the
+    attorney added to his request, and the jobs-uid child died at compose as
+    ``unexpected`` after $10.24. FALSIFIER: drop the catch in ``_close_request``
+    and this sees a bare PermissionError."""
+    r = _run(tmp_path, pricing_path)
+    lock = r.job.job_dir / ra.LOCK
+    lock.touch()
+    lock.chmod(0o000)  # stands in for root's 0640 file, which the child reads as "other"
+    try:
+        with pytest.raises(DraftingFailed) as caught:
+            r._close_request()
+    finally:
+        lock.chmod(0o644)
+    reason = str(caught.value)
+    assert REASON.match(reason) and reason.startswith("request_door_unopenable: ")
+    assert endings.ending("request_door_unopenable") == endings.Ending("smd", ("failed",), True, "none")
+    assert not (r.job.job_dir / ra.DOOR).exists()

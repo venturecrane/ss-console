@@ -85,6 +85,7 @@ TRIAGE: dict[str, str] = {
     "policy_missing": "smd_resume",
     "rule_unplaced": "smd_resume",
     "request_too_large": "smd_resume",
+    "request_door_unopenable": "smd_resume",
     "rule_unchecked": "smd_resume",
     "rule_unmet": "smd_resume",
     "rule_changed": "smd_resume",

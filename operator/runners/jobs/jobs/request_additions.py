@@ -84,12 +84,41 @@ def attributed(by: str, at: str, words: str) -> str:
     return f"\n\nAdded by {by} at {at}, in the same email thread:\n{words.strip()}"
 
 
+class DoorUnopenable(OSError):
+    """The child cannot open the door's lock file. Nothing is lost: the caller
+    ends the attempt as a named, resumable failure, never ``unexpected``."""
+
+
+def _shareable(fd: int, job_dir: Path) -> None:
+    """Make the lock file openable by both sides, whoever created it.
+
+    WHY (2026-11-24, A&P). The root daemon created the lock when an attorney
+    added to his request an hour into a drafting job. ``O_CREAT``'s mode is
+    filtered by the umask, and the daemon inherits the entrypoint's ``umask
+    027``, so the file was ``0640 root:root``: the jobs-uid child, which owns
+    the job dir, got EACCES at compose after $10.24 was spent. So the mode is
+    set outright (the umask cannot narrow ``fchmod``), and root hands the file
+    to the job dir's owner, which is the child. Each side fixes only what it
+    may: root anything, the child only a file it owns."""
+    st = os.fstat(fd)
+    me = os.geteuid()
+    if me == 0:
+        dst = os.stat(job_dir)
+        if (st.st_uid, st.st_gid) != (dst.st_uid, dst.st_gid):
+            os.fchown(fd, dst.st_uid, dst.st_gid)
+    if (me == 0 or st.st_uid == me) and st.st_mode & 0o777 != 0o644:
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - a lock file with no content; both the root daemon and the jobs-uid child must open it.
+        os.fchmod(fd, 0o644)
+
+
 @contextlib.contextmanager
 def _door_lock(job_dir: Path) -> Iterator[None]:
     """Held across one decision. Read-only is enough for ``flock``, which lets
-    root and the job's uid share a lock file either of them created."""
+    root and the job's uid share a lock file either of them created
+    (:func:`_shareable` keeps it so)."""
     fd = os.open(job_dir / LOCK, os.O_RDONLY | os.O_CREAT, 0o644)
     try:
+        _shareable(fd, job_dir)
         fcntl.flock(fd, fcntl.LOCK_EX)
         yield
     finally:
@@ -98,10 +127,21 @@ def _door_lock(job_dir: Path) -> Iterator[None]:
 
 def close_door(job_dir: Path | str) -> None:
     """The child, before the first stage that reads the request. The caller
-    reloads its job file after this: no write can follow it."""
+    reloads its job file after this: no write can follow it.
+
+    A lock file the child cannot open raises :class:`DoorUnopenable`. The child
+    never replaces it: the daemon may hold a ``flock`` on that very file, and a
+    second file would let it write words this process never reads. The next
+    attempt opens it, because the daemon gives the whole job dir to the child's
+    uid before every run (``daemon._chown_child``)."""
     jd = Path(job_dir)
-    with _door_lock(jd):
-        (jd / DOOR).touch()
+    try:
+        with _door_lock(jd):
+            (jd / DOOR).touch()
+    except PermissionError as exc:
+        raise DoorUnopenable(
+            exc.errno, f"the request's door in job {jd.name} cannot be opened by this process"
+        ) from exc
 
 
 def _write_as_it_was(path: Path, doc: dict[str, Any]) -> None:
@@ -212,6 +252,7 @@ __all__ = [
     "APPLIED",
     "COMPOSE_STARTED",
     "DOOR",
+    "DoorUnopenable",
     "JOB_ENDED",
     "MARKER_PREFIX",
     "MAX_REQUEST_TEXT",
