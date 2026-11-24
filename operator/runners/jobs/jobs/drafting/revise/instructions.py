@@ -174,12 +174,16 @@ def _home(nums: tuple[str, ...], docs: list[Doc], set_type: str) -> tuple[Doc | 
     return next(d for d in pool if d.key in homes), ""
 
 
-def _grounds_ok(act: str, grounds: tuple[str, ...], quote: str) -> str:
+def _grounds_ok(act: str, grounds: tuple[str, ...], quote: str, book: Any) -> str:
     if grounds and act != "add_objection":
         return "grounds are given only for an objection"
+    entries = book.entries.values() if book is not None else ()
     for g in grounds:
         if not g or f" {_words(g)} " not in f" {_words(quote)} ":
             return f"ground {g!r} is not named in the quote"
+        for e in entries:
+            if e.kind == "objection" and _words(g) in {_words(n) for n in (*e.names, e.key.replace("_", " "))}:
+                return f"ground {g!r} is the phrase-book entry {e.key!r}; give its key"
     return ""
 
 
@@ -261,7 +265,7 @@ def _item(n: int, it: Any, request_text: str, docs: list[Doc], book: Any) -> tup
     grounds = tuple(fold(str(g)) for g in raw_g) if isinstance(raw_g, list) else ()
     bad = (
         _keys_ok(str(act), keys, quote, book, grounds)
-        or _grounds_ok(str(act), grounds, quote)
+        or _grounds_ok(str(act), grounds, quote, book)
         or _sense_ok(str(act), quote)
     )
     if bad:

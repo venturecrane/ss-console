@@ -70,7 +70,10 @@ NOTES: dict[str, str] = {
         "Response {item}: an objection was written for this request, {by}; the firm's standard wording has no "
         "sentence for it."
     ),
-    "phrase_missing": "Response " + FIRM_MESSAGES["phrase_missing"],
+    "phrase_missing": (
+        "Response {item}: left as drafted; the firm's standard wording has no sentence for this objection, and none "
+        "written for this request passed the firm's checks."
+    ),
     makers.EXHIBIT: "Response " + FIRM_MESSAGES["exhibit_unresolved"],
     makers.NO_TRANSITION: (
         "Response {item}: not changed ({by}); the response has no transition and the firm's standard wording has none."

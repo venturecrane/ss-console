@@ -342,6 +342,11 @@ def test_an_emailed_objection_may_name_a_ground_the_book_lacks_but_only_in_his_w
     ]:  # fmt: skip
         _got, problems = ins.check({"items": [item]}, email, DOCS, BOOK)
         assert any(frag in p for p in problems), problems
+    # A ground the book already names is re-asked as its key: the firm's own sentence, never a written one.
+    email2 = "For RFP No. 9 add a privacy objection."
+    item = _item(quote="For RFP No. 9 add a privacy objection", numbers=["9"], grounds=["privacy"])
+    _got, problems = ins.check({"items": [item]}, email2, DOCS, BOOK)
+    assert any("give its key" in p for p in problems), problems
     old = {"instructions": {"01": [{"source": "email", "quote": "q", "numbers": ["9"], "doc_type": "",
                                     "act": "add_objection", "keys": ["privacy"]}]}}  # fmt: skip
     assert ins.Read.from_dict(old).instructions["01"][0].grounds == ()
