@@ -215,6 +215,51 @@ def test_capitals_outside_the_folder_name_are_still_emphasis():
     assert oc._caps(f"Filed in {FOLDER}. Review it TODAY.", oc.MEMO).group(0) == "TODAY"
 
 
+#: A reply citing a matter's folders as the firm spells them (A&P 2026-11-24, a
+#: reply to an attorney; the names here are invented in the same shape).
+FOLDER_REPLY = (
+    "The intake scans are in the CLIENT RECORDS folder, the photos are in the "
+    "ACCIDENT PHOTOS folder and the report is in the TRAFFIC REPORT- PENDING folder."
+)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        FOLDER_REPLY,
+        "Saved to CLIENT RECORDS > ACCIDENT PHOTOS > TRAFFIC REPORT- PENDING.",
+        "Saved to CLIENT RECORDS / ACCIDENT PHOTOS.",
+        "Saved to CLIENT RECORDS\\ACCIDENT PHOTOS.",
+        "I filed it in folder ACCIDENT PHOTOS.",
+        "Filed under “CLIENT RECORDS” and “TRAFFIC REPORT- PENDING”.",
+        "Filed under 'CLIENT RECORDS' and 'ACCIDENT PHOTOS'.",
+    ],
+)
+def test_a_folder_the_reply_cites_by_its_own_name_is_not_emphasis(line):
+    """A&P 2026-11-24: a reply quoting the matter's Smokeball folders exactly as
+    the firm spells them was held as shouting, and the redraft, in ordinary
+    case, misquoted the folders. FALSIFIER: on the old rule each refused."""
+    assert oc._caps(line, oc.STAFF_SEND) is None
+    assert _rules(line) == []
+
+
+@pytest.mark.parametrize(
+    ("line", "word"),
+    [
+        ("PLEASE NOTE: the report is in the ACCIDENT PHOTOS folder.", "PLEASE"),
+        ("VERY IMPORTANT, the deadline moved.", "VERY"),
+        ("THIS MUST BE FILED TODAY.", "THIS"),
+        ("URGENT/ASAP call the adjuster.", "URGENT"),
+        ("URGENT saved to CLIENT RECORDS > ACCIDENT PHOTOS.", "URGENT"),
+        ("Don't SHOUT it's in the file.", "SHOUT"),
+    ],
+)
+def test_shouting_beside_a_folder_name_is_still_emphasis(line, word):
+    """The pair's other half: only the run naming the folder is spared."""
+    assert oc._caps(line, oc.STAFF_SEND).group(0) == word
+    assert _rules(line) == ["caps_emphasis"]
+
+
 def test_not_captured_in_a_file_note_is_refused():
     (refused,) = oc.refusing(
         oc.check("Motions in limine deadline: NOT CAPTURED. Attorney to confirm.", oc.MEMO)

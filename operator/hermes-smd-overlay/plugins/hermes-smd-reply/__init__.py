@@ -1203,6 +1203,10 @@ def _hold_for_review(
         matter_id=matter_id,
         session_id=session_id,
         reason=because,
+        # The mailbox's working drafts of this reply, the held ones it
+        # superseded included: discarded when the review releases it
+        # (working_drafts.py), on the row so a restart cannot lose them.
+        draft_ids=_WORKING_DRAFTS.take(session_id, reply_key),
     )
     _commit_reply(reply_key, origin)
     matter_file_reply.discard(session_id)
@@ -1332,6 +1336,9 @@ def _review_one(row: dict[str, Any]) -> None:
     if len(prepared.batches) > 1:
         _send_file_continuations(prepared, origin, session_id=session_id, matter_ref=matter_ref)
     matter_file_review.finish(row, matter_file_review.STATUS_SENT)
+    # The reply is out: its working drafts, and the held drafts it superseded,
+    # leave the Operator mailbox's Drafts folder (A&P 2026-11-24). Never raises.
+    _discard_drafts(matter_file_review.row_draft_ids(row))
 
 
 def _relay_draft(**kwargs: Any) -> None:

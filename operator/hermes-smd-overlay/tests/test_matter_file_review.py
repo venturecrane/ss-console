@@ -166,6 +166,66 @@ def test_lane_a_files_reply_waits_for_review_and_goes_exactly_as_held(
     assert len(sent) == 2  # never twice
 
 
+def _graph_draft(mod, draft_id: str, body: str, call: str) -> str | None:
+    return mod.on_transform_tool_result(
+        tool_name="mcp_msgraph_mail_create_draft",
+        args={"to": [STAFF], "subject": "Re: records", "body_text": body},
+        result=json.dumps({"id": draft_id, "isDraft": True}),
+        session_id="s1",
+        tool_call_id=call,
+    )
+
+
+def _discards(mod, monkeypatch) -> list[str]:
+    discarded: list[str] = []
+
+    def discard_draft(draft_id):
+        discarded.append(draft_id)
+        return "discarded"
+
+    monkeypatch.setattr(mod.msgraph_broker, "discard_draft", discard_draft)
+    monkeypatch.setattr(mod, "_WORKING_DRAFTS", mod.working_drafts.WorkingDrafts(), raising=False)
+    return discarded
+
+
+def test_lane_a_released_reply_discards_the_drafts_it_superseded(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
+    """A&P 2026-11-24 shape: the checklist held a reply (capitals), the Operator
+    redrafted, and the redraft waited for SMD's review. Once the review sends
+    it, the held draft and the sent one leave the mailbox's Drafts folder.
+    FALSIFIER: before the fix the release discarded nothing."""
+    mod, _d1, sent, spool, _b = lane
+    discarded = _discards(mod, monkeypatch)
+    _review_first_seat(mod)
+    _email()
+    _stage_call(mod, spool, [("R.pdf", _pdf(1))])
+    held = _graph_draft(mod, "draft-held", "PLEASE NOTE: the records are attached.", "d1")
+    assert held and "output_checklist" in held and rev.rows() == []
+    notice = _graph_draft(mod, "draft-redraft", "The records are attached.", "d2")
+    assert sent == [] and "matter_files_review" in notice
+    (row,) = rev.rows()
+    assert row["draft_ids"] == ["draft-held", "draft-redraft"]
+    assert discarded == []  # waiting for review: the drafts stay
+    _decide(monkeypatch, {"m1": "approve"})
+    mod._review_once()
+    assert len(sent) == 1
+    assert discarded == ["draft-held", "draft-redraft"]
+    (done,) = rev.rows()
+    assert done["status"] == rev.STATUS_SENT
+
+
+def test_lane_a_rejected_review_keeps_its_drafts(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
+    """A reply that never went out leaves its drafts where a person can read them."""
+    mod, _d1, sent, spool, _b = lane
+    discarded = _discards(mod, monkeypatch)
+    _review_first_seat(mod)
+    _email()
+    _stage_call(mod, spool, [("R.pdf", _pdf(1))])
+    _graph_draft(mod, "draft-1", "The records are attached.", "d1")
+    _decide(monkeypatch, {"m1": "reject"})
+    mod._review_once()
+    assert sent == [] and discarded == []
+
+
 def test_lane_a_rejected_reply_is_discarded(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
     mod, d1, sent, spool, _b = lane
     _review_seat(mod._YAML_PATH)

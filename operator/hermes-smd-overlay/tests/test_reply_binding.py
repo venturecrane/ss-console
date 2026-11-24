@@ -1335,6 +1335,19 @@ def test_held_drafts_a_sent_redraft_superseded_are_discarded_with_it(drafts) -> 
     assert discarded == ["draft-1", "draft-2", "draft-3"]
 
 
+def test_a_draft_the_checklist_held_is_discarded_when_its_redraft_is_sent(drafts) -> None:
+    """A&P 2026-11-24: a reply held by the output checklist (capitals), redrafted
+    seconds later and sent. Both versions are copies of a reply that went out."""
+    mod, d1, broker, _, discarded = drafts
+    _email_turn(mod, "mail-1")
+    _graph_draft(mod, [ADMIN], "draft-held", body="PLEASE NOTE: both are filed to the matter.")
+    assert [m["reason"] for m in _held(d1)] == ["output_checklist"]
+    assert broker.plain_sends == [] and discarded == []
+    _graph_draft(mod, [ADMIN], "draft-sent", body="Both are filed to the matter.")
+    assert len(broker.plain_sends) == 1
+    assert discarded == ["draft-held", "draft-sent"]
+
+
 def test_a_draft_after_its_reply_went_out_is_discarded(drafts) -> None:
     mod, d1, _broker, _, discarded = drafts
     _email_turn(mod, "mail-1")

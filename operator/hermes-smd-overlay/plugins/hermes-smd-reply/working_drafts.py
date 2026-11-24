@@ -19,7 +19,12 @@ a draft deliberately kept for a person to review stays where they can see it:
 * a turn whose reply is held and never sent discards nothing;
 * a reply durably queued for release discards nothing now (the release sends
   from the queued text later, and the draft is the only copy staff can read
-  until then).
+  until then);
+* a reply held for SMD's review (``matter_file_review``) carries its tracked
+  drafts on the review row, and the release discards them once it sends.
+  Before 2026-11-24 a review release discarded nothing, so a reply held by the
+  checklist, redrafted and released from review left every version in Drafts.
+  A rejected or expired review discards nothing.
 
 A draft that arrives after its reply already went out (``duplicate_reply``) is
 discarded at once: it is a copy of an answer the person already has.

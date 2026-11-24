@@ -220,10 +220,13 @@ _CAPTION = re.compile(r"\s(?:v|vs)\.\s")
 #: a digit or a hyphen (a matter number like ``2026-PI-101``, a discovery set like
 #: ``SROG-1``, ``Medi-Cal`` spelled in capitals), (c) it sits on a caption line
 #: (one carrying `` v. `` or `` vs. ``), (d) it sits on a heading line, or on
-#: a document's table row (``_layout_spans``), or (e) it is inside double quotes
-#: on the line, a record's own title quoted back, or (f) it is inside the
-#: chronology runner's verbatim delivery folder name (``_RUNNER_FOLDER``:
-#: "MEDICAL CHRONOLOGY - <client> <MM-DD-YY>"). There is no dictionary and no
+#: a document's table row (``_layout_spans``), or (e) it is inside quotes
+#: (straight or typographic, double or single) on the line, a record's own
+#: title quoted back, or (f) it is inside the chronology runner's verbatim
+#: delivery folder name (``_RUNNER_FOLDER``: "MEDICAL CHRONOLOGY - <client>
+#: <MM-DD-YY>"), or (g) it is a folder the reply names by its own spelling: a
+#: capitals run right before "folder", right after "folder", or beside a path
+#: separator (``_folder_name_spans``). There is no dictionary and no
 #: inference: an acronym this list does not know is a refusal with the word
 #: named, and the model writes it in ordinary case or the firm adds it here.
 #: Three-letter words are never checked, so MSC, FSC, RFP, MRI and CCP need no
@@ -454,14 +457,58 @@ def _layout_spans(text: str, surface: str) -> list[tuple[int, int]]:
     return spans
 
 
-_QUOTED = re.compile(r'"[^"\n]{1,200}"')
+#: Quoted text on one line: straight or typographic double quotes, and single
+#: quotes that open after a space or a bracket and close before a non-letter, so
+#: the apostrophes of "don't" and "firm's" never pair up into a quote.
+_QUOTED = re.compile(
+    r'"[^"\n]{1,200}"'
+    r"|\u201c[^\u201c\u201d\n]{1,200}\u201d"
+    r"|(?:(?<=^)|(?<=[\s(\[]))['\u2018][^'\u2018\u2019\n]{1,200}['\u2019](?![A-Za-z])",
+    re.MULTILINE,
+)
 
 
 def _quoted_spans(text: str) -> list[tuple[int, int]]:
-    """Text inside double quotes on one line is someone else's words, quoted
+    """Text inside quotes on one line is someone else's words, quoted
     back: a calendar entry's subject, a task title, a file name. The firm's
     spelling of its own records is not the Operator's emphasis."""
     return [(m.start(), m.end()) for m in _QUOTED.finditer(text)]
+
+
+#: A run of capitalized words: the shape of a folder name the firm spells in
+#: capitals ("CLIENT DOCUMENTS", "POLICE REPORT- NEED").
+_CAPS_RUN = r"[A-Z][A-Z0-9&'.]*(?:(?: |-|- | - )[A-Z0-9][A-Z0-9&'.]*)*"
+#: A folder named by what it is (A&P 2026-11-24: a reply to an attorney quoting
+#: the matter's Smokeball folders "CLIENT DOCUMENTS", "EMAILS" and "POLICE
+#: REPORT- NEED" was held as shouting, and the redraft misquoted them): the run
+#: is followed by the word folder, or follows it.
+_FOLDER_NAME = re.compile(
+    rf"(?:\b{_CAPS_RUN}(?=\s+(?:sub-?)?(?:folders?|director(?:y|ies))\b))"
+    rf"|(?:(?<=\b[Ff]older )|(?<=\b[Ff]older: )|(?<=\b[Ss]ubfolder )"
+    rf"|(?<=\b[Ff]older named )|(?<=\b[Ff]older called ))({_CAPS_RUN})\b"
+)
+#: A segment of a folder path the reply cites ("CLIENT DOCUMENTS > EMAILS"): a
+#: capitals run directly before or after ">", "\" or " / ". Shouting is not
+#: written with path separators, and only the run touching one is spared, so
+#: "URGENT/ASAP" (no spaces round the slash) is still emphasis.
+_FOLDER_PATH = re.compile(
+    rf"\b{_CAPS_RUN}(?=\s?(?:>|\\)|\s/\s)"
+    rf"|(?:(?<=>)|(?<=> )|(?<=\\)|(?<=\\ )|(?<= / )){_CAPS_RUN}\b"
+)
+
+
+def _folder_name_spans(text: str) -> list[tuple[int, int]]:
+    """A folder or path the reply cites by its own name is the firm's spelling.
+
+    Only the shape decides: a capitals run directly before "folder" (or
+    "directory"), directly after "folder", or beside a path separator (">",
+    "\\", " / "). The run ends at the first word not in capitals, so "PLEASE
+    NOTE: check the EMAILS folder" still refuses on PLEASE."""
+    return [
+        (m.start(), m.end())
+        for pattern in (_FOLDER_NAME, _FOLDER_PATH)
+        for m in pattern.finditer(text)
+    ]
 
 
 #: The chronology runner's delivery folder name, verbatim: "MEDICAL CHRONOLOGY -
@@ -488,6 +535,7 @@ def _caps(text: str, surface: str = STAFF_SEND) -> re.Match[str] | None:
         + _layout_spans(text, surface)
         + _quoted_spans(text)
         + _runner_folder_spans(text)
+        + _folder_name_spans(text)
     )
     for match in _CAPS.finditer(text):
         word = match.group(0)
