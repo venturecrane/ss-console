@@ -29,23 +29,19 @@ SECOND_REPLY = (
 )
 
 
-#: Each asks, and each row's twin in STATES below shares its words and passes.
+#: Each asks. The design holds on few, clear signals (third review): a missed
+#: ask is cheaper than a held delivery.
 ASKS = [
     FIRST_REPLY,
     SECOND_REPLY,
-    "The set is ready. Please confirm the caption before I file it.",
     "Let me know which matter you mean.",
+    "Let me know whether the set should go out today.",
+    "Please confirm whether the caption is right.",
+    "Can you confirm whether the set is served.",
     "Do you want the RFAs too?",
-    "Tell me which set to trim.",
-    "Let me know the count you want.",
-    "Please provide the signed verification.",
-    "Send me the served set.",
-    "Confirm the matter number.",
-    "Would you prefer 120 or 125 in each set.",
+    "Would you like me to file it on matter 900417 as well.",
     'Reply "yes" to proceed.',
-    "A) cut each set to 120\nB) cut each set to 125",
-    "Pick one of these:\n1. cut each set to 120\n2. cut each set to 125",
-    "Please choose a set.",
+    "Reply with the number, for example 35.",
 ]
 
 STATES = [
@@ -60,7 +56,7 @@ STATES = [
     'Your note read "which set\nshould I trim?" and Set One is trimmed.',
     "Done.\n\n> How many should each set be cut to?\n> Reply with the number.",
     "Done.\n\nOn Mon, Nov 23, 2026 at 1:26 PM Dana wrote:\nWhich set?",
-    # Quoted discovery (second review A).
+    # Quoted discovery (second and third reviews).
     "Request No. 4: Did you see a doctor? Response: Yes, Dr. Example.",
     "Special Interrogatory No. 7: Do you contend the light was red?",
     "Form Interrogatory 2.5: What is your current address?",
@@ -68,7 +64,15 @@ STATES = [
     "Q: Were you at the scene?\nA: Yes.",
     "INTERROGATORY NO. 2:\nState all facts supporting your claim?\n\nThe responses are filed.",
     "The answer to Form Interrogatory No. 2.5 is filed. The set is served.",
-    # URLs, conditionals, statements with ask words (second review B to D).
+    "SROG 14: Did you consume alcohol?\nAnswered.",
+    "Discovery Request 4: Did you see a doctor? Answered.",
+    "RFP Set Two, No. 8: Produce all bills? Filed.",
+    "No. 14. Did you consume alcohol? Answer: No.",
+    "FROG 6.1: Do you attribute any injury to the incident?\nAnswered.",
+    # Reported speech (third review 3).
+    "Opposing counsel's letter says: Will your client agree to an IME? We have filed the letter.",
+    "The court's order reads: Has the defendant appeared? The answer is filed.",
+    # URLs, conditionals, statements with ask words (second review).
     "The form is at https://example.test/form?id=4 and is filed.",
     "Should we receive the records, we'll file them on matter 900417.",
     "We'll reply with the final draft.",
@@ -76,13 +80,20 @@ STATES = [
     "Please advise opposing counsel that the set is served.",
     "Please confirm receipt was requested by opposing counsel; we sent it.",
     "FAQ: What does the Operator file?",
-    # The twins of the new asks (second review G).
     "We will tell the court which set was served.",
     "The provider sent the records yesterday.",
     "We confirmed the matter number with the court.",
     "We would prefer to file on Monday.",
-    "The plan:\n1. cut each set to 120\n2. file it on the matter",
     "Option A was filed yesterday.",
+    # The third review's false holds of round two.
+    "We filed these, which the attorney approved:\n1. Responses to SROGs\n2. Responses to RFPs",
+    "Filed on matter 900417:\nA. Responses to SROGs\nB. Responses to RFPs",
+    "Send the signed verification to the client.",
+    "Tell me which set you want cut and I'll note it.",
+    "Please provide the signed verification to opposing counsel.",
+    "Confirm the hearing date with the clerk before filing.",
+    "Would you prefer 120 or 125 in each set.",
+    "Option A: cut each set to 120.\nOption B: cut each set to 125.",
 ]
 
 
@@ -129,6 +140,18 @@ def test_the_first_real_reply_is_held_with_the_redraft(relay: Any) -> None:
     detail = [c[2] for c in relay.calls if c[0] == "_held"][0]["_detail"]
     assert "Reply with the number, for example 35" in detail
     assert firm_question.LOOK_INTO in detail and "never contradict" in detail
+
+
+def test_quoted_html_is_not_read(relay: Any) -> None:
+    """Third review 4: a <blockquote> or gmail_quote is quoted history."""
+    html = "<p>Done.</p><blockquote>Can you cut these to 120?</blockquote>"
+    assert (
+        relay.relay_checks.question_held(_firm(), _Origin(), None, SENDER, "Done.", html) is False
+    )
+    html = '<p>Done.</p><div class="gmail_quote">On Mon Dana wrote:<p>Which set?</p></div>'
+    assert (
+        relay.relay_checks.question_held(_firm(), _Origin(), None, SENDER, "Done.", html) is False
+    )
 
 
 def test_the_html_part_is_read_too(relay: Any) -> None:
@@ -378,3 +401,7 @@ def test_an_owed_act_line_is_codes_words_not_a_question(monkeypatch) -> None:
     assert hold('Holding this. Reply "yes, delete them" to proceed.', "s-act") is None
     assert hold(f"{line}\n\nWhich set do you mean?", "s-act") is not None
     assert hold(f"Holding this.\n\n{line}", "") is not None
+    # Third review 7: the act's ask is dropped only as its own sentence or line.
+    ask = 'Reply "yes, delete them" to proceed.'
+    assert hold(f"Holding this. Please {ask[0].lower()}{ask[1:]}", "s-act") is not None
+    assert hold(f"Holding this. {ask}", "s-act") is None

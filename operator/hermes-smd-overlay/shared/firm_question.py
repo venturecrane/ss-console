@@ -20,29 +20,28 @@ A FALSE HOLD IS WORSE THAN A MISSED QUESTION: a held delivery to an attorney is
 silence where the work should be. So every ask pattern is narrow, and each has a
 test showing a statement with the same words that still passes.
 
-WHAT COUNTS AS ASKING
+WHAT COUNTS AS ASKING (few, clear signals; a missed ask is cheaper than a
+held delivery, and the turn's [thread-so-far] context and the router skill
+cover the rest)
 * a sentence that ends with a question mark;
-* a narrow ask (:func:`_asks`): "Reply with the number", sentence-initial
-  "Reply yes to proceed", "let me know which / whether / the ...", "please
-  confirm the ..." (never "please confirm receipt was ..."), "please choose",
-  "tell me which", sentence-initial "Confirm the ...", "Please provide the",
-  "Send me the", "which would you prefer", "would you prefer X or Y";
-* options offered: an "Option A:" line, two or more adjacent "A) ..." lines, or
-  numbered lines right after a line that offers a choice.
+* a small ask set (:data:`_ASK_RES`): "Reply with the number" (no subject
+  before it), sentence-initial "Reply "yes" to proceed", "let me know which /
+  whether", "please / can you confirm whether", "which would you prefer",
+  "would you like me to".
 
 WHAT DOES NOT
 * quoted history: lines starting ``>`` and everything from an "On ... wrote:",
-  "-----Original Message-----" or "From: " line down;
+  "-----Original Message-----" or "From: " line down; in HTML, every
+  ``<blockquote>`` and everything from a ``gmail_quote`` block on;
 * quoted discovery: a line or sentence starting with a discovery label and a
-  number ("Request No. 4:", "Special Interrogatory No. 7:", "Form Interrogatory
-  2.5:", "- No. 2:", "INTERROGATORY NO. 2:" and the lines under it to the next
-  blank line), and "Q:" / "A:" lines;
+  number ("Request No. 4:", "SROG 14:", "Discovery Request 4:", "RFP Set Two,
+  No. 8:", "No. 14.", "Form Interrogatory 2.5:") and the lines under it to the
+  next blank line, and "Q:" / "A:" lines;
 * a one-line label ("FAQ: ...?"), words inside quotation marks (single or
-  double, across lines), web addresses, reported speech ("You asked whether");
-* invitations: "Let me know if you'd like any changes", "Reply with any edits",
-  conditionals ("Should we receive the records, we'll file them");
+  double, across lines), web addresses, reported speech ("You asked whether",
+  "The letter says: ...?");
 * every line of a required block the turn's tools or hooks wrote
-  (``shared.turn_says``): code's sentences are code's to word.
+  (``shared.turn_says``), and an owed pending-act confirmation line.
 """
 
 from __future__ import annotations
@@ -61,13 +60,18 @@ _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 #: quotes that are not an apostrophe inside a word.
 _DOUBLE_QUOTED_RE = re.compile(r"\"[^\"]*\"|“[^”]*”")
 _SINGLE_QUOTED_RE = re.compile(r"(?<![\w'])'[^'\n]+'(?![\w'])|‘[^’\n]+’")
-_REPORTED_RE = re.compile(r"\b(?:asked|wondered|wonders|asks)\b", re.IGNORECASE)
-#: A discovery label and its number: "Request No. 4:", "Special Interrogatory
-#: No. 7:", "Form Interrogatory 2.5:", "- No. 2:", "RFP 12 (".
+_REPORTED_RE = re.compile(
+    r"\b(?:asked|asks|wondered|wonders|says|said|reads|states|writes|wrote|wants\s+to\s+know)\b",
+    re.IGNORECASE,
+)
+#: A discovery label and its number: "Request No. 4:", "SROG 14:", "Special
+#: Interrogatory No. 7:", "Discovery Request 4:", "RFP Set Two, No. 8:",
+#: "Form Interrogatory 2.5:", "- No. 2:", "No. 14.".
 _DISCOVERY_RE = re.compile(
-    r"^\s*(?:[-*•]\s*)?(?:(?:special|form)\s+)?"
-    r"(?:request(?:s)?(?:\s+for\s+(?:admission|production)s?)?|interrogator(?:y|ies)|rogs?|rfas?|rfps?|no\.?|number)"
-    r"\s*(?:no\.?\s*|number\s*)?#?\s*\d+(?:\.\d+)?\s*[:\-–(]",
+    r"^\s*(?:[-*\u2022]\s*)?(?:discovery\s+)?(?:(?:special|form)\s+)?"
+    r"(?:request(?:s)?(?:\s+for\s+(?:admission|production)s?)?|interrogator(?:y|ies)|s?rogs?|frogs?|rfas?|rfps?"
+    r"|no\.?|number)"
+    r"\s*(?:set\s+\w+,\s*)?(?:no\.?\s*|number\s*)?#?\s*\d+(?:\.\d+)?\s*[:\-\u2013(.]",
     re.IGNORECASE,
 )
 _QA_RE = re.compile(r"^\s*[QA]\s*:\s", re.IGNORECASE)
@@ -88,28 +92,13 @@ _ASK_RES: tuple[re.Pattern[str], ...] = tuple(
         r"^(?:please\s+)?(?:reply|respond)\s+(?:back\s+)?with\s+(?:the|a|your|one)\s+"
         r"(?:number|count|choice|option|answer|one|matter|figure|date)\b",
         # Sentence-initial "Reply yes to proceed" (checked before quotes are stripped).
-        r"^(?:please\s+)?(?:reply|respond)\s+[\"“']?(?:yes|no|ok|approve|confirm)\b",
-        r"\blet\s+(?:me|us)\s+know\s+(?:which|whether|how\s+(?:many|much)|what|the|your)\b",
-        # An object check: "please confirm the caption", "please advise which";
-        # never "please advise opposing counsel" or "please confirm receipt was".
-        r"\b(?:please|can\s+you|could\s+you|kindly)\s+(?:confirm|advise|clarify|specify|indicate)"
-        r"(?:\s+(?:which|whether|if|how|what|when|who|you|your|me|us|the)\b|\s*[.!]?$)",
-        r"\b(?:please|can\s+you|could\s+you|kindly)\s+(?:choose|select|pick)\b",
-        r"^(?:please\s+)?tell\s+(?:me|us)\s+(?:which|whether|how|what|when|the|your)\b",
-        r"^confirm\s+(?:the|which|whether|that|your)\b",
-        r"^(?:please\s+)?(?:provide|send)\s+(?:me\s+|us\s+)?(?:the|your)\b",
-        r"\bwhich\s+(?:would|do)\s+you\s+prefer\b",
-        r"\bwhich\s+(?:one|option)\s+(?:would|do|should)\b",
-        r"\bwould\s+you\s+(?:prefer|rather)\b.*\bor\b",
+        r"^(?:please\s+)?(?:reply|respond)\s+[\"\u201c']?(?:yes|no|ok|approve|confirm)\b",
+        r"\blet\s+(?:me|us)\s+know\s+(?:which|whether)\b",
+        r"\b(?:please|can\s+you|could\s+you)\s+confirm\s+whether\b",
+        r"\bwhich\s+would\s+you\s+prefer\b",
+        r"\bwould\s+you\s+like\s+(?:me|us)\s+to\b",
     )
 )
-_OPTION_LINE_RE = re.compile(r"^\s*(?:option|choice)\s+(?:[a-e]|[1-9])\s*[:)\-–]", re.IGNORECASE)
-_LETTER_ITEM_RE = re.compile(r"^\s*(?:\(?[A-Ea-e]\)|[A-E]\.)\s+\S")
-_NUMBER_ITEM_RE = re.compile(r"^\s*(?:\(?[1-9]\)|[1-9][.:])\s+\S")
-_CHOICE_CUE_RE = re.compile(
-    r"\b(?:choose|pick|prefer|option|options|which|either|one of)\b", re.IGNORECASE
-)
-_INLINE_CHOICE_RE = re.compile(r"\b[A-E]\)\s.+\bor\b.*\b[A-E]\)\s")
 
 
 def _norm(line: str) -> str:
@@ -142,24 +131,6 @@ def _asks(sentence: str) -> bool:
     return any(p.search(sentence) for p in _ASK_RES)
 
 
-def _offers(lines: list[str]) -> str:
-    """The first line of an offer of choices, or ``""``."""
-    for i, line in enumerate(lines):
-        if _OPTION_LINE_RE.match(line) or _INLINE_CHOICE_RE.search(line):
-            return line.strip()
-        nxt = lines[i + 1] if i + 1 < len(lines) else ""
-        if _LETTER_ITEM_RE.match(line) and _LETTER_ITEM_RE.match(nxt):
-            return line.strip()
-        cue = lines[i - 1] if i > 0 else ""
-        if (
-            _NUMBER_ITEM_RE.match(line)
-            and _NUMBER_ITEM_RE.match(nxt)
-            and _CHOICE_CUE_RE.search(cue)
-        ):
-            return line.strip()
-    return ""
-
-
 _REPLY_FIRST_RE = re.compile(r"^(?:please\s+)?(?:reply|respond)\b", re.IGNORECASE)
 
 
@@ -190,7 +161,7 @@ def _readable(lines: list[str], fixed: set[str]) -> list[str]:
             continue
         if discovery or _QA_RE.match(line):
             continue
-        if _LABEL_RE.match(line) and not _OPTION_LINE_RE.match(line):
+        if _LABEL_RE.match(line):
             continue
         out.append(line)
     return out
@@ -217,9 +188,6 @@ def question_in(text: str, blocks: Iterable[str] = ()) -> str:
             if _REPLY_FIRST_RE.match(sentence) and _asks(sentence):
                 return sentence[:200]
     lines = _readable(_DOUBLE_QUOTED_RE.sub('""', own).splitlines(), fixed)
-    offer = _offers(lines)
-    if offer:
-        return offer[:200]
     for line in lines:
         found = _ask_in_line(line)
         if found:
@@ -251,6 +219,23 @@ AT_CAP = (
     "firm_question: nothing was sent. This reply has been held too many times for asking the firm a question. "
     "Draft it once more with exactly this line as the whole body, nothing else: " + LOOK_INTO
 )
+
+
+_BLOCKQUOTE_RE = re.compile(r"<blockquote\b.*?</blockquote\s*>", re.IGNORECASE | re.DOTALL)
+_GMAIL_QUOTE_RE = re.compile(r"<div\b[^>]*\bclass=[\"'][^\"']*\bgmail_quote\b", re.IGNORECASE)
+
+
+def _own_html(markup: str) -> str:
+    """An HTML part without its quoted history: every ``<blockquote>``, and
+    everything from a ``gmail_quote`` block on."""
+    cut = _GMAIL_QUOTE_RE.search(markup)
+    return _BLOCKQUOTE_RE.sub("", markup[: cut.start()] if cut else markup)
+
+
+def _drop_sentence(text: str, sentence: str) -> str:
+    """``text`` without ``sentence`` where it stands as its own sentence or line."""
+    pattern = rf"(^|(?<=[.!?])[ \t]+){re.escape(sentence)}(?=\s|$)"
+    return re.sub(pattern, r"\1", text, flags=re.MULTILINE)
 
 
 def _owed_act_line(session_id: str) -> str:
@@ -305,8 +290,10 @@ def hold(
         # The act's own ask ("Reply "yes, delete them" to proceed.") is code's,
         # even on a line the model edited around it.
         ask = re.split(r"(?<=[.?!])\s+", act.strip())[-1]
-        text, html = text.replace(ask, ""), (html or "").replace(ask, "")
-    asked = question_in(text, read_blocks) or question_in(html_lines(html or ""), read_blocks)
+        text, html = _drop_sentence(text, ask), _drop_sentence(html or "", ask)
+    asked = question_in(text, read_blocks) or question_in(
+        html_lines(_own_html(html or "")), read_blocks
+    )
     if not asked:
         return None
     if count() > MAX_REDRAFTS:

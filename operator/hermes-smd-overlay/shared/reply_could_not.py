@@ -30,7 +30,7 @@ pattern set over the reply's own lines (quoted history removed), or ``None``:
 * ``none_available``: "none of the/those/these ... (could be|were|are|was|is)
   (found|located|attached|available|accessible)", within one sentence.
 * ``cannot_complete``: also a reply on a law-firm seat whose own words are
-  exactly :data:`LOOK_INTO` (a greeting line and a short sign-off aside), the
+  exactly :data:`LOOK_INTO` (lines with no terminal punctuation aside), the
   one reply a firm reply may be when no reading of the email is plain
   (``shared.firm_question``, 2026-11-23): the person did not get what they
   asked this turn, so SMD sees the follow-up through. The sentence inside a
@@ -290,17 +290,14 @@ def _norm(line: str) -> str:
 
 
 def is_look_into(text: object) -> bool:
-    """Is the reply's own text exactly :data:`LOOK_INTO`? A first line ending in
-    a comma (the greeting) and trailing lines of three words or fewer (the
-    sign-off and name) are set aside; nothing else may be there."""
+    """Is :data:`LOOK_INTO` the reply's only sentence? Lines with no terminal
+    punctuation (a greeting, a signature block) are set aside; nothing else may
+    be there."""
     if not isinstance(text, str):
         return False
     lines = [ln.strip() for ln in _own_text(text).splitlines() if ln.strip()]
-    if lines and lines[0].endswith(",") and len(lines[0].split()) <= 4:
-        lines = lines[1:]
-    while len(lines) > 1 and len(lines[-1].split()) <= 3:
-        lines = lines[:-1]
-    return _norm(" ".join(lines)) == _norm(LOOK_INTO)
+    said = [ln for ln in lines if ln[-1] in ".!?"]
+    return _norm(" ".join(said)) == _norm(LOOK_INTO)
 
 
 def _seat_vertical() -> str:

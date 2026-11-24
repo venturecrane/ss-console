@@ -219,6 +219,16 @@ def _sentence_around(text: str, start: int, end: int) -> tuple[str, str]:
     return head, text[end : after.start() if after else len(text)]
 
 
+def _is_count(text: str, start: int, end: int) -> bool:
+    """Is the figure at ``text[start:end]`` a count the requester asked for: a
+    cutting verb before it and a discovery noun in its sentence, and no item
+    word ("pages", "RFP") right before it?"""
+    head, tail = _sentence_around(text, start, end)
+    if _REFERENCE_BEFORE_RE.search(head) or not _COUNT_VERB_RE.search(head):
+        return False
+    return bool(_COUNT_NOUN_RE.search(head) or _COUNT_NOUN_RE.search(tail))
+
+
 def anchor_numbers(anchor: str) -> tuple[set[str], list[tuple[int, int]]]:
     """``(runs, ranges)``: every digit run the anchor carries, with the two
     readings of a run-together count, and every count range the anchor states.
@@ -239,6 +249,8 @@ def anchor_numbers(anchor: str) -> tuple[set[str], list[tuple[int, int]]]:
             continue
         if _ID_BEFORE_RE.search(text[max(0, m.start() - 30) : m.start()]):
             continue
+        if not _is_count(text, m.start(), m.end()):
+            continue
         runs.update(split)
     for m in _RANGE_RE.finditer(text):
         lo, hi = int(m.group(1)), int(m.group(2))
@@ -247,10 +259,7 @@ def anchor_numbers(anchor: str) -> tuple[set[str], list[tuple[int, int]]]:
         same = len(m.group(1)) == len(m.group(2)) or hi < 1000
         if not (lo <= hi and same) or _inside(m.span(), shaped):
             continue
-        head, tail = _sentence_around(text, m.start(), m.end())
-        if _REFERENCE_BEFORE_RE.search(head) or not _COUNT_VERB_RE.search(head):
-            continue
-        if not (_COUNT_NOUN_RE.search(head) or _COUNT_NOUN_RE.search(tail)):
+        if not _is_count(text, m.start(), m.end()):
             continue
         ranges.append((lo, hi))
     return runs, ranges

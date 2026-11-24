@@ -570,3 +570,18 @@ def test_the_readings_of_a_run_together_figure() -> None:
     runs, _ = note_identifiers.anchor_numbers("keep 125120")
     assert "125" not in runs
     assert note_identifiers.anchor_numbers("cut the rogs to 120-125")[1] == [(120, 125)]
+
+
+def test_a_run_together_figure_splits_only_as_a_count(tmp_path: Path) -> None:
+    """Third review 6: the split needs a cutting verb before it and a discovery
+    noun in its sentence, as a range does."""
+    for number in ("203", "795"):
+        out = _preview(
+            _body(tmp_path, "203795 cut the rogs"), text=f"Matter 900417: cut to the {number} most important."
+        )
+        assert out["accepted"] is False and number in out["reason"]
+    for number in ("120", "125"):
+        out = _preview(
+            _body(tmp_path, "please cut the rogs to 120125"), text=f"Matter 900417: cut to the {number} most important."
+        )
+        assert out["accepted"] is True
