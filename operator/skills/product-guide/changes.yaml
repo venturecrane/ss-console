@@ -39,3 +39,7 @@ entries:
     lines:
       - The hourly health check now covers all seven kinds of queued job, matter records included. A job waiting in its queue behind another kind of job that must finish first is described as waiting, not stalled.
     library_sha256: 8c65c385bce65bde001b9a76ac9b8f8428cd697cf5762b162afd5462e4f50939
+  - id: 5
+    lines:
+      - The Operator can now copy or move documents already on a matter into one of the matter's folders, so a request like create a folder and put these documents in it is done start to finish.
+    library_sha256: 77ebf84d34ca0c787f75c224441c858416b90c4a533bbcd5427cb6617e3c1fb9
