@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Callable
+from collections.abc import Sequence
+from typing import Any
 
 from .xlsx_io import OLE_MAGIC
 
@@ -35,6 +36,12 @@ from .xlsx_io import OLE_MAGIC
 #: trial matter) and 2026-10-23 (a cp1252 en dash in a subject, A&P matter
 #: 202098, which killed a chronology job at index_msg).
 FALLBACK_ENCODING = "cp1252"
+
+#: An image attached to an email smaller than this is an inline signature glyph
+#: or a logo, never a record: the job lanes' attachment index (``jobs/stages/
+#: msg.py``) skips it as tiny, and the connector's email read names it and does
+#: not count it. A photographed bill page measured 0.20 MB.
+INLINE_IMAGE_MIN_BYTES = 50_000
 
 #: An Exchange-internal (X500) address, ``/O=EXCHANGELABS/OU=.../CN=...``. It has
 #: no domain, so an address search finds nothing in it.
@@ -145,12 +152,12 @@ def open_msg(source: bytes | str) -> MsgFields:
         return read_msg(source, FALLBACK_ENCODING)
 
 
-def email_text(fields: MsgFields, attachment_text: Callable[[MsgAttachment], str]) -> str:
+def email_text(fields: MsgFields, attachment_texts: Sequence[str]) -> str:
     """The email as a person reading it sees it: the head (subject, parties,
     date, the attachments by name), the body, then each attachment's text
-    under its name. ``attachment_text(attachment)`` returns that text, or a
-    bracketed note saying why there is none; it is the caller's reader, so an
-    attachment is read by exactly the roads any other document is."""
+    under its name. ``attachment_texts`` holds one text per attachment, in
+    order, or a bracketed note saying why there is none; the caller reads
+    them, so an attachment is read by exactly the roads any other document is."""
     names = "; ".join(a.name for a in fields.attachments) or "none"
     head = [
         f"Email: {fields.subject}",
@@ -162,6 +169,6 @@ def email_text(fields: MsgFields, attachment_text: Callable[[MsgAttachment], str
     ]
     parts = ["\n".join(head), fields.body.strip()]
     total = len(fields.attachments)
-    for n, att in enumerate(fields.attachments, start=1):
-        parts.append(f"[Attachment {n} of {total}: {att.name}]\n{attachment_text(att)}".rstrip())
+    for n, (att, text) in enumerate(zip(fields.attachments, attachment_texts, strict=True), start=1):
+        parts.append(f"[Attachment {n} of {total}: {att.name}]\n{text}".rstrip())
     return "\n\n".join(p for p in parts if p)

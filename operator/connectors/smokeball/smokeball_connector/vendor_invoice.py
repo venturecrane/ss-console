@@ -116,6 +116,12 @@ def _refused_type(blob: bytes, file_name: str) -> str | None:
         return REASON_IMAGE
     if ext in _EMAIL_EXTENSIONS or (not blob.startswith(b"%PDF") and _EMAIL_HEADER.match(blob[:200])):
         return REASON_EMAIL_MESSAGE
+    from .msg_read import is_msg
+
+    # An Outlook email reads as text now (``msg_read``); by its bytes, whatever
+    # it is named, it is still an email and never an invoice.
+    if is_msg(blob):
+        return REASON_EMAIL_MESSAGE
     return None
 
 

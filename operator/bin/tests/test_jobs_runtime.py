@@ -37,8 +37,12 @@ IMPORT_LIST = (
     "jobs.note_lane, jobs.note_by_smd, jobs.litigation_lane, jobs.litigation.run, "
     "striprtf.striprtf, smokeball_connector.docx_format, docx, jobs.casefile_lane, jobs.casefile.run, "
     "jobs.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, "
-    "jobs.records_lane, jobs.records.run, jobs.records.firm"
+    "jobs.records_lane, jobs.records.run, jobs.records.firm, smokeball_connector.msg_read, extract_msg, olefile"
 )
+# The Smokeball venv's own import smoke (2026-11-24): the .msg reader imports
+# extract_msg and olefile only when an email is read, so a missing package
+# would otherwise surface as a failed read on a seat.
+CONNECTOR_IMPORTS = "python -c import smokeball_connector.msg_read, extract_msg, olefile"
 
 # uv: `venv X` makes X/bin/python (itself a recording stub); a --no-deps install
 # makes the console-script the replaced RUN lines asserted on.
@@ -46,7 +50,7 @@ UV_STUB = """#!/bin/sh
 echo "uv $*" >> "$LOG"
 if [ "$1" = venv ]; then
   mkdir -p "$2/bin"
-  printf '#!/bin/sh\\necho "python $*" >> "$LOG"\\n' > "$2/bin/python"
+  printf '#!/bin/sh\\necho "python $*" >> "$LOG"\\n[ -z \"$FAIL_PY\" ] || exit 1\\n' > "$2/bin/python"
   chmod_real=$(command -v chmod_real); "$chmod_real" +x "$2/bin/python"
 fi
 case "$*" in
@@ -125,6 +129,7 @@ def test_connectors_runs_exactly_the_replaced_connector_loop(box: dict[str, Path
         f"uv venv {v}",
         f"uv pip install --python {v}/bin/python --no-cache --no-config --require-hashes -r /app/requirements/connector-smokeball.txt",
         f"uv pip install --python {v}/bin/python --no-cache --no-deps /app/connectors/_sdk /app/connectors/smokeball/",
+        CONNECTOR_IMPORTS,
         "chmod -R a+rX /opt/connectors",
     ]
 
@@ -147,8 +152,8 @@ def test_one_connector_for_the_bundle_is_the_same_install(box: dict[str, Path]) 
     res = _run(box, "connector", "smokeball")
     assert res.returncode == 0, res.stderr + res.stdout
     log = _log(box)
-    assert log[:3] == _expected_connector_lines()
-    assert log[3] == "chmod -R a+rX /opt/connectors/smokeball"
+    assert log[:4] == _expected_connector_lines()
+    assert log[4] == "chmod -R a+rX /opt/connectors/smokeball"
 
 
 def _expected_connector_lines() -> list[str]:
@@ -157,7 +162,15 @@ def _expected_connector_lines() -> list[str]:
         f"uv venv {v}",
         f"uv pip install --python {v}/bin/python --no-cache --no-config --require-hashes -r /app/requirements/connector-smokeball.txt",
         f"uv pip install --python {v}/bin/python --no-cache --no-deps /app/connectors/_sdk /app/connectors/smokeball/",
+        CONNECTOR_IMPORTS,
     ]
+
+
+def test_a_connector_venv_that_cannot_import_its_msg_reader_fails_the_build(box: dict[str, Path]) -> None:
+    """FALSIFIER: drop the smokeball import smoke and this build succeeds."""
+    res = _run(box, "connector", "smokeball", extra={"FAIL_PY": "1"})
+    assert res.returncode != 0
+    assert "cannot import its .msg reader" in res.stdout
 
 
 def test_the_pricing_table_is_copied_beside_the_venv_when_asked(box: dict[str, Path]) -> None:

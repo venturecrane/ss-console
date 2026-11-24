@@ -1131,7 +1131,10 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     the matter: an ``Email:``/``From:``/``To:``/``Cc:``/``Date:``/``Attachments:``
     head, the body, then each attachment's text under ``[Attachment N of M: name]``.
     An attachment with no text this read can give (a scan nobody has transcribed,
-    an attached email, a type with no reader) says ``[not read: ...]`` there.
+    an attached email, a type with no reader) says ``[not read: ...]`` there, and
+    the read is then ``msg_partial`` with ``unreadAttachments`` naming them and
+    ``needsHumanRead`` true. ``msg_transcribed`` means an attachment's text is a
+    stored MACHINE TRANSCRIPTION of a scan, cited as one, like ``vision_cached``.
     ``vision``/``vision_cached`` is a MACHINE TRANSCRIPTION of a scan, or of a
     photograph of a document (JPEG/PNG/GIF/WEBP: an insurance card, a driver
     license, an estimate; a HEIC photo is refused by name), that no human has read: cite it as a transcription, never as the document verbatim
@@ -1577,7 +1580,7 @@ def _collect_matter_sources(
     Discipline: a scanned matter's draft path opens only after a person
     deliberately read each scan, so an uncached scan still lands in
     ``unextractable`` and still hard-refuses the draft, exactly as before."""
-    from .extract import MECHANICAL_METHODS, METHOD_MIXED, METHOD_VISION_CACHED, METHOD_XLSX_OPERATOR, extract_text_ex
+    from .extract import MECHANICAL_METHODS, METHOD_XLSX_OPERATOR, PARTIAL_METHODS, TRANSCRIBED_METHODS, extract_text_ex
     from .library import find_folder_id, is_library_file, load_library_config
 
     client = _get_client()
@@ -1610,15 +1613,17 @@ def _collect_matter_sources(
         # the text came from is what decides how it may be used.
         if result.method == METHOD_XLSX_OPERATOR:
             continue  # the Operator's own workbook is not the firm's record
-        if result.method == METHOD_MIXED:
+        if result.method in PARTIAL_METHODS:
             # Typed pages read, scanned pages not (none stored, and this path
             # never transcribes): the record is partial in exactly the way an
             # uncached scan's is, so it is reported the same way, with the pages
             # named, and the draft refuses. Once ``read_document`` has read
             # those pages they are stored, and the file comes back
             # ``vision_cached``, a transcription source like any other.
+            # A saved email with an attachment left unread is partial the same
+            # way, and names the attachments.
             unextractable.append(f"{name} ({result.unread_note()})")
-        elif result.method == METHOD_VISION_CACHED:
+        elif result.method in TRANSCRIBED_METHODS:
             vision_sources.append((name, result.text))
         elif result.method in MECHANICAL_METHODS and result.text.strip():
             sources.append((name, result.text))

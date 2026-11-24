@@ -33,6 +33,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from smokeball_connector.msg_read import INLINE_IMAGE_MIN_BYTES
+
 from ..matter import pull as matter_pull
 from ..medchron.gates import foreign_identity as FI
 from . import email_parents
@@ -43,7 +45,9 @@ CONTAINER_EXTS = {".msg", ".rpmsg"}
 # Attachment kinds that are never a medical record.
 SKIP_EXT = {".gif", ".ico", ".p7s", ".vcf", ".ics", ".htm", ".html", ".txt", ".xml", ".eml"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
-IMAGE_MIN = 50_000  # only true icons fall below this; signature glyphs are single-digit KB
+# Only true icons fall below this; signature glyphs are single-digit KB. One
+# number for the lanes and the connector's email read (``msg_read``).
+IMAGE_MIN = INLINE_IMAGE_MIN_BYTES
 DOC_EXT = {".doc", ".docx", ".rtf"}
 # Microsoft RMS-protected payloads: undecryptable without the recipient's
 # credentials. Reported by name so the hole is visible, never "opened".

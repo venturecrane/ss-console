@@ -47,6 +47,12 @@ install_connector() {
   uv pip install --python "$venv/bin/python" --no-cache --no-config --require-hashes -r "$reqs"
   uv pip install --python "$venv/bin/python" --no-cache --no-deps "${SRC}/connectors/_sdk" "$cdir"
   ls "$venv"/bin/*-mcp >/dev/null 2>&1 || { echo "FATAL: connector ${name} produced no *-mcp console-script"; exit 1; }
+  # The modules a connector imports only when a document needs them: a missing
+  # package fails the build here, not a read on a seat.
+  case "$name" in
+    smokeball) "$venv/bin/python" -c "import smokeball_connector.msg_read, extract_msg, olefile" \
+      || { echo "FATAL: connector ${name} venv cannot import its .msg reader"; exit 1; } ;;
+  esac
 }
 
 # The connectors the `jobs` bundle carries. The image no longer builds them
@@ -77,7 +83,7 @@ connector() {
 # The build-time import smoke: every lane module the runner ships, plus the two
 # readers the litigation job needs. FAILS THE BUILD, not a seat.
 import_check() {
-  "$1" -c "import jobs.daemon, jobs.stages.upload, jobs.demand_lane, jobs.demand.run, jobs.drafting_lane, jobs.drafting.run, jobs.negotiation_lane, jobs.negotiation.run, jobs.note_lane, jobs.note_by_smd, jobs.litigation_lane, jobs.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, jobs.casefile_lane, jobs.casefile.run, jobs.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, jobs.records_lane, jobs.records.run, jobs.records.firm"
+  "$1" -c "import jobs.daemon, jobs.stages.upload, jobs.demand_lane, jobs.demand.run, jobs.drafting_lane, jobs.drafting.run, jobs.negotiation_lane, jobs.negotiation.run, jobs.note_lane, jobs.note_by_smd, jobs.litigation_lane, jobs.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, jobs.casefile_lane, jobs.casefile.run, jobs.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, jobs.records_lane, jobs.records.run, jobs.records.firm, smokeball_connector.msg_read, extract_msg, olefile"
   command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the litigation job and the negotiation watch read .doc with it)"; exit 1; }
 }
 

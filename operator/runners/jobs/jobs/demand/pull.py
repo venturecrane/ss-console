@@ -174,6 +174,11 @@ def _open_msg(path: Path) -> dict[str, Any] | None:
         m = open_msg(str(path))
     except Exception:  # noqa: BLE001 - an unreadable container is reported by name, never guessed at
         return None
+    if any(a.error is not None for a in m.attachments):
+        # An attachment whose payload will not read makes the email unreadable,
+        # named in ``split_emails``' unreadable list: dropping it silently would
+        # leave a demand built without a record nobody was told was missing.
+        return None
     return {
         "subject": m.subject[:200],
         "sender": (addresses(m.sender) or [""])[0],

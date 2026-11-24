@@ -80,7 +80,18 @@ METHOD_XLSX = "xlsx"
 METHOD_XLSX_OPERATOR = "xlsx_operator"
 #: An Outlook email saved in the matter (``msg_read``): its head, its body, and
 #: each attachment's text under its name, attachments read with no model call.
+#: ``msg`` only when every attachment that could hold record was read from its
+#: own text layer, so the whole email may stand as the firm's record.
 METHOD_MSG = "msg"
+#: An email whose attachments are all read, at least one from a stored
+#: MACHINE TRANSCRIPTION of a scan: a transcription source, like
+#: ``vision_cached``, never the firm's verbatim record.
+METHOD_MSG_TRANSCRIBED = "msg_transcribed"
+#: An email with an attachment that could hold record left unread (a scan with
+#: no stored reading, a type with no reader, an attached email, one that would
+#: not open, one past the read cap). ``unread_attachments`` names them; a caller
+#: treats it the way it treats ``mixed``.
+METHOD_MSG_PARTIAL = "msg_partial"
 
 METHODS = frozenset(
     {
@@ -94,12 +105,21 @@ METHODS = frozenset(
         METHOD_XLSX,
         METHOD_XLSX_OPERATOR,
         METHOD_MSG,
+        METHOD_MSG_TRANSCRIBED,
+        METHOD_MSG_PARTIAL,
     }
 )
 
 #: The roads whose text is the document's own, mechanically read, and so may
 #: stand as the firm's record in a drafting check.
 MECHANICAL_METHODS = (METHOD_PYPDF, METHOD_DOCX, METHOD_PLAIN, METHOD_XLSX, METHOD_MSG)
+
+#: The roads whose text is partly unread (pages or attachments named): the
+#: drafting record check refuses on them, naming what was left.
+PARTIAL_METHODS = (METHOD_MIXED, METHOD_MSG_PARTIAL)
+#: The roads whose text is (or includes) a stored MACHINE TRANSCRIPTION: a
+#: transcription source in the record check, never the firm's verbatim record.
+TRANSCRIBED_METHODS = (METHOD_VISION_CACHED, METHOD_MSG_TRANSCRIBED)
 
 #: Why a scanned PDF produced no text. Closed set — never an exception message
 #: (which can carry a URL or a credential fragment) and never model output.
@@ -185,6 +205,8 @@ class ExtractResult:
     pages: int | None = None
     unread_pages: tuple[int, ...] = ()
     transcribed_pages: tuple[int, ...] = ()
+    #: For ``msg_partial``: the attachments that could hold record and were not read.
+    unread_attachments: tuple[str, ...] = ()
 
     def report(self) -> dict[str, Any]:
         """The fields ``read_document`` returns beside the text, in its order:
@@ -197,17 +219,22 @@ class ExtractResult:
             out["pageCount"] = self.pages
         if self.reason is not None:
             out["extractionReason"] = self.reason
-        if self.method in (METHOD_NONE_SCANNED, METHOD_MIXED):
+        if self.method in (METHOD_NONE_SCANNED, METHOD_MIXED, METHOD_MSG_PARTIAL):
             out["needsHumanRead"] = True
         if self.unread_pages:
             out["unreadPages"] = list(self.unread_pages)
             out["unreadCount"] = len(self.unread_pages)
         if self.transcribed_pages:
             out["transcribedPages"] = list(self.transcribed_pages)
+        if self.unread_attachments:
+            out["unreadAttachments"] = list(self.unread_attachments)
         return out
 
     def unread_note(self) -> str:
-        """The scanned pages not read, said the way a refusal names them."""
+        """The scanned pages (or an email's attachments) not read, said the way
+        a refusal names them."""
+        if self.unread_attachments:
+            return "attachments not read: " + ", ".join(self.unread_attachments)
         return "scanned pages not read: " + ", ".join(str(n) for n in self.unread_pages)
 
 
@@ -262,16 +289,19 @@ def _extract(
     file_extension: str,
     allow_vision: bool,
     allow_cache: bool,
+    depth: int = 0,
 ) -> ExtractResult:
     """The one dispatch both public entry points share, so the mechanical
-    detection can never drift between them."""
+    detection can never drift between them. ``depth`` is how many emails deep
+    this document sits: an attachment is read at depth 1, and no email is
+    opened there (``_msg_result``), so nesting can never recurse."""
     ext = (file_extension or "").lower().lstrip(".")
     if blob.startswith(_PDF_MAGIC) or ext == "pdf":
         return _pdf_result(blob, allow_vision=allow_vision, allow_cache=allow_cache)
     if blob.startswith(_ZIP_MAGIC) and _office_kind(blob) is not None:
         return _office_result(blob, file_name)
     if blob.startswith(OLE_MAGIC):
-        return _msg_result(blob, file_name, allow_cache=allow_cache)
+        return _msg_result(blob, file_name, allow_cache=allow_cache, depth=depth)
     if blob.startswith(_ZIP_MAGIC) and (ext in ("docx", "dotx", "docm", "dotm", "") or _looks_like_docx(blob)):
         return ExtractResult(_docx_text(blob), METHOD_DOCX)
     if ext in ("txt", "text", "md", "csv", "log", "eml"):
@@ -289,19 +319,32 @@ def _extract(
     )
 
 
-def _msg_result(blob: bytes, file_name: str, *, allow_cache: bool) -> ExtractResult:
+#: The attachments one email read opens. Past it each is named, not read, so a
+#: message with thousands of parts cannot make one read unbounded.
+MAX_EMAIL_ATTACHMENTS = 50
+#: The roads whose text is the attachment's own and may stand as record.
+_EMAIL_RECORD_METHODS = (METHOD_PYPDF, METHOD_DOCX, METHOD_PLAIN, METHOD_XLSX)
+#: The marker an attachment gets when a whole PDF or photo read is a scan with
+#: no stored reading.
+_UNREAD_SCAN = "[not read: a scan with no stored reading]"
+
+
+def _msg_result(blob: bytes, file_name: str, *, allow_cache: bool, depth: int = 0) -> ExtractResult:
     """An Outlook email (``msg_read``); any other OLE file, a legacy .doc or
     .xls or an encrypted Office file, is refused by name as it always was.
     Each attachment is read by this module's own roads with no model call (a
     scan is served from the store when ``allow_cache`` allows, else named as
-    not read), so reading one email can never bill a transcription per page."""
-    from .msg_read import MsgAttachment, email_text, is_msg, open_msg
+    not read), so reading one email can never bill a transcription per page.
+    The method says what the attachments were (``METHOD_MSG`` and its two
+    siblings), so a transcription or an unread scan inside an email is never
+    counted as the firm's verbatim record."""
+    from .msg_read import email_text, is_msg, open_msg
 
     name = file_name or "document"
-    if not is_msg(blob):
+    if depth >= 1 or not is_msg(blob):
         # The wording is the refusal's since before emails were read (the reader
         # goldens pin it); an OLE file that is no message lands here, a damaged
-        # .msg included.
+        # .msg included, and so does an email inside an email.
         raise UnsupportedDocumentError(
             f"{name!r} is a legacy Office file (.xls/.doc/.msg) or an encrypted one; needs manual review"
         )
@@ -311,20 +354,58 @@ def _msg_result(blob: bytes, file_name: str, *, allow_cache: bool) -> ExtractRes
         raise UnsupportedDocumentError(
             f"{name!r} is an Outlook email that could not be read; needs manual review"
         ) from exc
+    texts: list[str] = []
+    unread: list[str] = []
+    transcribed = False
+    for n, att in enumerate(fields.attachments):
+        text, kind = _email_attachment(
+            att.name, att.data, att.error, over_cap=n >= MAX_EMAIL_ATTACHMENTS, allow_cache=allow_cache, depth=depth
+        )
+        texts.append(text)
+        if kind == "unread":
+            unread.append(att.name)
+        transcribed = transcribed or kind == "transcribed"
+    text = email_text(fields, texts)
+    if unread:
+        return ExtractResult(text, METHOD_MSG_PARTIAL, unread_attachments=tuple(unread))
+    return ExtractResult(text, METHOD_MSG_TRANSCRIBED if transcribed else METHOD_MSG)
 
-    def attachment_text(att: MsgAttachment) -> str:
-        if att.data is None:
-            return "[not read: could not be read]" if att.error else "[not read: an attached email]"
-        ext = att.name.rsplit(".", 1)[-1] if "." in att.name else ""
-        try:
-            got = _extract(
-                att.data, file_name=att.name, file_extension=ext, allow_vision=False, allow_cache=allow_cache
-            )
-        except UnsupportedDocumentError:
-            return "[not read: no text can be read from this type]"
-        return "[not read: a scan with no stored reading]" if got.method == METHOD_NONE_SCANNED else got.text
 
-    return ExtractResult(email_text(fields, attachment_text), METHOD_MSG)
+def _email_attachment(
+    name: str, data: bytes | None, error: str | None, *, over_cap: bool, allow_cache: bool, depth: int
+) -> tuple[str, str]:
+    """One attachment's text and what it is to the record: ``record`` (its own
+    text layer), ``transcribed`` (a stored machine transcription), ``unread``
+    (could hold record, not read), or ``none`` (cannot be the firm's record:
+    an inline signature image, the Operator's own workbook)."""
+    from .msg_read import INLINE_IMAGE_MIN_BYTES, is_msg
+
+    if over_cap:
+        return f"[not read: past the first {MAX_EMAIL_ATTACHMENTS} attachments]", "unread"
+    if data is None:
+        return ("[not read: could not be read]" if error else "[not read: an attached email]"), "unread"
+    if is_msg(data):
+        return "[not read: an attached email]", "unread"
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if _image_media_type(data, ext) is not None and len(data) < INLINE_IMAGE_MIN_BYTES:
+        return "[not read: an inline image]", "none"
+    try:
+        got = _extract(
+            data, file_name=name, file_extension=ext, allow_vision=False, allow_cache=allow_cache, depth=depth + 1
+        )
+    except UnsupportedDocumentError:
+        return "[not read: no text can be read from this type]", "unread"
+    if got.method == METHOD_XLSX_OPERATOR:
+        return "[not read: the Operator's own workbook]", "none"
+    if got.method == METHOD_NONE_SCANNED:
+        return _UNREAD_SCAN, "unread"
+    if got.method == METHOD_MIXED:
+        return got.text, "unread"
+    if got.method in (METHOD_VISION, METHOD_VISION_CACHED):
+        return got.text, "transcribed"
+    if got.method in _EMAIL_RECORD_METHODS:
+        return got.text, "record"
+    return got.text, "unread"
 
 
 def _image_media_type(blob: bytes, ext: str) -> str | None:
