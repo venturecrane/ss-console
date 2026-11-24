@@ -91,6 +91,10 @@ def test_names_whole_is_code_and_never_a_part() -> None:
     assert not rank.names_whole(_item("the ER visit from the hospital records"), "Hospital records.pdf")
     assert not rank.names_whole(_item("the hospital records", dates=["3/2/2024"]), "Hospital records.pdf")
     assert not rank.names_whole(_item("the records"), "Records.pdf")  # stop words name nothing
+    # A page range in the words is a part, even when the parser left it out of the hints (review 2026-11-24).
+    assert not rank.names_whole(_item("page 3 of the Declaration of Jane Roe"), "Declaration of Jane Roe.pdf")
+    assert not rank.names_whole(_item("pages 12-14 of the Declaration of Jane Roe"), "Declaration of Jane Roe.pdf")
+    assert not rank.names_whole(_item("the 17-page Declaration of Jane Roe 4"), "Declaration of Jane Roe.pdf")
 
 
 def test_a_named_pdf_with_an_active_key_holds_rather_than_going_altered() -> None:

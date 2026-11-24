@@ -468,12 +468,14 @@ class RecordsRun(RunBase):
             for pages, n in assemble.ranges_to_cut(result, fid, owners):
                 counter[n] = k = counter.get(n, 0) + 1
                 source = self.data / "files" / f"{fid}.pdf"
-                if result.get("namedFile"):
-                    # The record named this file: it goes whole and exactly as the
-                    # matter holds it, proved by sha256 (2026-11-24).
-                    blob = source.read_bytes()
-                    if not as_stored(blob) or hashlib.sha256(blob).hexdigest() != files[fid]["sha256"]:
-                        raise RecordsHold("cut_refused: a named file cannot go exactly as the matter holds it")
+                total = int(result.get("pageCount") or 0)
+                whole = result.get("namedFile") and pages in ("", f"1-{total}", "1" if total == 1 else None)
+                blob = source.read_bytes() if whole else b""
+                if whole and as_stored(blob) and hashlib.sha256(blob).hexdigest() == files[fid]["sha256"]:
+                    # The record named this file: it goes whole, exactly as downloaded
+                    # from the matter (2026-11-24). Another record's range on the same
+                    # file is still cut; a named file that cannot go as stored is cut
+                    # whole by the usual path below.
                     span = None
                 else:
                     try:

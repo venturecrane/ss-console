@@ -84,6 +84,10 @@ def is_pdf(row: dict[str, Any]) -> bool:
     return str(row.get("fileExtension") or "").strip().lower().lstrip(".") == "pdf"
 
 
+_PAGE_RANGE = re.compile(r"\bpages?\s+\d", re.I)
+_PAGE_COUNT = re.compile(r"\b(\d+)[\s-]pages?\b", re.I)
+
+
 def names_whole(rec: dict[str, Any], label: Any) -> bool:
     """Does the record NAME the file called ``label`` (a file's name, or its
     folder's), asking for the whole of it? Code, never a model: every word of
@@ -95,12 +99,16 @@ def names_whole(rec: dict[str, Any], label: Any) -> bool:
     hints = rec.get("hints") or {}
     if hints.get("dates") or hints.get("date") or hints.get("pages"):
         return False
+    raw = str(rec.get("asked") or "")
+    if _PAGE_RANGE.search(raw):  # "page 3 of", "pages 12-14": a part, never the whole
+        return False
+    counts = set(_PAGE_COUNT.findall(raw))  # "the 17-page declaration"
     asked = tokens(rec.get("asked")) - STOP - CREDENTIALS
     want = tokens(label) - STOP - CREDENTIALS - {"pdf"}
     if not want or not want <= asked:
         return False
     extra = asked - want - _WHOLE_EXTRA
-    if extra and (extra - {t for t in extra if t.isdigit()} or not asked & {"page", "pages"}):
+    if extra and (extra - {t for t in extra if t.isdigit() and t in counts} or not asked & {"page", "pages"}):
         return False
     return True
 
