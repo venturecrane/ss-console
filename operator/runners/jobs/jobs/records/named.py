@@ -37,6 +37,8 @@ def named_file(run: Any, mid: str, rec: dict[str, Any], files: dict[str, Any]) -
     review rejected the reply."""
     from smokeball_connector import matter_files as mf
 
+    if rec.get("every"):
+        return None  # every document of a kind is never one named file
     try:
         rows, _complete = mf._all_files(run.client, mid)
     except Exception as exc:  # could not look is never "no file is named for it"

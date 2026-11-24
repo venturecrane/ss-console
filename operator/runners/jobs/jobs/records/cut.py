@@ -8,7 +8,7 @@ import hashlib
 from typing import Any
 
 from ..litigation.tools import dump
-from . import assemble, named
+from . import assemble, candidates, named
 from .outcome import RecordsHold
 
 
@@ -55,7 +55,7 @@ def cut(run: Any) -> None:
                     "page_count": count,
                     "sha256": hashlib.sha256(blob).hexdigest(),
                     "size": len(blob),
-                    "name": mf.attachment_name(files[fid].get("name"), span, taken),
+                    "name": mf.attachment_name(candidates.pdf_name(files[fid]), span, taken),
                     "path": str(out.relative_to(run.data)),
                 }
             )

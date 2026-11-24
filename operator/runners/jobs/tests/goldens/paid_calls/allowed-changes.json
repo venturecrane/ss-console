@@ -76,6 +76,17 @@
   "model-facts": [],
   "model-facts-disagreements": [],
   "negotiation": [],
-  "records": [],
-  "records_cap": []
+  "records": [
+    "1.body_sha256",
+    "1.max_tokens",
+    "1.output_format_sha256",
+    "1.seam",
+    "1.stage",
+    "2.body_sha256",
+    "2.max_tokens",
+    "2.output_format_sha256",
+    "2.seam",
+    "2.stage"
+  ],
+  "records_cap": ["0.body_sha256", "0.output_format_sha256"]
 }

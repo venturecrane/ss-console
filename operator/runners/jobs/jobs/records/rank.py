@@ -30,7 +30,8 @@ from typing import Any
 TOP = 8
 STOP = frozenset(
     "a an and any all as at by for from in into me my of on or our please send the their this to with records record "
-    "copy copies file files documents document notes note report reports visit visits".split()
+    "copy copies file files documents document notes note report reports visit visits every each attached attach "
+    "email emails".split()
 )
 CREDENTIALS = frozenset("md m d do psyd phd abpp atr bc faaos faoa dr np pa rn".split())
 _MONTHS = "january february march april may june july august september october november december".split()
@@ -113,12 +114,39 @@ def names_whole(rec: dict[str, Any], label: Any) -> bool:
     return True
 
 
+#: The kinds of matter file a record can be found in: a PDF, and an Outlook
+#: email, which the job turns into a PDF of its own (``emails.py``, 2026-11-24:
+#: an attorney's parent statements sat in 262 emails on the matter).
+EXTENSIONS = frozenset({"pdf", "msg"})
+
+
+def extension(row: dict[str, Any]) -> str:
+    return str(row.get("fileExtension") or "").strip().lower().lstrip(".")
+
+
+def _stem(token: str) -> str:
+    """A word without a plural ``s``, so "statements" meets "statement"."""
+    return token[:-1] if len(token) > 3 and token.endswith("s") and not token.endswith("ss") else token
+
+
+def text_matches(text: Any, rec: dict[str, Any]) -> int:
+    """How many of the record's words a text carries (an email's subject and
+    body, or a file's name), when it carries every one of them (plurals aside),
+    else 0. Code, no model: the candidates the page finder is then paid to read."""
+    provider, asked, dates = _words(rec)
+    want = {_stem(t) for t in provider | asked}
+    have = {_stem(t) for t in tokens(text)}
+    if not want or not want <= have:
+        return 0
+    return len(want) + len(dates & tokens(text))
+
+
 def rank(rows: list[dict[str, Any]], rec: dict[str, Any], top: int = TOP) -> list[tuple[str, int]]:
-    """``[(file_id, score)]`` for the matter's PDFs that score above 0, best
-    first (smaller file, then id, breaking a tie), at most ``top``."""
+    """``[(file_id, score)]`` for the matter's PDFs and emails that score above
+    0, best first (smaller file, then id, breaking a tie), at most ``top``."""
     scored = []
     for row in rows:
-        if str(row.get("fileExtension") or "").strip().lower().lstrip(".") != "pdf" or not row.get("id"):
+        if extension(row) not in EXTENSIONS or not row.get("id"):
             continue
         s = score(row.get("name"), rec)
         if s > 0:
@@ -126,4 +154,17 @@ def rank(rows: list[dict[str, Any]], rec: dict[str, Any], top: int = TOP) -> lis
     return [(fid, -neg) for neg, _size, fid in sorted(scored)[:top]]
 
 
-__all__ = ["CREDENTIALS", "STOP", "TOP", "date_tokens", "is_pdf", "names_whole", "rank", "score", "tokens"]
+__all__ = [
+    "CREDENTIALS",
+    "EXTENSIONS",
+    "STOP",
+    "TOP",
+    "date_tokens",
+    "extension",
+    "is_pdf",
+    "names_whole",
+    "rank",
+    "score",
+    "text_matches",
+    "tokens",
+]
