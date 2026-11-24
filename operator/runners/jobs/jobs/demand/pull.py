@@ -70,24 +70,8 @@ def addresses(raw: Any) -> list[str]:
     return [a.lower() for a in _ADDR.findall(str(raw or ""))]
 
 
-#: An Exchange-internal (X500) address, ``/O=EXCHANGELABS/OU=.../CN=...``. It has
-#: no domain, so ``addresses`` finds nothing in it.
-_X500 = re.compile(r"/o=[^<>;,]*", re.I)
-INTERNAL_ADDRESS = "internal Exchange address"
-
-
-def party_text(raw: Any) -> str:
-    """A From/To/Cc value as a person reading the email sees it: display names
-    kept, an X500 address named as internal. For the TEXT a model reads only;
-    the wall decides on ``addresses``, never on this.
-
-    WHY (2026-10-21): the email head rendered only the SMTP addresses the regex
-    found, so every display name was dropped and a sender stored as an X500
-    address became a blank ``From:``. The ``.eml`` reader always rendered the
-    full header. The negotiation review's first check is who sent the email to
-    whom; on A&P it held seven ``.msg`` offers on that check in one run and
-    passed four of them on a re-read of the same text."""
-    return " ".join(_X500.sub(INTERNAL_ADDRESS, str(raw or "")).split())[:500]
+# ``party_text`` (a From/To/Cc value as a reader sees it, an X500 address named
+# as internal) lives with the one email reader, ``smokeball_connector.msg_read``.
 
 
 def head_parties(msg: dict[str, Any]) -> tuple[str, str]:
@@ -180,42 +164,26 @@ RETRY_PAUSE_SECONDS = matter_pull.RETRY_PAUSE_SECONDS
 
 # ---- emails ----------------------------------------------------------------------
 def _open_msg(path: Path) -> dict[str, Any] | None:
-    """The email's fields, or None when it cannot be read. A body stored in a
-    legacy code page (cp1252 curly quotes, read live 2026-10-06 on a trial
-    matter) raises inside extract_msg; the second attempt names the encoding."""
-    for encoding in (None, "cp1252"):
-        try:
-            return _read_msg(path, encoding)
-        except Exception:  # noqa: BLE001 - an unreadable container is reported by name, never guessed at
-            continue
-    return None
+    """The email's fields, or None when it cannot be read. The connector's
+    reader (``smokeball_connector.msg_read``, the one reader of a saved email)
+    retries a body stored in a legacy code page in cp1252 (cp1252 curly quotes,
+    read live 2026-10-06 on a trial matter)."""
+    from smokeball_connector.msg_read import open_msg, party_text
 
-
-def _read_msg(path: Path, encoding: str | None) -> dict[str, Any]:
-    import extract_msg
-
-    m = extract_msg.Message(str(path), **({"overrideEncoding": encoding} if encoding else {}))
     try:
-        atts = []
-        for att in m.attachments:
-            data = getattr(att, "data", None)
-            if isinstance(data, bytes):
-                atts.append((att.longFilename or att.shortFilename or "unnamed", data))
-        return {
-            "subject": str(m.subject or "")[:200],
-            "sender": (addresses(m.sender) or [""])[0],
-            "recipients": addresses(m.to) + addresses(m.cc) + addresses(getattr(m, "bcc", "")),
-            "from_display": party_text(m.sender),
-            "to_display": "; ".join(p for p in map(party_text, (m.to, m.cc, getattr(m, "bcc", ""))) if p),
-            "date": str(m.date or ""),
-            "body": str(m.body or ""),
-            "attachments": atts,
-        }
-    finally:
-        try:
-            m.close()
-        except Exception:  # noqa: BLE001 - closing must not mask what was read
-            pass
+        m = open_msg(str(path))
+    except Exception:  # noqa: BLE001 - an unreadable container is reported by name, never guessed at
+        return None
+    return {
+        "subject": m.subject[:200],
+        "sender": (addresses(m.sender) or [""])[0],
+        "recipients": addresses(m.to) + addresses(m.cc) + addresses(m.bcc),
+        "from_display": party_text(m.sender),
+        "to_display": "; ".join(p for p in map(party_text, (m.to, m.cc, m.bcc)) if p),
+        "date": m.date,
+        "body": m.body,
+        "attachments": [(a.name, a.data) for a in m.attachments if isinstance(a.data, bytes)],
+    }
 
 
 def _email_text(row: dict[str, Any], msg: dict[str, Any]) -> str:

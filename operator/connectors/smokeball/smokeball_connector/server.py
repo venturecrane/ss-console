@@ -1098,7 +1098,7 @@ def get_file(matter_id: str, file_id: str) -> Any:
 
 @server.tool()
 def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: int = 0) -> Any:
-    """Return a matter document's extracted TEXT (PDF, DOCX, Excel, or plain text) so
+    """Return a matter document's extracted TEXT (PDF, DOCX, Excel, an Outlook email, or plain text) so
     document-reading skills — served-discovery capture, deficiency review,
     separate-statement assembly, document review — can actually read matter
     files. Before this tool existed the connector could only mint a presigned
@@ -1127,7 +1127,11 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     row per line, cells separated by `` | ``; ``[formula, no saved value]`` is a
     formula the file never computed (a gap, never a zero). ``xlsx_operator`` is a
     workbook the Operator itself built with ``add_workbook``: its figures are
-    the Operator's, not the firm's record.
+    the Operator's, not the firm's record. ``msg`` is an Outlook email saved in
+    the matter: an ``Email:``/``From:``/``To:``/``Cc:``/``Date:``/``Attachments:``
+    head, the body, then each attachment's text under ``[Attachment N of M: name]``.
+    An attachment with no text this read can give (a scan nobody has transcribed,
+    an attached email, a type with no reader) says ``[not read: ...]`` there.
     ``vision``/``vision_cached`` is a MACHINE TRANSCRIPTION of a scan, or of a
     photograph of a document (JPEG/PNG/GIF/WEBP: an insurance card, a driver
     license, an estimate; a HEIC photo is refused by name), that no human has read: cite it as a transcription, never as the document verbatim

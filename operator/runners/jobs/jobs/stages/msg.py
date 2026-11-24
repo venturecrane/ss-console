@@ -223,36 +223,21 @@ class _Index:
             ids.append(container_id)
 
 
-#: The code page a legacy Outlook message is retried in when its strings do
-#: not decode as declared (2026-10-23, A&P matter 202098: one email's text
-#: carried a cp1252 en dash, byte 0x96, and the whole chronology job died at
-#: index_msg). ``demand/pull._open_msg`` reads emails the same way.
-FALLBACK_ENCODING = "cp1252"
-
-
-def _read_one(rec: dict[str, Any], encoding: str | None) -> tuple[str, list[tuple[str, Any]], list[dict[str, Any]]]:
+def _read_one(rec: dict[str, Any]) -> tuple[str, list[tuple[str, Any]], list[dict[str, Any]]]:
     """One email in full before anything is indexed: (subject, [(name, data)],
-    attachment errors). Reading it whole first means a retry in another
-    encoding never indexes half an email twice."""
-    import extract_msg
+    attachment errors). The connector's reader (``smokeball_connector.msg_read``,
+    the one reader of a saved email) opens it whole, and retries it once in
+    cp1252 when its strings do not decode (2026-10-23, A&P matter 202098: one
+    email's subject carried a cp1252 en dash, byte 0x96, and the whole
+    chronology job died at index_msg), so a retry never indexes half an email
+    twice. An attached email comes back with no bytes and is named, not opened."""
+    from smokeball_connector.msg_read import open_msg
 
-    m = extract_msg.Message(rec["path"], **({"overrideEncoding": encoding} if encoding else {}))
-    try:
-        subject = (m.subject or rec["name"])[:120]
-        atts: list[tuple[str, Any]] = []
-        errs: list[dict[str, Any]] = []
-        for att in m.attachments:
-            name = att.longFilename or att.shortFilename or "unnamed"
-            try:
-                atts.append((name, att.data))
-            except Exception as exc:  # noqa: BLE001 - an attachment whose payload cannot be read is recorded as that attachment's error; the rest are still indexed
-                errs.append({"email": subject, "attachment": name, "error": str(exc)[:120]})
-        return subject, atts, errs
-    finally:
-        try:
-            m.close()
-        except Exception:  # noqa: BLE001 - closing the message in finally must not mask an error already recorded for it
-            pass
+    m = open_msg(str(rec["path"]))
+    subject = (m.subject or rec["name"])[:120]
+    atts: list[tuple[str, Any]] = [(a.name, a.data) for a in m.attachments if a.error is None]
+    errs = [{"email": subject, "attachment": a.name, "error": a.error} for a in m.attachments if a.error is not None]
+    return subject, atts, errs
 
 
 def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str, str]) -> tuple[_Index, int]:
@@ -260,14 +245,11 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
     msgs = [r for r in pulled if r.get("ok") and r.get("path")]
     for n, rec in enumerate(msgs, 1):
         if (rec.get("ext") or "").lower() in ENCRYPTED_EXT:
-            ix.add_standalone_encrypted(rec)  # not OLE2; extract_msg cannot open it
+            ix.add_standalone_encrypted(rec)  # not OLE2; the reader cannot open it
             continue
         try:
-            try:
-                subject, atts, errs = _read_one(rec, None)
-            except UnicodeDecodeError:
-                subject, atts, errs = _read_one(rec, FALLBACK_ENCODING)
-        except Exception as exc:  # noqa: BLE001 - an email extract_msg cannot read in either encoding is recorded as that email's error; the loop continues
+            subject, atts, errs = _read_one(rec)
+        except Exception as exc:  # noqa: BLE001 - an email the reader cannot open in either encoding is recorded as that email's error; the loop continues
             ix.errors.append({"email": rec["name"], "error": str(exc)[:160]})
             continue
         ix.errors.extend(errs)
@@ -276,7 +258,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
         container = str(rec.get("name") or "") + str(rec.get("ext") or "")
         for name, data in atts:
             if not isinstance(data, bytes):
-                # A nested .msg comes back as a Message and is not opened; it
+                # A nested .msg comes back with no bytes and is not opened; it
                 # is named in the limitations like any attachment not opened.
                 ix.counts["other"] += 1
                 ix.dropped.append({"kind": "other", "attachment": name, "bytes": 0, "email": subject})

@@ -15,6 +15,9 @@ dependencies = [
     # The format renderer reads the firm's document-library location off the
     # seat's live customer.yaml (the registered config-as-data shape); pure Python.
     "pyyaml>=6",
+    # read_document reads an Outlook .msg saved in a matter (msg_read.py): the
+    # same reader, at the same pin, as the job lanes' email stages.
+    "extract-msg>=0.48",
 ]
 
 # The console-script the overlay registry launches as `command` (absolute path to
