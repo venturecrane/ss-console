@@ -484,3 +484,53 @@ def test_a_v1_table_gains_the_new_columns_and_keeps_its_rows(tmp_path: Path) -> 
     NoteLedger(str(db))  # a second construction finds the columns present
     row = led.read("OLD")
     assert row["trigger"] == "request" and row["subject"] is None and row["text"] == "x"
+
+
+# -- a number the requester wrote as a range or run together (A&P 2026-11-23) --
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Reduce the special rogs to the most important 120125",
+        "Reduce the special rogs to the most important 120-125",
+        "Reduce the special rogs to the most important 120 to 125",
+    ],
+)
+def test_a_number_read_from_the_requesters_range_corroborates(tmp_path: Path, body: str) -> None:
+    """FALSIFIER: before the range readings, "120" was refused because the
+    email carries only "120125" (or 120 and 125, never 122)."""
+    broker, _ = _seat(tmp_path, subject="Matter 900417", body={"contentType": "text", "content": body})
+    assert (
+        _preview(broker, text="The special interrogatories on matter 900417 are cut to the 120 most important.")[
+            "accepted"
+        ]
+        is True
+    )
+    assert (
+        _preview(broker, text="The special interrogatories on matter 900417 are cut to the 122 most important.")[
+            "accepted"
+        ]
+        is True
+    )
+
+
+@pytest.mark.parametrize(
+    "body, number",
+    [
+        ("Reduce the special rogs to the most important 120125", "130"),
+        ("Call me at 602-555-1234 about matter 900417", "700"),
+        ("Matter 900417, hearing 06-08-2026", "900"),
+        ("Matter 900417: keep the most important 125120", "121"),
+    ],
+)
+def test_a_number_outside_any_range_the_requester_wrote_is_refused(tmp_path: Path, body: str, number: str) -> None:
+    broker, _ = _seat(tmp_path, subject="Matter 900417", body={"contentType": "text", "content": body})
+    out = _preview(broker, text=f"Matter 900417: cut to the {number} most important.")
+    assert out["accepted"] is False and number in out["reason"]
+
+
+def test_the_readings_of_a_run_together_figure() -> None:
+    runs, ranges = note_identifiers.anchor_numbers("the most important 120125")
+    assert {"120", "125", "120125"} <= runs and (120, 125) in ranges
+    assert note_identifiers.anchor_numbers("keep 125120")[1] == []

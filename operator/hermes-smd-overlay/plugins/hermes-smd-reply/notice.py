@@ -144,11 +144,16 @@ _REASON_HINTS: dict[str, str] = {
         "reply is still yours. Draft it again without the phrase below, in the "
         "person's terms: what they asked, and what they will get."
     ),
+    "firm_question": (
+        "The reply asked the firm a question. Nothing was sent and the one reply "
+        "is still yours. Draft it again as statements of what you did or will do, "
+        "as described below."
+    ),
 }
 
 #: Holds whose guidance stands on every attempt: the redraft that clears them is
 #: named exactly, so "do not redraft" on a second hold would be the wrong advice.
-_EXACT_REDRAFT_REASONS = frozenset({"fixed_wording", "mechanics_named"})
+_EXACT_REDRAFT_REASONS = frozenset({"fixed_wording", "mechanics_named", "firm_question"})
 #: The detail of a fixed-wording hold past the relay's redraft cap (relay_checks
 #: step 5a, every seat): the one case "draft it again" is the wrong advice.
 FIXED_WORDING_STOP = (
@@ -159,6 +164,12 @@ FIXED_WORDING_STOP = (
 MECHANICS_STOP = (
     "mechanics_named: nothing was sent. This reply has been held too many times for describing "
     "how the work is done. Do not draft it again; SMD has been told."
+)
+#: The same, for a reply to firm staff held too often for asking them a
+#: question (relay_checks step 5b).
+FIRM_QUESTION_STOP = (
+    "firm_question: nothing was sent. This reply has been held too many times for asking the firm a "
+    "question. Do not draft it again; SMD has been told."
 )
 _STOP_GUIDANCE = "Do not draft this reply again."
 #: How the relay's step-5a refusal begins (``shared.turn_says.REFUSAL_LEAD``,
@@ -219,7 +230,7 @@ def render(notice: HoldNotice) -> str:
         return _SENT_TRACE_INCOMPLETE_TEXT.format(recipient=recipient)
     exact = reason in _EXACT_REDRAFT_REASONS
     if exact:
-        stopped = notice.detail in (FIXED_WORDING_STOP, MECHANICS_STOP)
+        stopped = notice.detail in (FIXED_WORDING_STOP, MECHANICS_STOP, FIRM_QUESTION_STOP)
         paragraphs = reason == "fixed_wording" and notice.detail.startswith(SAY_REFUSAL_LEAD)
         hint = _REASON_HINTS["fixed_wording_paragraphs" if paragraphs else reason]
         guidance = _STOP_GUIDANCE if stopped else hint
@@ -236,7 +247,8 @@ def render(notice: HoldNotice) -> str:
     )
     detail = _sanitize(notice.detail, _MAX_EXACT_DETAIL_LEN if exact else _MAX_DETAIL_LEN)
     if detail:
-        text += f" {'The broker says' if exact else 'What to correct'}: {detail}"
+        said = "The broker says" if exact and reason != "firm_question" else "What to correct"
+        text += f" {said}: {detail}"
     return text
 
 

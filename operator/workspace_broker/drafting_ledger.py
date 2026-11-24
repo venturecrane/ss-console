@@ -382,6 +382,26 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
         finally:
             conn.close()
 
+    def delivered_for_refs(self, refs: list[str], since: str) -> list[dict[str, Any]]:
+        """Jobs delivered at or after ``since`` for any of these request emails
+        (internet message ids), oldest first (``thread_recent``)."""
+        wanted = [r for r in refs if isinstance(r, str) and r][:50]
+        if not wanted:
+            return []
+        conn = self._connect()
+        try:
+            return [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT updated_at, document_class, matter_number, delivery_json FROM drafting_jobs "
+                    "WHERE state='delivered' AND updated_at >= ? "
+                    "AND request_ref IN (SELECT value FROM json_each(?)) ORDER BY updated_at ASC LIMIT 20",
+                    (since, json.dumps(wanted)),
+                )
+            ]
+        finally:
+            conn.close()
+
     def proven_files(self, job_id: str) -> list[dict[str, Any]] | None:
         """The delivered job's filed files, each {role, file_id, name, size,
         sha256}: the names and roles from the job's own delivery report, the

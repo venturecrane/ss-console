@@ -34,6 +34,7 @@ from shared import (
     advertising_gate,
     champion,
     champion_audience,
+    firm_question,
     inbound,
     matter_file_facts,
     matter_file_reply,
@@ -361,6 +362,8 @@ def body_and_facts(
         return None
     if mechanics_held(origin, reply_to, send_text, send_html):
         return None
+    if question_held(cfg, origin, bound, reply_to, send_text, send_html, say):
+        return None
     if facts is not None and not facts_hold:
         # The invariant, checked on the body that would go: no marker, and
         # the facts block present whenever there is one.
@@ -511,6 +514,66 @@ def mechanics_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -
     )
     if hold is not None:
         _plugin._held(MECHANICS_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
+    return hold is not None
+
+
+# --------------------------------------------------------------------------
+# 5b. A reply to firm staff asks them nothing (2026-11-23)
+# --------------------------------------------------------------------------
+#
+# The standing rule (the Captain, after A&P 2026-11-23): any message we cause in
+# an attorney's thread asks nothing. An in-turn reply on a law-firm seat that
+# asks its reader a question, or offers choices (``shared.firm_question``), is
+# held and redrafted as statements: the most reasonable reading, done and
+# stated, or ``firm_question.LOOK_INTO`` alone, which pages SMD when it goes.
+# Its own redraft counter; past the cap the reply stays held, and the hold
+# pages SMD as ``reply_held:firm_question``.
+#
+# Not checked: a bound reply (a job's delivery, an SMD note, a chronology
+# hold's one question: words the broker or a job wrote), a reply to SMD's own
+# address, a seat of any other vertical, and every line of the turn's required
+# blocks (code's words).
+#
+# Skills that told the model to ask the firm a question on purpose, as of this
+# check (each now gets the redraft): demand-letter-drafter, document-drafter,
+# litigation-status and case-file-manager ("reply asking which matter"),
+# file-work-requests (which plaintiff), medical-chronology-maintainer (which
+# date of birth or incident date), combined-post-intake and
+# vendor-invoice-intake (which matter). None is allowed past it: the rule has
+# no exception, and "which matter" becomes the most reasonable reading or the
+# look-into sentence with SMD paged.
+
+#: The hold reason, its own counter and cap (``firm_question.MAX_REDRAFTS``),
+#: and the detail past the cap.
+QUESTION_HOLD_REASON = "firm_question"
+_QUESTION_HOLDS = held_notice.HoldCounter()
+QUESTION_MAX_REDRAFTS = firm_question.MAX_REDRAFTS
+QUESTION_STOP_DETAIL = notice.FIRM_QUESTION_STOP
+
+
+def question_held(
+    cfg: Any,
+    origin: Any,
+    bound: Any,
+    reply_to: Any,
+    send_text: str,
+    send_html: str,
+    say: Any = None,
+) -> bool:
+    """Step 5b: hold an in-turn reply to firm staff that asks them something.
+    False to go on."""
+    hold = firm_question.hold(
+        cfg.vertical,
+        bound is not None,
+        reply_to,
+        send_text,
+        send_html,
+        say,
+        lambda: _QUESTION_HOLDS.note(origin.message_id),
+        QUESTION_STOP_DETAIL,
+    )
+    if hold is not None:
+        _plugin._held(QUESTION_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
     return hold is not None
 
 

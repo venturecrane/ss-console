@@ -45,6 +45,10 @@ REPLY_HOLD_REASONS = frozenset(
         # turn", "drafting job"; ``shared.turn_says.TIER1_PHRASES``), held on
         # every turn and counted apart from fixed_wording (review 2026-11-19).
         "mechanics_named",
+        # A reply to firm staff that asks them a question or offers choices
+        # (``shared.firm_question``, 2026-11-23): held for the redraft that
+        # states what will be done; past its cap it stays held.
+        "firm_question",
     }
 )
 

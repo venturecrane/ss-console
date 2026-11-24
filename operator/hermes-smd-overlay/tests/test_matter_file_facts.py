@@ -309,7 +309,9 @@ def test_lane_a_searched_turn_with_no_files_still_waits_for_review(lane, monkeyp
     _review_first(mod)
     _email()
     _find_call(mod, _finding(unreadable=24, not_reached=57))
-    notice = _reply(mod, f"Here is what we found.\n\n{facts.MARKER}\n\nWhich visit did you mean?")
+    notice = _reply(
+        mod, f"Here is what we found.\n\n{facts.MARKER}\n\nThe visit notes are on the matter."
+    )
     assert sent == [] and "matter_files_review" in notice
     (row,) = rev.rows()
     assert row["batches"] == [] and row["matter_id"] == MATTER
@@ -324,7 +326,7 @@ def test_lane_without_review_a_searched_no_files_reply_sends_with_its_facts(lane
     mod, _d1, sent, _spool, _b = lane
     _email()
     _find_call(mod, _finding())
-    assert _reply(mod, "Here is what we found.\n\nWhich visit did you mean?") is None
+    assert _reply(mod, "Here is what we found.\n\nThe visit notes are on the matter.") is None
     (out,) = sent
     assert "Not found:\n- the discharge summary: not found in Hospital records" in out["comment"]
 
@@ -536,7 +538,9 @@ def test_lane_no_reply_sends_with_the_marker_or_without_its_facts(
     version = {"old_bundle": None, "newer_bundle": 3}.get(case, 2)
     _find_call(mod, _finding(version=version))
     _stage_pages(mod, spool, [("1-5" if case == "range_not_reported" else "1-4", 4)])
-    notice = _reply(mod, f"Here are the records.\n\n{facts.MARKER}\n\nAnything else?")
+    notice = _reply(
+        mod, f"Here are the records.\n\n{facts.MARKER}\n\nThat is everything the matter holds."
+    )
     assert "output_checklist" not in (notice or "")
     for row in rev.rows():
         assert facts.MARKER not in row["text"]
