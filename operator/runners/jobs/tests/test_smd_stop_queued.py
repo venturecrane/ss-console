@@ -81,7 +81,8 @@ def test_stop_ends_a_job_held_for_its_lane_proof_and_it_never_runs(tmp_path, rea
     assert "ledger_recorded=True" in out
     jd = lane.job_dir(jid)
     assert not (lane.queue / f"{jid}.json").exists() and (jd / smd_stop.ENVELOPE).is_file()
-    assert client.records[-1] == (jid, "failed", {"reason": "stopped_by_smd: by scott: answered by hand"})
+    # A job that never ran made no paid call: its spend is $0, priced without a rate card (2026-11-24).
+    assert client.records[-1] == (jid, "failed", {"reason": "stopped_by_smd: by scott: answered by hand", "cents": 0})
     st = lane._daemon_state(jid)
     assert st["state"] == "stopped_by_smd" and not st.get("claimed") and not st.get("wake")
     assert lane_proof.holds(lane.run_dir) == [], "the hold is set aside, not left waiting on a proof"

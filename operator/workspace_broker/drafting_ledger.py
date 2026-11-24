@@ -35,13 +35,26 @@ THE SUBMIT ENVELOPE (``validate_envelope``), the verb payload:
                                                         completion reply threads to
     request_text      str (<= 20000)                    the request verbatim
     document_class    one of DOCUMENT_CLASSES
+    cap_cents         int > 0, optional, ROOT ONLY      SMD's cost cap for this one
+                                                        job, in cents. It can only
+                                                        LOWER the firm's per-job
+                                                        cap: the runner refuses the
+                                                        job before any paid call
+                                                        when it is above it (the
+                                                        firm file is the runner's,
+                                                        root:jobs 0640, unreadable
+                                                        here). Absent: the firm's
+                                                        cap alone (2026-11-24, a
+                                                        $35 cap SMD could enforce
+                                                        only by watching).
 
 THE QUEUE FILE (``<queue>/<job_id>.json``), the runner's input, is the FLAT
 shape the runner is built to (``queue_record``)::
 
     {"kind": "drafting", "job_id", "matter_id", "matter_number",
      "document_class", "requester", "message_ref", "request_text",
-     "file_to_matter_id" | null, "file_to_matter_number" | null}
+     "file_to_matter_id" | null, "file_to_matter_number" | null,
+     "cap_cents"?: int}                    (only when the envelope set one)
 
 THE ALLOWANCE is a COUNT of drafts per billing cycle (the firm's authored
 ``drafting_allowance_per_cycle``), on the chronology cycle's anchor, counted
@@ -101,6 +114,8 @@ ALLOWANCE_KEY = "drafting_allowance_per_cycle"
 CLASSES_KEY = "enabled_classes"
 SKILL_NAME = "document-drafter"
 MAX_REQUEST_TEXT = 20_000
+#: The envelope's optional per-job cost cap, in cents (``validate_envelope``).
+CAP_KEY = "cap_cents"
 
 _UUID = re.compile(r"^[0-9a-fA-F-]{32,40}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
@@ -200,10 +215,15 @@ def _matter(raw: Any, field: str) -> dict[str, str]:
 def validate_envelope(req: Any) -> dict[str, Any]:
     """The submit envelope, normalized, or ``EnvelopeError``."""
     keys = {"matter", "file_to", "requested_by", "request_ref", "request_text", "document_class"}
-    if not isinstance(req, dict) or not keys <= set(req) <= keys | {"attachments", "revise_of"}:
+    # The sentence is the model's to correct its call by; cap_cents, root's own,
+    # is left out of it (the frozen verb goldens hold its wording).
+    if not isinstance(req, dict) or not keys <= set(req) <= keys | {"attachments", "revise_of", CAP_KEY}:
         raise EnvelopeError(
             f"a drafting envelope carries exactly {sorted(keys)}, and optionally attachments (and, from root, revise_of)"
         )
+    cap = req.get(CAP_KEY)
+    if CAP_KEY in req and not (isinstance(cap, int) and not isinstance(cap, bool) and cap > 0):
+        raise EnvelopeError(f"{CAP_KEY} must be a whole number of cents above zero when present")
     if "revise_of" in req and not (isinstance(req["revise_of"], str) and _ULID.match(req["revise_of"])):
         raise EnvelopeError("revise_of must be the delivered drafting job's id")
     try:
@@ -234,6 +254,8 @@ def validate_envelope(req: Any) -> dict[str, Any]:
     }
     if attachments:  # absent unless the request email carried Word documents
         out["attachments"] = attachments
+    if CAP_KEY in req:  # absent unless SMD capped this one job
+        out[CAP_KEY] = cap
     return out
 
 
@@ -242,7 +264,9 @@ def queue_record(env: dict[str, Any], job_id: str, revise: dict[str, Any] | None
     plus ``revise`` (the broker's resolution of the brief to revise) when the
     job revises a delivered brief."""
     file_to = env["file_to"]
-    extra = {"attachments": env["attachments"]} if env.get("attachments") else {}
+    extra: dict[str, Any] = {"attachments": env["attachments"]} if env.get("attachments") else {}
+    if CAP_KEY in env:
+        extra[CAP_KEY] = env[CAP_KEY]
     if revise is not None:
         extra["revise"] = revise
     return {

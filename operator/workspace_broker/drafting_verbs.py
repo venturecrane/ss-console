@@ -64,6 +64,7 @@ from .drafting_threads import ThreadUnknown, graph_thread_of
 from .drafting_ledger import (
     ALLOWANCE_KEY,
     AUDIT_TYPE,
+    CAP_KEY,
     CLASS_LABEL,
     CLASSES_KEY,
     DOCUMENT_CLASSES,
@@ -161,6 +162,7 @@ REFUSAL_OUR_CODES = frozenset(
         "admins_unreadable",
         "filing_target",
         "revise_of_root_only",
+        "cap_root_only",
         "revise_of_unknown",
         "mailbox_unanswered",
         "prior_unidentified",
@@ -376,6 +378,11 @@ class DraftingVerbs:
         except EnvelopeError as exc:
             return refused(str(exc), "envelope_invalid")
         revise_of = str(raw.get("revise_of") or "") if isinstance(raw, dict) else ""
+        # SMD's per-job cost cap is SMD's act: the overlay's envelope never
+        # carries it, and a caller that is not root may not set one (a cap set
+        # by the agent could stop a firm's job short).
+        if CAP_KEY in envelope and peer_uid != 0:
+            return refused(f"{CAP_KEY} is accepted from root only; nothing was queued", "cap_root_only")
         settings = drafting_skill_settings(self.customer_yaml)
         if settings is None:
             return refused(

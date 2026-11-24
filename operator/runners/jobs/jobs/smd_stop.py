@@ -82,6 +82,8 @@ logger = logging.getLogger("jobs.daemon")
 MARKER = stop_request.SMD_NAME
 STATE = "stopped_by_smd"
 REASON_PREFIX = "stopped_by_smd:"
+#: Said in a stop's ledger reason when its spend could not be priced, with the cause.
+SPEND_UNKNOWN = "spend unknown"
 GRACE_ENV = "SMD_JOB_STOP_GRACE_SECONDS"
 #: How long a stopped child gets to reach its own checkpoint before the
 #: daemon terminates it. Long enough for an in-flight call to come back (its
@@ -152,34 +154,51 @@ def finish(d: Any, job_id: str, code: int, out: str) -> bool:
         return False
     from .broker_client import BrokerError
 
-    cents = spend.priced_cents(jd, d.LANE)
+    cents, unknown = spend.priced(jd, d.LANE)
     recorded = True
     try:
         d.broker.record(
             job_id,
             "failed",
-            {**_fields(req, cents), **run_record.fields_for(d, "stop", by="smd", code="stopped_by_smd")},
+            {**_fields(req, cents, unknown), **run_record.fields_for(d, "stop", by="smd", code="stopped_by_smd")},
         )
     except (BrokerError, ValueError) as exc:
         recorded = False
         logger.error("could not record SMD's stop of %s job %s: %s (the state file keeps it)", d.LANE, job_id, exc)
-    _write_stopped(d, job_id, req, code=code, cents=cents, recorded=recorded)
+    _write_stopped(d, job_id, req, code=code, cents=cents, unknown=unknown, recorded=recorded)
     logger.warning("%s job %s stopped by SMD (exit %s); final, never resumed", d.LANE, job_id, code)
     return True
 
 
-def _fields(req: dict[str, Any], cents: int | None) -> dict[str, Any]:
-    fields: dict[str, Any] = {"reason": reason_of(req)}
+def _fields(req: dict[str, Any], cents: int | None, unknown: str | None = None) -> dict[str, Any]:
+    """The ledger row's fields. A spend that cannot be read is said in the
+    reason (``spend unknown: <cause>``), never left out silently: the row's
+    ``cents`` then stays what the lane last recorded, and the reason says why
+    it is not the stop's figure (2026-11-24, ashton-price: no rate card)."""
+    reason = reason_of(req)
+    if cents is None:
+        reason = f"{reason}; {SPEND_UNKNOWN}: {unknown or 'not read'}"[:500]
+    fields: dict[str, Any] = {"reason": reason}
     if cents is not None:
         fields["cents"] = cents
     return fields
 
 
 def _write_stopped(
-    d: Any, job_id: str, req: dict[str, Any], *, code: int | None, cents: int | None, recorded: bool
+    d: Any,
+    job_id: str,
+    req: dict[str, Any],
+    *,
+    code: int | None,
+    cents: int | None,
+    recorded: bool,
+    unknown: str | None = None,
 ) -> None:
+    # Said only when the figure could not be read, so a priced stop's state is unchanged.
+    said = {} if cents is not None else {"stopped_spend_unknown": unknown or "not read"}
     d._write_state(
         job_id,
+        **said,
         state=STATE,
         finished_at=d.clock(),
         reason=reason_of(req),
@@ -285,12 +304,12 @@ def _record_unclaimed(d: Any, job_id: str, st: dict[str, Any]) -> bool:
 
     jd = d.job_dir(job_id)
     req = read(jd) or {"by": "unknown", "why": "unreadable stop request"}
-    cents = spend.priced_cents(jd, d.LANE)
+    cents, unknown = spend.priced(jd, d.LANE)
     try:
         d.broker.record(
             job_id,
             "failed",
-            {**_fields(req, cents), **run_record.fields_for(d, "stop", by="smd", code="stopped_by_smd")},
+            {**_fields(req, cents, unknown), **run_record.fields_for(d, "stop", by="smd", code="stopped_by_smd")},
         )
         recorded = True
     except (BrokerError, ValueError) as exc:
@@ -306,7 +325,7 @@ def _record_unclaimed(d: Any, job_id: str, st: dict[str, Any]) -> bool:
         # there is nothing left to record, only the state to close.
         recorded = False
         logger.warning("%s job %s: its ledger row is already %s; closed here", d.LANE, job_id, row.get("state"))
-    _write_stopped(d, job_id, req, code=None, cents=cents, recorded=recorded)
+    _write_stopped(d, job_id, req, code=None, cents=cents, unknown=unknown, recorded=recorded)
     lane_proof.set_aside_hold(d, job_id, jd / HOLD_KEPT)
     logger.warning(
         "%s job %s stopped by SMD while not running (was %s); final, never claimed",

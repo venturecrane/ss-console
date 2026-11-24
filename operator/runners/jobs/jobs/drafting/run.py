@@ -146,6 +146,17 @@ def rules_for_job(run: Any) -> dict[str, Any]:
     return {} if run.job.revise else firm_rules.start(run)
 
 
+#: What a cap hold calls the cost cap SMD set for this one job (the envelope's
+#: ``cap_cents``). The firm's guard keeps its own words.
+JOB_CAP_LABEL = "the cost cap SMD set for this job"
+#: The refusal of a job whose SMD cap is above the firm's ``per_job_cap_usd``:
+#: a per-job cap only lowers the firm's, so the job runs nothing and SMD resubmits.
+CAP_OVER_FIRM = (
+    "per_job_cap_usd: the cost cap SMD set for this job is above the firm's per-job cost cap; "
+    "the package was not started"
+)
+
+
 class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
     def __init__(
         self,
@@ -171,10 +182,15 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
         self.data.mkdir(parents=True, exist_ok=True)
         self.log = log
         b = self.firm.data["budget"]
+        firm_cap = float(b["per_job_cap_usd"])
+        #: Set when SMD's per-job cap is above the firm's: ``run`` refuses before anything is paid.
+        self.cap_over_firm = self.job.cap_cents is not None and self.job.cap_cents / 100 > firm_cap
+        smd_cap = self.job.cap_cents is not None and not self.cap_over_firm
         session = paid.open_session(
             self.data,
             paid.Caps(
-                cap_usd=float(b["per_job_cap_usd"]),
+                cap_usd=self.job.cap_cents / 100 if smd_cap else firm_cap,
+                cap_label=JOB_CAP_LABEL if smd_cap else "the job's cost cap",
                 monthly_budget_usd=float(b["monthly_budget_usd"]),
                 usd_per_scanned_page=float(b["usd_per_scanned_page"]),
                 month_cents_used=self.job.month_cents_used,
@@ -505,6 +521,8 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
 
     def run(self) -> Verdict:
         try:
+            if self.cap_over_firm:
+                raise limits_mod.LimitHold(limits_mod.CAP_SETTING, CAP_OVER_FIRM)
             v = self._walk()
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=hold.setting, reason=f"limit: {hold.reason}")
