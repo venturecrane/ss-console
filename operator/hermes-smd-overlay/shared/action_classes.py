@@ -838,6 +838,12 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "mcp_smokeball_update_event": ActionClass.INTERNAL_WRITE,
     "mcp_smokeball_create_event_reminder": ActionClass.INTERNAL_WRITE,
     "mcp_smokeball_create_folder": ActionClass.INTERNAL_WRITE,
+    # Copy or move documents already on a matter into one of its folders
+    # (ss-console smokeball_connector/file_placement.py, 2026-11-24). The firm's
+    # own record reorganized; every file and the folder are read through the
+    # matter before anything is written, and nothing leaves the firm.
+    "mcp_smokeball_copy_files_to_folder": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_move_files_to_folder": ActionClass.INTERNAL_WRITE,
     "mcp_smokeball_create_matter": ActionClass.COMMITMENT,
     "mcp_smokeball_delete_file": ActionClass.DESTRUCTIVE,
     # Calendar-event deletion as an ADMIN-CONFIRMED ACT (ss-console, 2026-09-25).

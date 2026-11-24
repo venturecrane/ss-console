@@ -125,6 +125,14 @@ class SmokeballWriteError(RuntimeError):
     upload URL, or the presigned PUT was rejected. Surfaced as a clear refusal."""
 
 
+class DownloadTooLarge(SmokeballWriteError):
+    """A download refused because the file is over ``_MAX_DOWNLOAD_BYTES``: the
+    file is there, it is only too large to read into this process. A
+    subclass, so every caller that catches ``SmokeballWriteError`` still does,
+    and one that must tell "too large" from "failed" (``file_placement.py``)
+    can."""
+
+
 _MAX_ERROR_BODY = 600
 # read_document ceiling: a matter PDF/DOCX is KBs to low MBs; anything past this
 # is a scan bundle or media file that text extraction shouldn't slurp into RAM.
@@ -547,7 +555,7 @@ class SmokeballClient:
             raise SmokeballWriteError(f"download: no downloadUrl for file {file_id!r} on matter {matter_id!r}")
         advertised = info.get("sizeBytes")
         if isinstance(advertised, int) and advertised > _MAX_DOWNLOAD_BYTES:
-            raise SmokeballWriteError(
+            raise DownloadTooLarge(
                 f"download: file {file_id!r} is {advertised} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
             )
         try:
@@ -558,7 +566,7 @@ class SmokeballClient:
             raise SmokeballWriteError(f"presigned download GET rejected with HTTP {resp.status_code}")
         blob = resp.content
         if len(blob) > _MAX_DOWNLOAD_BYTES:
-            raise SmokeballWriteError(
+            raise DownloadTooLarge(
                 f"download: file {file_id!r} body is {len(blob)} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
             )
         return info, blob
@@ -619,6 +627,23 @@ class SmokeballClient:
         if parent_folder_id is not None:
             body["parentFolderId"] = parent_folder_id
         return self.request("POST", f"/matters/{matter_id}/documents/folders", json=body)
+
+    def move_file(self, matter_id: str, file_id: str, folder_id: str, *, file_name: str) -> Any:
+        """Move a matter file into another folder of the SAME matter:
+        ``PATCH /matters/{id}/documents/files/{fileId}`` with ``folderId``.
+
+        Vendor contract (docs.smokeball.com, "Patch a file", read 2026-11-24):
+        a partial update of the file's metadata; "the file moves only when
+        /folderId is present in the request", and the destination "is not
+        validated for existence", so the caller proves the folder is on the
+        matter first (``file_placement.py``). ``fileName`` is listed as
+        required, so the file's own current name is sent back unchanged; the
+        extension cannot change through this call. Answers 202 with an
+        ``uploadUrl`` for an optional new version, which is never used here:
+        a move sends no bytes. The read-back (folder, name, sha256) is the
+        caller's."""
+        body = {"fileName": file_name, "folderId": folder_id}
+        return self.request("PATCH", f"/matters/{matter_id}/documents/files/{file_id}", json=body)
 
     def delete_file(self, matter_id: str, file_id: str) -> Any:
         """Delete a file from a matter (``DELETE /matters/{id}/documents/files/{fileId}``,

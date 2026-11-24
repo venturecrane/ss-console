@@ -242,6 +242,8 @@ PINNED_CONNECTOR_SURFACES: dict[str, frozenset[str]] = {
             "mcp_smokeball_update_event",
             "mcp_smokeball_create_event_reminder",
             "mcp_smokeball_create_folder",
+            "mcp_smokeball_copy_files_to_folder",
+            "mcp_smokeball_move_files_to_folder",
             "mcp_smokeball_create_matter",
             "mcp_smokeball_delete_file",
             "mcp_smokeball_prepare_event_deletion",
