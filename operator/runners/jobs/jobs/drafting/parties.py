@@ -506,7 +506,7 @@ def _scope(request: str, cands: list[Candidate]) -> list[Candidate] | None:
     got: list[Candidate] = []
     lines = [m.group("a") or m.group("b") or "" for m in _ONLY.finditer(request or "")]
     for chunk in lines:
-        found = named_in(chunk, cands)
+        found = named_in(f"to {chunk}", cands)  # "to the School District only": a short reference, too
         if not found and re.search(r"\b[A-Z][A-Za-z]", chunk) and not _EVERY.search(f"to {chunk}"):
             raise PartyUnknown(
                 f'the request limits its sets to "{chunk.strip()[:80]}", which is no party on the caption'

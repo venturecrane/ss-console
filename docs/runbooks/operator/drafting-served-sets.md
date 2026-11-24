@@ -198,13 +198,19 @@ means every defendant on the court's caption; when our client is a defendant
 there, the job ends `party_unknown` for SMD (name the parties in `parties.json`
 in the job directory and resume, or draft by hand). A request naming no kind
 of set drafts the firm's default sets when the firm authored them
-(`discovery_defaults`). Else, when it asks for "discovery" or "sets" ("sets of
-discovery to the school district"), it drafts the kinds the same requester's
-earlier set job on the matter planned when it says "also", or the standard
-package (special interrogatories, requests for admission, requests for
-production) to each party it names, and the attorney notes say which in one
-line (`set_package.py`). Any other request naming no kind drafts the one set
-it describes, as before. A short reference to a party ("to the middle school")
-names the caption party whose last words it is, when exactly one does
-(`party_tail.py`); two or none end `party_unknown` for SMD. A
-`request_incomplete` hold is SMD's: the attorney is never sent its question.
+(`discovery_defaults`). Else, when it asks to propound new discovery in so
+many words ("sets of discovery", "discovery requests", "prepare discovery to
+the district"), it drafts the standard package (special interrogatories,
+requests for admission, requests for production) to each party it names, or,
+when the asking clause says "also" or "as well", the kinds the same
+requester's newest set job on the matter in the last 30 days planned. The
+attorney notes say which in one line (`set_package.py`). A request that speaks
+of a redo, a revision, responses, answers, a supplement, an amendment, "a
+set", a deposition, a subpoena or an inspection is never a package, and any
+other request naming no kind drafts the one set it describes, as before. A
+short reference to a party ("to the middle school", "upon the district")
+names the caption party whose last words it is, only where the phrase ends
+there and exactly one party ends so (`party_tail.py`); "the district
+attorney" or "the school district's counsel" names no one, and two or none
+end `party_unknown` for SMD. A `request_incomplete` hold is SMD's: the
+attorney is never sent its question.

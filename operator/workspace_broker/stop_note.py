@@ -35,7 +35,9 @@ SILENT_KINDS = frozenset({"drafting_job", "litigation_job"})
 
 #: A drafting hold whose cause is in the request or the file: SMD's page says
 #: so, because the firm would have been asked for it (``delivered_matter.drafting``).
-DRAFTING_FIRM_HOLDS = frozenset({"request_incomplete", "no_readable_documents", "record_unreadable", "gate_refused"})
+#: ``request_incomplete`` left 2026-11-23: what code cannot settle in a request is
+#: SMD's to finish, never a question for the firm (``drafting/endings.py``).
+DRAFTING_FIRM_HOLDS = frozenset({"no_readable_documents", "record_unreadable", "gate_refused"})
 #: The reason a job waiting on its lane's proof run carries (``lane_proof.HOLD_PREFIX``).
 LANE_UNPROVEN = "lane_unproven"
 #: A failed drafting job whose draft exists and the review held with nothing
