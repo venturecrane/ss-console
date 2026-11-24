@@ -203,7 +203,7 @@ def _units(seat: SetSeat, prior: str = "01JAAAAAAAAAAAAAAAAAAAAAAA") -> list[dic
             "name": seat.names[fid],
             "size": len(seat.files[fid][0]),
             "sha256": hashlib.sha256(seat.files[fid][0]).hexdigest(),
-            "set_type": next(KINDS[k] for k, n in NAMES.items() if n == seat.names[fid]),
+            "set_type": next((KINDS[k] for k, n in NAMES.items() if n == seat.names[fid]), ""),
             "prior_job_id": prior,
             "folder_id": "folder-0001",
         }
@@ -273,6 +273,35 @@ def test_every_filed_document_is_revised_by_the_rules_in_place(world) -> None:
     assert [f["name"] for f in v.files] == [NAMES["special"], NAMES["rfp"]]
     items = json.loads((jd / "data" / "checklist.json").read_text())["items"]
     assert [i["source"] for i in items] == ["rule:wr-nodocs", "rule:wr-object"]  # rules as code-authored items
+
+
+def index_doc() -> bytes:
+    """A request's Index of Exhibits delivered as a file of its own: no response heading."""
+    d = docx.Document()
+    d.add_paragraph("SUPERIOR COURT OF THE STATE OF EXAMPLE")
+    d.add_paragraph("PLAINTIFF'S INDEX OF EXHIBITS TO RESPONSES TO REQUESTS FOR PRODUCTION")
+    for line in ("EXHIBIT A: SAMPLE RECORDS", "1. Records of Example Clinic (Request Nos. 1)",
+                 "EXHIBIT B: SAMPLE BILLS", "1. Bills of Example Clinic (Request Nos. 2, 3)"):  # fmt: skip
+        d.add_paragraph(line)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def test_an_index_file_among_the_units_is_kept_and_never_fails_the_request(world) -> None:
+    """FALSIFIER: read the index file as a response document and the whole
+    request fails revise_base_unproven (4 of 7 real requests, 2026-11-23)."""
+    seat = _three()
+    seat.names["file-idx"] = "Index of Exhibits, Set One.docx"
+    seat.files["file-idx"] = [index_doc()]
+    v, client, jd = _run(world, seat, ANSWERS)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert seat.sent == ["file-special", "file-rfp"] and len(seat.files["file-idx"]) == 1  # kept as filed
+    assert sorted(client.calls) == ["form", "rfp", "special"]  # no values asked for the index
+    base = json.loads((jd / "data" / "units" / "03" / "base.json").read_text())
+    assert base["index"] is True and base["in_scope"] is False
+    notes = (jd / "data" / "revise-set-notes.md").read_text()
+    assert "An index of exhibits; left as filed" in notes
 
 
 def test_the_revision_is_made_on_the_staffs_latest_version(world) -> None:

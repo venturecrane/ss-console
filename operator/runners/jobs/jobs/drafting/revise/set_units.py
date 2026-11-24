@@ -70,8 +70,9 @@ def edit_file(filed: Path, md: str, out: Path) -> tuple[inplace.Edit, list[str]]
     return ed, inplace.prove(ed, before, filed.read_bytes(), blob, md)
 
 
-def read_base(filed: Path, work: Path) -> tuple[str, rs.Document]:
-    """The filed file as markdown and responses, proven to write back unchanged."""
+def read_base(filed: Path, work: Path, set_type: str | None = None) -> tuple[str, rs.Document]:
+    """The filed file as markdown and responses, proven to write back unchanged.
+    ``set_type``: the kind it was delivered as (``rs.read``)."""
     md = prior.docx_to_md(filed)
     ed, diffs = edit_file(filed, md, work / "base-roundtrip.docx")
     if diffs or ed.touched or ed.removed:
@@ -81,7 +82,7 @@ def read_base(filed: Path, work: Path) -> tuple[str, rs.Document]:
             + ")"
         )
     try:
-        return md, rs.read(md)
+        return md, rs.read(md, set_type)
     except rs.ResponsesUnread as exc:
         raise BaseUnproven(f"its responses cannot be pinned to request numbers: {exc}") from None
 
@@ -116,14 +117,20 @@ def prior_records(data: Path) -> list[dict[str, Any]]:
 
 
 def revise_one(
-    base_md: str, filed: Path, values: list[rs.Value], out: Path, cls: str, fmt: dict[str, Any] | None
+    base_md: str,
+    filed: Path,
+    values: list[rs.Value],
+    out: Path,
+    cls: str,
+    fmt: dict[str, Any] | None,
+    set_type: str | None = None,
 ) -> dict[str, Any]:
     """The values made in the filed file at ``out``, proven: only the responses
     they name changed, the XML unchanged beyond the paragraphs rewritten, and no
     kind of format finding the filed file did not already have (``finding_kind``;
     ``fmt`` None: a
     rehearsal without the firm's inputs, no format check). Raises ``Refused``."""
-    doc = rs.read(base_md)
+    doc = rs.read(base_md, set_type)
     new, did, skipped = rs.apply(doc, values)
     rec: dict[str, Any] = {"did": did, "skipped": skipped, "changed": [], "out": None}
     if new.md == doc.md:
@@ -131,7 +138,7 @@ def revise_one(
     ed, diffs = edit_file(filed, new.md, out)
     if diffs:
         raise Refused("revise_layout_lost", "the revision changes what no rule names: " + "; ".join(diffs)[:300])
-    numbers, outside = rs.changed(doc.md, new.md)
+    numbers, outside = rs.changed(doc.md, new.md, set_type)
     allowed = {v.request for v in values}
     if outside or not set(numbers) <= allowed:
         raise Refused("revise_layout_lost", f"words outside the responses the rules name changed ({numbers})")
