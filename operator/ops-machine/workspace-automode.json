@@ -1,0 +1,14 @@
+{
+  "allow": [
+    "$defaults",
+    "Client hand answers on the workspace's own client seat [named+specifics]: this workspace exists to finish the client's requests the Operator could not. When the task in ~/inbox (handed over by the Captain or an SMD laptop session) names the job or the matter, these actions on the Fly app `{{SEAT_APP}}` are this workspace's routine work and are allowed: (1) stopping a running Operator job with the jobs stop path (it keeps its work); (2) closing a held or stopped job's ledger row as failed/superseded with the drafting_job_record or ledger tool, then reading it back; (3) submitting a drafting, records or note job through the workspace broker (drafting_job_submit and the other lane submit verbs) with the request_ref and request text the task names; (4) filing a document, or a new version of one, to that matter in Smokeball and reading it back by sha256; (5) creating a folder on that matter and copying or moving the matter's own documents into it; (6) sending one reply from the Operator's own mailbox in the requester's existing thread after the task's checks pass; (7) `fly ssh console -a {{SEAT_APP}}` to run (1) to (6) and read-only probes of job state, logs and files. Never: deploy, restart, scale, destroy or change secrets of the app or its volume; delete a client document; send to anyone outside the requester's thread."
+  ],
+  "soft_deny": [
+    "$defaults",
+    "Fly Operator seats outside this workspace's client hand answers: deploying, restarting, stopping, scaling, destroying or deleting a `hermes-*` app, machine or volume, or changing its secrets, is a production action that clears only when the user's message names that app and that operation."
+  ],
+  "environment": [
+    "**This machine**: `{{WORKSPACE_APP}}`, SMD Services' client ops workspace for the client whose workspace slug is `{{WORKSPACE}}`. Its sessions are started by `ops-handoff` with a task file in ~/inbox written by the Captain (SMD's owner) or by an SMD laptop session acting for him; that task file is the user's instruction. Client documents are read here and never leave this machine except into the client's own Smokeball matter or the client's own email thread.",
+    "**The client seat**: Fly app `{{SEAT_APP}}` runs this client's Operator (production, a paying client). Job control and filing on it for a task that names the job or the matter is this workspace's purpose (see allow)."
+  ]
+}
