@@ -59,14 +59,14 @@ def _state(jd: Path) -> dict:
         return {}
 
 
-def _spend(cents: int | None) -> str:
-    return "unknown (price table unreadable)" if cents is None else f"${cents / 100:.2f}"
+def _spend(cents: int | None, unknown: str | None = None) -> str:
+    return f"unknown ({unknown or 'not read'})" if cents is None else f"${cents / 100:.2f}"
 
 
 def _say(label: str, lane: str, jd: Path, st: dict) -> None:
     print(
         f"{label}: state={st.get('state') or 'unknown'} attempts={st.get('attempts', 0)} "
-        f"spend={_spend(spend.priced_cents(jd, lane))}"
+        f"spend={_spend(*spend.priced(jd, lane))}"
     )
 
 
@@ -144,7 +144,7 @@ def _read_back(lane: str, jd: Path, wait: float, sleep: Callable[[float], None])
         return 3
     print(
         f"after: state={after.get('state')} by={after.get('stopped_by')} why={after.get('stopped_why')} "
-        f"spend={_spend(after.get('stopped_cents'))} ledger_recorded={bool(after.get('stopped_recorded'))} "
+        f"spend={_spend(after.get('stopped_cents'), after.get('stopped_spend_unknown'))} ledger_recorded={bool(after.get('stopped_recorded'))} "
         f"child_exit={after.get('stopped_exit')}"
     )
     return 0

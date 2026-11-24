@@ -40,6 +40,11 @@ logger = logging.getLogger("jobs.daemon")
 
 LEDGER_NAME = "usage-ledger.jsonl"
 
+#: The named causes a job's spend reads "unknown" for (:func:`priced`): the
+#: seat's rate card would not load, or a usage row would not price.
+UNKNOWN_PRICE_TABLE = "price table unreadable"
+UNKNOWN_USAGE = "usage ledger unpriceable"
+
 
 def _medchron_ledgers(job_dir: Path) -> list[Path]:
     """The chronology driver's budgeted ledgers (``medchron.job.usage_ledgers``),
@@ -68,25 +73,47 @@ def ledgers(job_dir: Path | str, lane: str) -> list[Path]:
     return [jd / "data" / LEDGER_NAME]
 
 
-def priced_cents(job_dir: Path | str, lane: str) -> int | None:
+def priced(job_dir: Path | str, lane: str) -> tuple[int | None, str | None]:
     """What the job's paid calls cost, from the ledgers its lane's runner
     budgets (:func:`ledgers`), priced the way the cap prices them
-    (``budget.Pricing``). None when a figure cannot be read: a stop or a record
-    is never held up by a figure."""
+    (``budget.Pricing``): ``(cents, None)``, or ``(None, why)`` when the figure
+    cannot be read, ``why`` naming the cause (the rate card's path and error),
+    so a stop or a record says *why* its spend is unknown instead of dropping
+    the figure. A stop or a record is never held up by a figure."""
     from .budget import PRICING_DEFAULT, PRICING_ENV, Pricing
     from .ledger import read_rows
 
     try:
-        pricing = Pricing.load(Path(os.environ.get(PRICING_ENV) or PRICING_DEFAULT))
-        dollars = 0.0
-        for path in ledgers(job_dir, lane):
-            if path.is_file():
-                for row in read_rows(path):
-                    dollars += float(pricing.price_row(row))
+        paths = [p for p in ledgers(job_dir, lane) if p.is_file()]
     except Exception as exc:  # noqa: BLE001 - a missing figure is said, never fatal
-        logger.error("could not price the spend of %s job %s: %s", lane, job_dir, exc)
-        return None
-    return int(round(dollars * 100))
+        why = f"{UNKNOWN_USAGE}: {exc}"[:300]
+        logger.error("could not price the spend of %s job %s: %s", lane, job_dir, why)
+        return None, why
+    if not paths:
+        return 0, None  # no paid call was made: nothing to price, whatever the card
+    card = Path(os.environ.get(PRICING_ENV) or PRICING_DEFAULT)
+    try:
+        pricing = Pricing.load(card)
+    except Exception as exc:  # noqa: BLE001 - a missing figure is said, never fatal
+        why = f"{UNKNOWN_PRICE_TABLE}: {card}: {exc}"[:300]
+        logger.error("could not price the spend of %s job %s: %s", lane, job_dir, why)
+        return None, why
+    try:
+        dollars = 0.0
+        for path in paths:
+            for row in read_rows(path):
+                dollars += float(pricing.price_row(row))
+    except Exception as exc:  # noqa: BLE001 - a missing figure is said, never fatal
+        why = f"{UNKNOWN_USAGE}: {exc}"[:300]
+        logger.error("could not price the spend of %s job %s: %s", lane, job_dir, why)
+        return None, why
+    return int(round(dollars * 100)), None
+
+
+def priced_cents(job_dir: Path | str, lane: str) -> int | None:
+    """:func:`priced`'s figure alone: None when it cannot be read (the cause is
+    logged; a caller that records the ending reads :func:`priced`)."""
+    return priced(job_dir, lane)[0]
 
 
 def recorded_cents(job_dir: Path | str, lane: str, reported: int | None) -> int:
@@ -193,8 +220,11 @@ __all__ = [
     "ALERT_CODE",
     "LEDGER_NAME",
     "SWEEP_SECONDS",
+    "UNKNOWN_PRICE_TABLE",
+    "UNKNOWN_USAGE",
     "WATERMARK",
     "ledgers",
+    "priced",
     "priced_cents",
     "recorded_cents",
     "sweep",

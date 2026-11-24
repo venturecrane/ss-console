@@ -66,6 +66,10 @@ class Limits:
     allowance_remaining_pages: int | None = None
     allowance_month: str | None = None
     allowance_cycle_label: str | None = None
+    #: What a cap hold calls the cap. A job SMD capped below the firm's
+    #: ``per_job_cap_usd`` says so; the setting name still leads the reason, so
+    #: every reader that keys on it (hold_class, work-health) reads it unchanged.
+    cap_label: str = "the job's cost cap"
 
     @property
     def month_spent_usd(self) -> float:
@@ -145,7 +149,7 @@ class Limits:
         if spent_usd >= self.cap_usd or spent_usd + projected_usd > self.cap_usd:
             raise LimitHold(
                 CAP_SETTING,
-                f"{CAP_SETTING}: {what} would exceed the job's cost cap {when} {stage}; {tail}",
+                f"{CAP_SETTING}: {what} would exceed {self.cap_label} {when} {stage}; {tail}",
             )
 
     # ---- before every paid call ---------------------------------------------
@@ -160,5 +164,5 @@ class Limits:
         if spent_usd >= self.cap_usd:
             raise LimitHold(
                 CAP_SETTING,
-                f"{CAP_SETTING}: the run's spend reached the job's cost cap during {stage}; the run stopped",
+                f"{CAP_SETTING}: the run's spend reached {self.cap_label} during {stage}; the run stopped",
             )

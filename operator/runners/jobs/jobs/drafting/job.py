@@ -8,6 +8,7 @@ The envelope (the broker's ``drafting_job_submit`` writes exactly this)::
      "document_class": one of CLASSES, "requester": email, "message_ref": str,
      "request_text": str, "file_to_matter_id": str|null, "file_to_matter_number": str|null,
      "attachments"?: [{"filename": .docx, "sha256", "b64"}],   (the request email's own Word documents)
+     "cap_cents"?: int > 0,                                    (SMD's cost cap for this one job; root only)
      "revise"?: {"prior_job_id": <ULID>, "folder_id": str,
                  "files": [{"role", "file_id", "name", "size", "sha256"}]}}
                  (revise mode: the broker named the filed files from its delivery proof)
@@ -73,6 +74,11 @@ class DraftingJob:
     #: files by id, as the BROKER resolved them from its delivery proof. None
     #: for a fresh draft.
     revise: dict[str, Any] | None = None
+    #: SMD's cost cap for this one job, in cents (the broker's ``cap_cents``,
+    #: set from root only). None: the firm's ``per_job_cap_usd`` alone. It can
+    #: only LOWER the firm's cap: above it, the run refuses before anything is
+    #: paid (``DraftingRun.run``).
+    cap_cents: int | None = None
 
     @property
     def data(self) -> Path:
@@ -114,6 +120,9 @@ def parse(data: Any, job_dir: Path) -> DraftingJob:
             "month_cents_used must be stamped (a non-negative int) before a run; unmetered is refused"
         )
     remaining = data.get("allowance_remaining")
+    cap = data.get("cap_cents")
+    if cap is not None and not (isinstance(cap, int) and not isinstance(cap, bool) and cap > 0):
+        raise DraftingJobError("cap_cents must be a whole number of cents above zero when present")
     return DraftingJob(
         job_dir=job_dir,
         job_id=job_id,
@@ -132,6 +141,7 @@ def parse(data: Any, job_dir: Path) -> DraftingJob:
         ledger_releases=_count(data.get("ledger_releases")),
         form_releases=_count(data.get("form_releases")),
         revise=_revise(data.get("revise")),
+        cap_cents=cap,
     )
 
 
