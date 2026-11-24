@@ -47,10 +47,14 @@ class Tenant:
         self.ignore_patch = False
         self.corrupt_uploads = False
         self.change_bytes_on_move = False
+        self.hide_uploads = False
+        self.unreadable: set[str] = set()
+        self.advertise: dict[str, int] = {}
         self._n = 0
 
     def add(self, fid: str, matter: str, name: str, ext: str, data: bytes, folder: str | None = None) -> None:
         rec: dict[str, Any] = {"id": fid, "name": name, "fileExtension": ext, "isDeleted": False}
+        rec["versionId"] = f"{fid}-v1"
         rec["sizeBytes"], rec["_matter"] = len(data), matter
         if folder:
             rec["folder"] = {"id": folder, "href": f"/folders/{folder}"}
@@ -76,7 +80,8 @@ class Tenant:
             data = request.content + (b"!" if self.corrupt_uploads else b"")
             self.blobs[fid] = data
             self.files[fid]["sizeBytes"] = len(request.content)  # the index lists the size sent
-            self.files[fid]["isDeleted"] = False
+            self.files[fid]["isDeleted"] = self.hide_uploads
+            self.files[fid]["versionId"] = f"{fid}-v{self._n + 2}"
             return httpx.Response(200)
         if m := re.fullmatch(r"/matters/([^/]+)/documents/folders", path):
             return httpx.Response(200, json={"value": [{"folders": self.folders.get(m.group(1), [])}]})
@@ -85,8 +90,8 @@ class Tenant:
         if m := re.fullmatch(r"/matters/([^/]+)/documents/files", path):
             rows = [self._public(r) for r in self.files.values() if r["_matter"] == m.group(1)]
             return httpx.Response(200, json={"value": rows})
-        if m := re.fullmatch(r"/matters/([^/]+)/documents/files/([^/]+)(/download)?", path):
-            matter, fid, download = m.group(1), m.group(2), m.group(3)
+        if m := re.fullmatch(r"/matters/([^/]+)/documents/files/([^/]+)(/download|/upload)?", path):
+            matter, fid, tail = m.group(1), m.group(2), m.group(3)
             rec = self.files.get(fid)
             if rec is None:
                 return httpx.Response(404, json={"title": "Not Found"})
@@ -94,9 +99,14 @@ class Tenant:
                 return httpx.Response(400, text="The file is not part of this matter.")
             if method == "PATCH":
                 return self._patch(fid, json.loads(request.content))
-            if download:
+            if tail == "/upload":  # a presigned PUT for a new version of THIS file
+                return httpx.Response(200, json={"fileId": fid, "uploadUrl": f"{S3}/up/{fid}"})
+            if tail == "/download":
+                if fid in self.unreadable:
+                    return httpx.Response(500, text="download unavailable")
                 body = {"downloadUrl": f"{S3}/dl/{fid}", "name": rec["name"], "fileExtension": rec["fileExtension"]}
-                return httpx.Response(200, json={**body, "fileId": fid, "sizeBytes": rec["sizeBytes"]})
+                size = self.advertise.get(fid, rec.get("sizeBytes"))
+                return httpx.Response(200, json={**body, "fileId": fid, "sizeBytes": size})
             return httpx.Response(200, json=self._public(rec))
         raise AssertionError(f"unscripted {method} {path}")
 
@@ -257,3 +267,108 @@ def test_ids_that_are_not_ids_are_refused_before_any_request(tenant: Tenant, bad
     with pytest.raises(file_placement.PlacementRefused):
         _tool("copy")(M, bad, FOLDER)
     assert tenant.requests == []
+
+
+# ---- review fixes (2026-11-24) ---------------------------------------------------
+BIG = 30 * 1024 * 1024
+
+
+def test_an_empty_twin_from_an_earlier_copy_gets_the_bytes_as_a_new_version(tenant: Tenant) -> None:
+    """FALSIFIER: without it a second file of the same name is filed beside the empty one."""
+    tenant.add("file-half", M, "Demand to carrier", ".pdf", b"", FOLDER)
+    out = _tool("copy")(M, ["file-0001"], FOLDER)
+    assert out["readback"] == "confirmed", out
+    row = out["files"][0]
+    assert row["result"] == "copied" and row["newFileId"] == "file-half" and row["completedEarlierCopy"] is True
+    assert tenant.blobs["file-half"] == tenant.blobs["file-0001"]
+    assert not any(r.method == "POST" and r.url.path.endswith("/documents/files") for r in tenant.requests)
+    assert ("PUT", "/up/file-half") in tenant.writes()
+
+
+def test_an_empty_twin_that_cannot_be_completed_is_a_mismatch_naming_it(tenant: Tenant) -> None:
+    tenant.add("file-half", M, "Demand to carrier", ".pdf", b"", FOLDER)
+    tenant.files["file-half"]["versionId"] = ""  # the compare-and-stop read refuses
+    out = _tool("copy")(M, ["file-0001"], FOLDER)
+    assert out["status"] == "readback_mismatch" and out["placed"] == 0
+    row = out["files"][0]
+    assert row["result"] == "not_copied" and row["twinFileId"] == "file-half"
+    assert "file-half" in out["readback_detail"]
+    assert tenant.writes() == []
+
+
+def test_an_unreadable_twin_holds_the_copy_as_a_mismatch(tenant: Tenant) -> None:
+    """FALSIFIER: an unreadable twin used to fail the row as a plain error."""
+    tenant.add("file-twin", M, "Demand to carrier", ".pdf", b"%PDF demand bytes", FOLDER)
+    tenant.unreadable.add("file-twin")
+    out = _tool("copy")(M, ["file-0001"], FOLDER)
+    assert out["status"] == "readback_mismatch"
+    row = out["files"][0]
+    assert row["result"] == "not_copied" and row["twinFileId"] == "file-twin"
+    assert "rule out a duplicate" in row["readback_detail"]
+    assert tenant.writes() == []
+
+
+def test_a_copy_over_the_limit_stops_before_any_write_and_pages_smd(tenant: Tenant) -> None:
+    tenant.files["file-0001"]["sizeBytes"] = BIG
+    out = _tool("copy")(M, ["file-0001", "file-0002"], FOLDER)
+    assert out["status"] == "readback_mismatch"
+    big, small = out["files"]
+    assert big["result"] == "over_copy_limit" and small["result"] == "copied" and out["placed"] == 1
+    assert tenant.files["file-0001"]["folder"]["id"] == OLD  # not moved either
+    assert not any(r.url.path.endswith("/file-0001/download") for r in tenant.requests)
+
+
+def test_a_copy_over_the_limit_is_moved_when_the_sender_did_not_say_copy(tenant: Tenant) -> None:
+    tenant.files["file-0001"]["sizeBytes"] = BIG
+    out = file_placement.copy_files_to_folder_tool(M, ["file-0001"], FOLDER, if_too_large="move")
+    assert out["readback"] == "confirmed", out
+    row = out["files"][0]
+    assert row["result"] == "moved" and row["overCopyLimit"] is True and out["placed"] == 1
+    assert tenant.files["file-0001"]["folder"]["id"] == FOLDER
+    assert [m for m, _ in tenant.writes()] == ["PATCH"]
+
+
+def test_a_copy_whose_size_shows_only_at_download_is_over_the_limit(tenant: Tenant) -> None:
+    del tenant.files["file-0001"]["sizeBytes"]
+    tenant.advertise["file-0001"] = BIG
+    out = _tool("copy")(M, ["file-0001"], FOLDER)
+    assert out["files"][0]["result"] == "over_copy_limit" and tenant.writes() == []
+
+
+def test_a_link_not_visible_copy_keeps_its_new_id_and_is_not_placed(tenant: Tenant) -> None:
+    tenant.hide_uploads = True
+    out = _tool("copy")(M, ["file-0001"], FOLDER)
+    assert out["status"] == "link_not_visible" and out["placed"] == 0
+    row = out["files"][0]
+    assert row["newFileId"] and row["status"] == "link_not_visible"
+    posts = [r for r in tenant.requests if r.method == "POST" and r.url.path.endswith("/documents/files")]
+    assert len(posts) == 1  # never filed a second time in the call
+
+
+def test_a_link_not_visible_move_is_not_counted_as_placed(tenant: Tenant) -> None:
+    tenant.ignore_patch = True
+    out = _tool("move")(M, ["file-0001"], FOLDER)
+    assert out["status"] == "link_not_visible" and out["placed"] == 0
+
+
+def test_a_deleted_folder_is_refused(tenant: Tenant) -> None:
+    tenant.folders[M][1]["isDeleted"] = True
+    with pytest.raises(file_placement.PlacementRefused, match="reads deleted"):
+        _tool("move")(M, ["file-0001"], FOLDER)
+    assert tenant.writes() == []
+
+
+def test_a_move_too_large_to_hash_is_proven_by_id_and_name(tenant: Tenant) -> None:
+    del tenant.files["file-0001"]["sizeBytes"]
+    tenant.advertise["file-0001"] = BIG
+    out = _tool("move")(M, ["file-0001"], FOLDER)
+    assert out["readback"] == "confirmed", out
+    assert out["files"][0]["result"] == "moved" and "hash limit" in out["files"][0]["readback_detail"]
+
+
+def test_the_tool_text_promises_no_safe_retry_and_moves_only_on_move_words() -> None:
+    copy_doc = file_placement.copy_files_to_folder_tool.__doc__ or ""
+    move_doc = file_placement.move_files_to_folder_tool.__doc__ or ""
+    assert "Calling again is safe" not in copy_doc and "Never call either tool again" in copy_doc
+    assert "if_too_large" in copy_doc
+    assert "reorganize" not in move_doc
