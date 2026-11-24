@@ -31,7 +31,12 @@ _PROOF = re.compile(r"(?m)^[ \t|]*PROOF\s+OF\s+(?:ELECTRONIC\s+)?SERVICE\b")
 _DATED = re.compile(rf"(?i)\b(?:dated|served)\b[^\n]{{0,40}}?{_DATE}")
 #: A signature block after the date: "/s/", "By:", or "Attorneys for".
 _SIGNED = re.compile(r"(?i)/s/|^[ \t|]*By:|\bAttorneys?\s+for\b", re.M)
-_DRAFT_NAME = re.compile(r"(?i)^\s*DRAFT\b|for\s+attorney\s+review")
+#: A draft by its name: "DRAFT" anywhere (2026-11-24: "Responses to <party> RFP Set
+#: One DRAFT <date> by A&P Operator Agent" put it last), "for attorney review", or
+#: a paper the Operator's agent wrote. The Operator never serves a paper itself.
+_DRAFT_NAME = re.compile(
+    r"(?i)(?<![a-z])DRAFT(?![a-z])|for\s+attorney\s+review|(?<![a-z])operator[\s_-]+agent(?![a-z])"
+)
 #: "DRAFT ... Responses to <kind>, Set One", with or without the comma (measured
 #: 2026-11-20: 0 of 15 real draft names carried it), the number in digits or words.
 _DRAFT_OF = re.compile(r"(?i)\bDRAFT\b.*?\bResponses?\s+to\s+(?P<kind>.+?),?\s+Set\s+(?:No\.?\s*)?(?P<n>\w+)")

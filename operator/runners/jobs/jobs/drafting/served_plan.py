@@ -17,10 +17,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import amended, challenge, parties, served_find, set_package, sets
+from . import amended, challenge, parties, provenance, served_find, set_package, sets
 from .forms import lane_hook, read_stage
 from .outcome import DraftingFailed
 from .served import PLAN_STOPS, PLANNED_CLASSES, clients_of, frozen, has_plan, outcomes, plan_units, review_map
+from ..attorneys.seat import roster_for
 from .served import stop_note
 from .served_find import other_side
 
@@ -98,6 +99,7 @@ class DiscoveryPlan:
             other_side=other_side(self.data),
             title=self._title,
             form_by_operator=lane_hook.by_operator(self.firm.data),
+            firm=provenance.our_firm(self.firm.attorneys, roster_for(self)),
         )
         # Each served form set the Operator drafts: its boxes read before the plan
         # (forms/read_stage.py); a firm with no form policy reads and spends nothing.

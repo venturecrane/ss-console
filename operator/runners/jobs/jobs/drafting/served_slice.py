@@ -15,6 +15,8 @@ import re
 from .served import SET_TYPES
 
 RESPONDING = re.compile(r"(?im)^[ \t]*RESPONDING[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
+#: The asking party's line (measured 2026-11-20: half the real sets say REQUESTING).
+ASKING = re.compile(r"(?im)^[ \t]*(?:PROPOUNDING|REQUESTING|DEMANDING)[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
 #: The closed title list, upper case as a caption prints it (never body prose).
 TITLES = {
     "form_interrogatories": r"FORM\s+INTERROGATOR(?:Y|IES)",

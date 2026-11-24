@@ -60,7 +60,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
-from . import amended, parties
+from . import amended, parties, served_earlier as earlier
 from . import served as served_mod
 from .outcome import DraftingFailed
 from .served import OPERATOR, OTHER, SET_TYPES, ServedSet, found_drafted_by
@@ -114,6 +114,9 @@ class Found:
     form_by_operator: bool = False
     #: The served sets a later served response of ours answers, with that response (``amended.py``).
     answered: list[tuple[ServedSet, Doc]] = field(default_factory=list)
+    #: Lines for the attorney notes (``attorney_lines``): files left out, earlier papers of ours.
+    notes: list[str] = field(default_factory=list)
+    firm: Any = None  #: our firm's attorneys (``provenance.our_firm``): their block marks a paper ours
 
     def note(self, doc: Doc | None, kind: str, kept: bool, why: str, **more: Any) -> None:
         head = {"id": doc.id, "name": doc.name, "folder": doc.folder, "copies": doc.copies} if doc else {}
@@ -310,6 +313,7 @@ class Sorted:
     responses: list[tuple[Doc, str, int, str]] = field(default_factory=list)
     scans: list[Doc] = field(default_factory=list)
     others: list[Doc] = field(default_factory=list)
+    drafts: list[earlier.Earlier] = field(default_factory=list)
 
 
 def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> None:
@@ -318,9 +322,13 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
     if responding and not ours(responding, clients):
         f.note(d, "response", False, "the other side's response to our client's discovery; ignored", set_type=kind)
         return
+    if not kind:  # ours by its name (provenance.whose), of a kind code cannot read
+        f.note(d, "response", False, "our side's paper, not a served set; its kind is not read")
+        return
     if not papers.was_served(d.name, d.text):
         why = "a draft by its name" if papers.draft_name(d.name) else "no proof of service or dated signature"
         f.note(d, "response", False, f"{why}: not served, so it answers nothing", set_type=kind)
+        out.drafts.append(earlier.Earlier(d.name, kind, nums[0] if nums else None, asking))
         return
     if not (asking and nums):
         f.note(d, "response", False, "a response paper whose set number or asking party code cannot read")
@@ -333,8 +341,8 @@ def sort_docs(f: Found, all_docs: list[Doc], clients: list[str]) -> Sorted:
     out = Sorted()
     ours_folders: set[str] = set()
     for d in all_docs:
-        what, kind = classify(d)
-        if what == "response" and kind:
+        what, kind = classify(d, f.firm)
+        if what == "response":
             _response(f, d, kind, clients, out)
         elif what == "served" and kind:
             asking = _value(_ASKING, d.first)
@@ -448,7 +456,12 @@ def _before_spend(f: Found, got: Sorted, kinds: list[str]) -> None:
     """Every stop code can call before a single read is paid for."""
     for d in got.scans:
         f.note(d, "scan", False, "its name reads as discovery and its first pages have no text; not read")
-    if got.others:
+    if got.others and got.served:  # a leftover beside sets the job drafts never refuses it (2026-11-24)
+        for d in got.others:
+            f.note(d, "other_set", False, "a paper of a kind outside the list beside the served sets; left out")
+            f.notes.append(f'Not answered by these drafts: "{d.name}" reads as a discovery paper of a kind other '
+                           "than interrogatories, requests for production or requests for admission.")  # fmt: skip
+    elif got.others:
         for d in got.others:
             f.note(d, "other_set", False, "a served set of a kind outside the list")
         names = ", ".join(repr(d.name) for d in got.others)
@@ -531,13 +544,14 @@ def find(
     other_side: list[str] | None = None,
     title: str = "Discovery Responses",
     form_by_operator: bool = False,
+    firm: Any = None,
 ) -> Found | None:
     """The served sets, found and written as ``served.json``; None (nothing
     done) when the hand file is already there. Raises ``Stop`` on every stop;
     ``found-report.json`` is written either way."""
     if (Path(job_dir) / served_mod.FILE).exists():
         return None
-    f = Found(form_by_operator=form_by_operator)
+    f = Found(form_by_operator=form_by_operator, firm=firm)
     stop: Stop | None = None
     try:
         _walk(f, data, request, reader, list(clients), list(other_side or []), title, Path(job_dir))
@@ -592,7 +606,9 @@ def _walk(
         return
     if not f.keep:
         raise Stop("served_none", "every served set in the matter file is answered by a later response of ours")
-    f.keep = with_priors(f, prior, delivered_drafts(job_dir) if job_dir is not None else [])
+    delivered = delivered_drafts(job_dir) if job_dir is not None else []
+    f.keep, notes = earlier.apply(with_priors(f, prior, delivered), got.drafts, delivered)
+    f.notes += notes
 
 
 def _amended(f: Found, data: Path, request: str) -> bool:
@@ -701,6 +717,7 @@ def _report(job_dir: Path, f: Found, stop: Stop | None, reader: Reader) -> None:
         "spent_usd": round(reader.spent(), 4),
         "planned": [s.label for s in f.keep] if not stop else [],
         "candidates": f.rows,
+        "attorney_notes": f.notes if not stop else [],
     }
     _atomic(Path(job_dir) / REPORT, json.dumps(doc, indent=1))
 

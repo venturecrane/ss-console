@@ -10,13 +10,12 @@ from __future__ import annotations
 import datetime as dt
 import re
 
-from . import served as served_mod, served_papers as papers
+from . import provenance, served as served_mod
 from .served_docs import Doc
-from .served_slice import RESPONDING as _RESPONDING, TITLE as _TITLE, TITLES as _TITLES
+from .served_slice import ASKING as _ASKING, RESPONDING as _RESPONDING, TITLE as _TITLE, TITLES as _TITLES
 
 #: A Word file's extracted text: paragraphs, then tables (``matter/word.record_docx_text``).
 WORD_EXTS = (".docx", ".doc")
-_ASKING = re.compile(r"(?im)^[ \t]*(?:PROPOUNDING|REQUESTING|DEMANDING)[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
 #: A SET line: "SET ONE", "SET NO.: 2", or "SET NO.:" with its value on the next
 #: non-blank line (measured 2026-11-20: every real text set prints it below).
 _SET_LINE = re.compile(r"(?im)^[ \t]*SET\b(?:[ \t]*(NO\b\.?|NUMBER\b))?[ \t]*(:)?[ \t|]*(.*)$")
@@ -82,7 +81,7 @@ def response_type(text: str) -> str | None:
     return min(hits)[1] if hits else None
 
 
-def classify(d: Doc) -> tuple[str, str | None]:
+def classify(d: Doc, firm: provenance.OurFirm | None = None) -> tuple[str, str | None]:
     """(``served`` | ``response`` | ``other_set`` | ``scan`` | ``none``, set type), by code only."""
     head = d.first
     responding = _RESPONDING.search(head)
@@ -98,9 +97,18 @@ def classify(d: Doc) -> tuple[str, str | None]:
         return "served", "form_interrogatories"
     if lined:
         t = title_type(head)
-        return ("served", t) if t else ("other_set", None)
+        if t:
+            return "served", t
+        # No title in the capitals a caption prints: whose paper it is decides
+        # (``provenance.whose``, 2026-11-24). Ours (a response, a draft, a filed
+        # paper) is a response paper, its kind None when code reads none; the
+        # other side's is a served set of the kind its title or name reads.
+        w = provenance.whose(d.name, d.folder, head, firm=firm)
+        if w.side == provenance.OURS or w.what == "response":
+            return "response", w.kind
+        return ("served", w.kind) if w.kind else ("other_set", None)
     if len(head.strip()) < 40 and _NAME_VOCAB.search(re.sub(r"[_\-.]+", " ", d.name)):
-        return ("none" if papers.ours_written(d.name, d.folder) else "scan"), None
+        return ("none" if provenance.whose(d.name, d.folder).side == provenance.OURS else "scan"), None
     return "none", None
 
 
