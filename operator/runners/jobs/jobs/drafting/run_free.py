@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from .. import limits as limits_mod
 from ..demand import facts as facts_mod, preflight
-from . import evidence_cost, response_cost
+from . import evidence_cost, exhibit_plan, response_cost
 from .outcome import DraftingFailed, DraftingHold
 
 #: Scoped and priced over what its sets read (response_scope.py, response_cost.py).
@@ -116,4 +116,6 @@ class FreeStages:
         )  # fmt: skip
         self._put("units", response_cost.cheapest_first(plan, est))
         self._units = None
+        # Each pulled file in its exhibit, when the firm authored the table (exhibit_plan.py).
+        exhibit_plan.run(self.data, self.firm.data, plan)
         self._put("expected_finish", est["expected_finish"])

@@ -115,6 +115,11 @@ SENTENCES: dict[str, dict[str, str]] = {
         "served_lead": "The responses to each set of discovery served on this matter:",
         "served_filed": '{set}: filed as "{document}".',
         "served_ours": "{set}: being prepared by us.",
+        # The runner's served.prior_line (endings.FIRM_MESSAGES "prior_draft_routed"), word for word.
+        "served_prior": (
+            '{set}, "{document}": a draft of these responses is already on the matter, so no new one was made; '
+            "changes sent in reply to this email are made to that draft."
+        ),
         "discrepancies": "Where the court paper and the practice-management record differ:",
         "discrepancy": '{field}: the court paper says "{document}"; the practice-management record says "{record}".',
         "corrections": "Record fields corrected from the court's own paper:",
@@ -427,7 +432,10 @@ def _served_sets(delivery: dict[str, Any]) -> str:
     out = []
     for r in rows:
         name = _text(r.get("document")) if r.get("status") == "filed" else None
-        if name:
+        # The revision promise only for a draft an Operator job delivered (its job id named).
+        if name and r.get("prior_draft") is True and r.get("drafted_by") == "operator" and _text(r.get("prior_job")):
+            out.append(_s("drafting", "served_prior", set=_text(r["set"]), document=name))
+        elif name:
             out.append(_s("drafting", "served_filed", set=_text(r["set"]), document=name))
         else:
             out.append(_s("drafting", "served_ours", set=_text(r["set"])))

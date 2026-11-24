@@ -35,12 +35,16 @@ adding a fact (``repair_guard``): they are unresolved like any other.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, NoReturn
 
 from .outcome import DraftingFailed
 from .repair_guard import FindingId, Guard, kind_of, unit_text
+
+#: The job's shared files (``SPEND``, ``EXHAUSTED``) are read and rewritten by one set at a time.
+_LOCK = threading.Lock()
 
 DEFAULT_ROUNDS = 8
 #: Without an authored ``repair_cap_usd``, repairs may spend this share of the job's cap.
@@ -80,12 +84,15 @@ class Plan:
 
     rounds: int
     cap_usd: float
-    spent: Callable[[], float]  # the job's priced ledger, now
+    spent: Callable[[], float]  # this set's priced calls, now (the job's ledger for a one-document job)
     job_data: Path
     unit_data: Path
     key: str
     label: str
     job_id: str
+    #: Any set's priced calls by its key (``finish.Finish.unit_spent``), for the
+    #: open windows of the other sets drafting at once; None: ``spent`` for all.
+    meter: Callable[[str], float] | None = None
 
     # ---- the dollars --------------------------------------------------------------------
     def _spend(self) -> dict[str, Any]:
@@ -94,22 +101,32 @@ class Plan:
     def begin(self) -> None:
         """The first audit is not a repair: the meter starts after it. Once
         per set, so a resume keeps what earlier runs spent."""
-        st = self._spend()
-        if self.key not in st:
-            st[self.key] = {"start": round(self.spent(), 6)}
-            _write(self.job_data / SPEND, st)
+        with _LOCK:
+            st = self._spend()
+            if self.key not in st:
+                st[self.key] = {"start": round(self.spent(), 6)}
+                _write(self.job_data / SPEND, st)
 
     def _end(self) -> None:
-        st = self._spend()
-        row = st.get(self.key) or {}
-        if "end" not in row and "start" in row:
-            row["end"] = round(self.spent(), 6)
-            st[self.key] = row
-            _write(self.job_data / SPEND, st)
+        with _LOCK:
+            st = self._spend()
+            row = st.get(self.key) or {}
+            if "end" not in row and "start" in row:
+                row["end"] = round(self.spent(), 6)
+                st[self.key] = row
+                _write(self.job_data / SPEND, st)
 
     def repair_usd(self) -> float:
-        now = self.spent()
-        return sum(float(r.get("end", now)) - float(r["start"]) for r in self._spend().values() if "start" in r)
+        """Every set's spend inside its own repair window, summed. A keyed set's
+        meter is its own calls (``unit_spent``), so sets drafting at once never
+        count each other's spend. A window from a meter a resume no longer
+        reads (a deploy between) counts as nothing, never as negative."""
+        meter = self.meter or (lambda _key: self.spent())
+        return sum(
+            max(0.0, float(r["end"] if "end" in r else meter(k)) - float(r["start"]))
+            for k, r in self._spend().items()
+            if "start" in r
+        )
 
     def over(self, version: int) -> str | None:
         """Why no further round may start, or None."""
@@ -133,11 +150,12 @@ class Plan:
             self.hold(len(left), kinds, why, version)
         items = [self._item(f, ln, guard, draft_md) for f, ln in left]
         _write(self.unit_data / OPEN, items)
-        rec = _read(self.job_data / EXHAUSTED) or []
-        rec = [r for r in rec if r.get("set") != self.label] + [
-            {"job_id": self.job_id, "set": self.label, "kinds": sorted(kinds), "count": len(left), "why": why}
-        ]
-        _write(self.job_data / EXHAUSTED, rec)
+        with _LOCK:
+            rec = _read(self.job_data / EXHAUSTED) or []
+            rec = [r for r in rec if r.get("set") != self.label] + [
+                {"job_id": self.job_id, "set": self.label, "kinds": sorted(kinds), "count": len(left), "why": why}
+            ]
+            _write(self.job_data / EXHAUSTED, rec)
         return version
 
     def hold(self, n: int, kinds: set[str], why: str, version: int) -> NoReturn:
@@ -165,15 +183,19 @@ class Plan:
 def plan(run: Any, unit: Any, default_rounds: int = DEFAULT_ROUNDS) -> Plan:
     """The firm's repair budget for one set of ``run`` (a ``DraftingRun``)."""
     b = run.firm.data["budget"]
+    # A keyed set is metered by its own calls (sets draft at once, 2026-11-23); a
+    # one-document job, or a run that cannot meter by set, by the job's ledger.
+    by_set = getattr(run, "unit_spent", None) if unit.key else None
     return Plan(
         rounds=int(b.get("repair_rounds", default_rounds)),
         cap_usd=float(b.get("repair_cap_usd", CAP_SHARE * float(b["per_job_cap_usd"]))),
-        spent=run.budget.refresh,
+        spent=(lambda: by_set(unit.key)) if by_set else run.budget.refresh,
         job_data=run.data,
         unit_data=unit.data,
         key=unit.key or "_",
         label=unit.label,
         job_id=str(run.job.job_id),
+        meter=by_set,
     )
 
 

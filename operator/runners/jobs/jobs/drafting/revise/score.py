@@ -21,6 +21,7 @@ key made the same one.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
 
@@ -95,4 +96,65 @@ def totals(scores: list[dict[str, Any]]) -> dict[str, int]:
     return {c: sum(int(s.get(c) or 0) for s in scores) for c in COUNTS}
 
 
-__all__ = ["COUNTS", "index", "norm", "responses", "totals"]
+# ---- per kind of change (A2) ----------------------------------------------------------------
+#: What one response's change is made of, read from its sentences.
+KINDS = (
+    "objection_added",
+    "objection_removed",
+    "disposition",
+    "marker_cleared",
+    "sentence_added",
+    "sentence_removed",
+)
+_SENT = re.compile(r"(?<=[.;])\s+(?=[A-Z{(])")
+
+
+_MARKER = re.compile(r"\{\{(?:[^{}]|\{\{[^{}]*\}\})*\}\}")
+
+
+def _sentences(text: str) -> list[str]:
+    """The response's sentences with every marker taken out: a marker cleared
+    is its own kind, never a sentence added."""
+    return [s for s in (x.strip() for x in _SENT.split(norm(_MARKER.sub(" ", text)))) if s]
+
+
+def change_kinds(before: str, after: str, book: Any = None) -> set[str]:
+    """The kinds of change from ``before`` to ``after`` of one response. With
+    the firm's phrase book, a sentence it holds is an objection or a
+    disposition; without it, every sentence is plain added or removed."""
+    out: set[str] = set()
+    if after.count("{{") < before.count("{{"):
+        out.add("marker_cleared")
+    a, b = Counter(_sentences(before)), Counter(_sentences(after))
+    for s, how in [*((s, "added") for s in b - a), *((s, "removed") for s in a - b)]:
+        if "{{" in s:
+            continue
+        key = book.find(s) if book is not None else None
+        kind = book.entries[key].kind if key else ""
+        if kind == "objection":
+            out.add(f"objection_{how}")
+        elif kind == "disposition":
+            out.add("disposition")
+        else:
+            out.add(f"sentence_{how}")
+    return out
+
+
+def kinds(base: rs.Document, out: rs.Document, key: rs.Document, book: Any = None) -> dict[str, dict[str, int]]:
+    """Per kind: ``correct`` (the key made it and the lane's response equals
+    the key's), ``missed`` (the key made it, the lane's response is not the
+    key's), ``extra`` (the lane made it, the key did not)."""
+    b, o, k = ({r.number: d.text_of(r) for r in d.responses} for d in (base, out, key))
+    tally: dict[str, Counter[str]] = {kind: Counter() for kind in KINDS}
+    for n in b:
+        want = change_kinds(b[n], k.get(n, b[n]), book)
+        got = change_kinds(b[n], o.get(n, b[n]), book)
+        right = norm(o.get(n, b[n])) == norm(k.get(n, b[n]))
+        for kind in want:
+            tally[kind]["correct" if right and kind in got else "missed"] += 1
+        for kind in got - want:
+            tally[kind]["extra"] += 1
+    return {kind: {c: t[c] for c in ("correct", "missed", "extra")} for kind, t in tally.items()}
+
+
+__all__ = ["COUNTS", "KINDS", "change_kinds", "index", "kinds", "norm", "responses", "totals"]

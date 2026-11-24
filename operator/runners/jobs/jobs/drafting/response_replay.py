@@ -6,8 +6,8 @@ result with an answer key built from the hand drafts (design
 ``operator-drafts-discovery-responses``, section F)::
 
     python -m jobs.drafting.response_replay <job_dir_or_matter_dir> --key <key.json> \\
-        [--stage find|scope|cost|form-read|all] [--no-model] [--body <file>] [--work <dir>] \\
-        [--firm <drafting-firm.yaml>] [--pricing <rate card>]
+        [--stage find|scope|cost|form-read|exhibits|all] [--no-model] [--body <file>] [--work <dir>] \\
+        [--firm <drafting-firm.yaml>] [--pricing <rate card>] [--production <response>]
 
 Stages, each a code stage of the response path (``replay/stages.py`` names the
 module and function each one calls):
@@ -26,6 +26,12 @@ module and function each one calls):
 * ``form-read``: the pixel checkbox read of each form set in the key (found by
   its sha256 in the pull's corpus.json, else raw_manifest.jsonl), against
   ``form.checked``.
+* ``exhibits``: each pulled file's exhibit by the firm's table (``exhibit_plan``,
+  needs ``--firm`` with ``response_scope.exhibits``) against the key's Index of
+  Exhibits (``exhibits``), file by file; with ``--production`` (a production
+  response, .md or .docx) each index line's request numbers too
+  (``exhibit_index``). Runs scope first. Bar: no extra file; a miss names
+  code's reason.
 * ``--body <file>``: a produced body's per-number kind (from a JSON body; a
   text or .docx body's kinds are reported unread), the key's names in
   each form response, and its layout (one subpart per line, one provider per
@@ -58,7 +64,7 @@ from typing import Any, Callable
 from .replay import body as body_mod, compare, key as key_mod, real, recorded, stages as S
 from .replay.compare import Section
 
-STAGES = ("find", "scope", "cost", "form-read", "all")
+STAGES = ("find", "scope", "cost", "form-read", "exhibits", "all")
 INCOMPLETE = ("needs_model", "missing_module", "needs_input")
 
 
@@ -80,6 +86,7 @@ class Run:
     ) -> None:
         self.matter, self.key, self.work, self.client = matter, key, work, client
         self.firm, self.pricing = firm, pricing
+        self.production: Path | None = None
         self.doorway = recorded.doorway(work, client)
         self.sections: list[Section] = []
         self.scope: Any = None
@@ -133,6 +140,16 @@ class Run:
         served = S.served_doc(self.matter, self.work)
         return [compare.cost(real.cost(self.work, self.scope, served, self.firm, self.pricing))]
 
+    def exhibits(self) -> list[Section]:
+        from .exhibit_plan import table
+
+        if not self.key.exhibits:
+            return [Section("exhibits vs key", notes=["the key has no exhibits; nothing compared"])]
+        if table(self.firm) is None:
+            raise NeedsInput("the exhibits stage needs --firm with its response_scope.exhibits table")
+        got = real.exhibits(self.work, self.scope, self.firm, self.production)
+        return [compare.exhibits(self.key, got["placed"], got["listed"])]
+
     def form_read(self) -> list[Section]:
         forms = [s for s in self.key.served_sets if s.type == "form_interrogatories"]
         if not forms:
@@ -154,12 +171,14 @@ class Run:
 def replay(run: Run, stage: str, body_path: Path | None) -> None:
     want = set(STAGES[:-1]) if stage == "all" else {stage}
     chain = True
-    if "find" in want or (want & {"scope", "cost"} and S.served_doc(run.matter, run.work) is None):
+    if "find" in want or (want & {"scope", "cost", "exhibits"} and S.served_doc(run.matter, run.work) is None):
         chain = run.guarded("find", run.find)
-    if chain and want & {"scope", "cost"}:
+    if chain and want & {"scope", "cost", "exhibits"}:
         chain = run.guarded("scope", run.scope_stage)
     if chain and "cost" in want:
         run.guarded("cost", run.cost)
+    if chain and "exhibits" in want:
+        run.guarded("exhibits", run.exhibits)
     if "form-read" in want:
         run.guarded("form-read", run.form_read)
     if body_path is not None:
@@ -208,6 +227,7 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--work", type=Path, help="where the stages write (default: <key stem>.replay/ beside the key)")
     ap.add_argument("--firm", type=Path, help="the firm's drafting-firm.yaml (its scope patterns, models and budget)")
     ap.add_argument("--pricing", type=Path, help="the rate card (default: the lane's own, as the seat finds it)")
+    ap.add_argument("--production", type=Path, help="a production response (.md or .docx) for the exhibits stage")
     return ap.parse_args(argv)
 
 
@@ -241,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     work.mkdir(parents=True, exist_ok=True)
     client = recorded.RecordedClient(recorded.load_recordings(a.key))
     run = Run(matter, key, work, client, _firm(a.firm), _pricing(a.pricing))
+    run.production = a.production
     if key.dropped:
         run.sections.append(Section("answer key", notes=[f"entries dropped as malformed: {', '.join(key.dropped)}"]))
     replay(run, a.stage, a.body)

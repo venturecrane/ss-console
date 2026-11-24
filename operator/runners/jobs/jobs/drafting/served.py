@@ -15,7 +15,10 @@ in the job directory, and nothing else (no paper reader, no breakdown)::
        "request_count": 22,                       a whole number, 1 or more
        "request_text": "<the requests, verbatim>"  or "request_text_path":
                                                   "<a file inside the job dir>"
-       "drafted_by": "operator"}                  "operator" or "smd"
+       "drafted_by": "operator",                  "operator" or "smd"
+       "prior_draft": "<file name>",              optional, with prior_job: the draft of this
+       "prior_job": "<job id>"}                   set an Operator job delivered, on
+                                                  the matter (never drafted again)
     ]}
 
 Closed keys at both levels. The endings, each before anything is paid (the
@@ -84,18 +87,19 @@ OPERATOR, SMD = DRAFTERS
 #: A served set of a kind outside ``SET_TYPES``, named by its own ``label``:
 #: drafted by SMD only, listed in the reply like any other.
 OTHER = "other"
-#: Who drafts a form interrogatory set: THE one switch. A form set is answered
-#: by its dotted numbers (1.1, 2.1) from the matter file (``forms/``); it is
-#: checked by its own keys (``served_form.py``) and refused for the Operator
-#: until this is on. The lane's form hook (``forms.lane_hook.enabled``), the
-#: validator and the finder (``found_drafted_by``) all read it; nothing else
-#: decides it. Off: SMD drafts every form set, exactly as before.
-FORM_SETS_BY_OPERATOR = False
+#: Who drafts a form interrogatory set is per firm (``forms.lane_hook.by_operator``):
+#: the Operator when the firm authored ``form_responses`` AND this global switch
+#: is on. This is the off switch for every firm at once; a firm's own section is
+#: its on switch, so a firm without one keeps SMD drafting its form sets exactly
+#: as before. The finder and the validator are handed the answer
+#: (``form_by_operator``) by the lane; a caller with no firm passes nothing and
+#: gets SMD.
+FORM_SETS_BY_OPERATOR = True
 #: Kinds the Operator does not draft: a set of type other.
 SMD_ONLY = frozenset({OTHER})
 #: Who drafts each kind of set the finder found (``served_find.py``): the
 #: Operator drafts special interrogatories and requests for production; SMD the
-#: rest. A form set follows ``FORM_SETS_BY_OPERATOR`` (``found_drafted_by``). A
+#: rest. A form set follows the firm (``found_drafted_by``, ``form_by_operator``). A
 #: hand file (``served_cli``) says its own ``drafted_by``.
 FOUND_DRAFTED_BY = {
     "special_interrogatories": OPERATOR,
@@ -105,18 +109,21 @@ FOUND_DRAFTED_BY = {
 }
 
 
-def form_drafted_by() -> str:
-    """Who drafts a form interrogatory set now: the switch, read at call time."""
-    return OPERATOR if FORM_SETS_BY_OPERATOR else SMD
+def form_drafted_by(form_by_operator: bool = False) -> str:
+    """Who drafts a form interrogatory set: the lane's per-firm answer
+    (``forms.lane_hook.by_operator``), which already includes the global switch."""
+    return OPERATOR if form_by_operator else SMD
 
 
-def found_drafted_by(kind: str) -> str:
+def found_drafted_by(kind: str, form_by_operator: bool = False) -> str:
     """Who drafts a set of this kind the finder found."""
-    return form_drafted_by() if kind == "form_interrogatories" else FOUND_DRAFTED_BY[kind]
+    return form_drafted_by(form_by_operator) if kind == "form_interrogatories" else FOUND_DRAFTED_BY[kind]
 
 
 BEING_PREPARED = "being prepared by us"
 FILED = "filed"
+#: A served-set row whose draft was already on the matter (``outcomes``).
+PRIOR = "prior_draft"
 KEYS = (
     "set_type",
     "set_number",
@@ -128,6 +135,8 @@ KEYS = (
     "drafted_by",
     "label",
     "source",
+    "prior_draft",
+    "prior_job",
     *served_form.FORM_KEYS,
 )
 _REQUIRED = ("set_type", "set_number", "propounding_party", "responding_party", "request_count", "drafted_by")
@@ -151,6 +160,13 @@ class ServedSet:
     #: The matter file's document id the set was read from (``source``; the
     #: finder writes it, ``served_find.py``); "" for a hand-named set.
     source: str = ""
+    #: The draft of this set an earlier Operator job DELIVERED (same type, number
+    #: and asking party, ``served_find.with_priors``), and that job's id: the set
+    #: is not drafted again; the reply names the draft, and a change request in
+    #: the delivery's thread revises it (``workspace_broker/drafting_route``).
+    #: "" for every other set. Any other draft on the matter stops the job.
+    prior_draft: str = ""
+    prior_job: str = ""
     #: A form interrogatory set's own keys (``served_form.py``); empty for any
     #: other set, and for an SMD form set that names none. Defaults, so a plan
     #: frozen before these keys existed still loads.
@@ -275,10 +291,21 @@ def _values(i: int, raw: dict[str, Any], problems: list[str]) -> None:
         problems.append(f"set {i}: drafted_by must be one of {list(DRAFTERS)}")
     if "source" in raw and (not isinstance(raw["source"], str) or not raw["source"].strip()):
         problems.append(f"set {i}: source must name the matter file's document")
+    for k in ("prior_draft", "prior_job"):
+        if k in raw and (not isinstance(raw[k], str) or not raw[k].strip()):
+            problems.append(f"set {i}: {k} must name the delivered draft's file and its job")
+    if ("prior_draft" in raw) != ("prior_job" in raw):
+        problems.append(f"set {i}: prior_draft and prior_job go together")
 
 
 def _one(
-    job_dir: Path, i: int, raw: Any, problems: list[str], other: list[str], clients: list[str] | None = None
+    job_dir: Path,
+    i: int,
+    raw: Any,
+    problems: list[str],
+    other: list[str],
+    clients: list[str] | None = None,
+    form_by_operator: bool = False,
 ) -> ServedSet | None:
     if not isinstance(raw, dict):
         problems.append(f"set {i}: not an object")
@@ -293,7 +320,7 @@ def _one(
     text = _text(job_dir, i, raw, problems)
     if problems or st is None:
         return None
-    form = served_form.fields(i, raw, problems, by_operator=FORM_SETS_BY_OPERATOR)
+    form = served_form.fields(i, raw, problems, by_operator=form_by_operator)
     if problems:
         return None
     if raw["drafted_by"] == OPERATOR and st == served_form.FORM_TYPE:
@@ -320,11 +347,13 @@ def _one(
         raw["drafted_by"],
         str(raw.get("label") or "").strip(),
         str(raw.get("source") or "").strip(),
+        str(raw.get("prior_draft") or "").strip(),
+        str(raw.get("prior_job") or "").strip(),
         **form,
     )
 
 
-def read(job_dir: Path, clients: list[str] | None = None) -> list[ServedSet]:
+def read(job_dir: Path, clients: list[str] | None = None, form_by_operator: bool = False) -> list[ServedSet]:
     """The served sets SMD named, validated strictly; ``DraftingFailed`` with
     ``served_unknown``, ``served_other_set`` or ``served_invalid``."""
     p = Path(job_dir) / FILE
@@ -332,14 +361,16 @@ def read(job_dir: Path, clients: list[str] | None = None) -> list[ServedSet]:
         raise _fail("served_invalid", f"{FILE} in the job directory is not a plain file")
     if not p.is_file():
         raise _fail("served_unknown", f"SMD has not named the served sets: no {FILE} in the job directory")
-    return parse(p.read_bytes(), Path(job_dir), clients)
+    return parse(p.read_bytes(), Path(job_dir), clients, form_by_operator)
 
 
-def parse(raw: bytes, base: Path, clients: list[str] | None = None) -> list[ServedSet]:
+def parse(raw: bytes, base: Path, clients: list[str] | None = None, form_by_operator: bool = False) -> list[ServedSet]:
     """``read``'s validator on a file's bytes; a ``request_text_path`` is read
     from inside ``base`` (the job dir, or the staff file's own folder for the
     CLI). ``clients``: our client's names in the job's record; an Operator set
-    must answer for one of them (None: not checked, a laptop rehearsal)."""
+    must answer for one of them (None: not checked, a laptop rehearsal).
+    ``form_by_operator``: the firm's answer (``forms.lane_hook.by_operator``);
+    False refuses an Operator form set."""
     try:
         doc = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as exc:
@@ -351,7 +382,7 @@ def parse(raw: bytes, base: Path, clients: list[str] | None = None) -> list[Serv
     out: list[ServedSet] = []
     for i, item in enumerate(doc["sets"], 1):
         before = len(problems)
-        got = _one(base, i, item, problems, other, clients)
+        got = _one(base, i, item, problems, other, clients, form_by_operator)
         if got is not None and len(problems) == before:
             out.append(got)
     if other:
@@ -366,6 +397,8 @@ def parse(raw: bytes, base: Path, clients: list[str] | None = None) -> list[Serv
         raise _fail("served_invalid", f"{FILE}: " + "; ".join(problems)[:400])
     if not any(s.drafted_by == OPERATOR for s in out):
         raise _fail("served_invalid", f'{FILE} marks no set "drafted_by": "operator"; SMD drafts every one')
+    if not any(s.drafted_by == OPERATOR and not s.prior_draft for s in out):
+        raise _fail("served_invalid", f"{FILE}: every operator set already has a draft on the matter (prior_draft)")
     return out
 
 
@@ -394,13 +427,14 @@ def _write_plan(data: Path, got: list[ServedSet]) -> None:
     tmp.replace(p)
 
 
-def frozen(data: Path, job_dir: Path) -> list[ServedSet]:
+def frozen(data: Path, job_dir: Path, form_by_operator: bool = False) -> list[ServedSet]:
     """The job's served sets: ``data/served-plan.json`` when frozen, else
-    ``read`` (checked against our client's names) and freeze them."""
+    ``read`` (checked against our client's names and the firm's form answer)
+    and freeze them."""
     p = Path(data) / PLAN
     if p.is_file():
         return [ServedSet(**s) for s in json.loads(p.read_text(encoding="utf-8"))["sets"]]
-    got = read(job_dir, clients_of(data))
+    got = read(job_dir, clients_of(data), form_by_operator)
     _write_plan(data, got)
     return got
 
@@ -434,7 +468,7 @@ def has_plan(plan: list[dict[str, Any]]) -> bool:
 def plan_units(served: list[ServedSet]) -> list[dict[str, Any]]:
     """One unit per operator set, always keyed (so each carries its own
     instruction and its own file name), with its index in the served plan."""
-    mine = [(i, s) for i, s in enumerate(served) if s.drafted_by == OPERATOR]
+    mine = [(i, s) for i, s in enumerate(served) if s.drafted_by == OPERATOR and not s.prior_draft]
     return [
         {"key": f"set-{n}", "variant": s.set_type, "label": s.label, "served": i} for n, (i, s) in enumerate(mine, 1)
     ]
@@ -447,6 +481,8 @@ def review_map(served: list[ServedSet], plan: list[dict[str, Any]]) -> dict[str,
             "set_type": served[p["served"]].set_type,
             "count": served[p["served"]].request_count,
             "requests": numbered(served[p["served"]].request_text),
+            # An amended set answers only its challenged numbers (amended.py).
+            **({"numbers": list(p["numbers"])} if p.get("numbers") else {}),
             **_form_review(served[p["served"]]),
         }
         for p in plan
@@ -463,12 +499,17 @@ def _form_review(s: ServedSet) -> dict[str, Any]:
 
 def outcomes(served: list[ServedSet], plan: list[dict[str, Any]], names: dict[str, str]) -> list[dict[str, Any]]:
     """Every served set as filed (with its document's name, ``names`` keyed by
-    unit key) or being prepared by us, in the served order."""
+    unit key) or being prepared by us, in the served order. A set with a draft
+    already on the matter is that draft, filed and told: the reply names it,
+    and nothing is owed on it (``PRIOR``)."""
     by_index = {p["served"]: p["key"] for p in plan if isinstance(p.get("served"), int)}
     out = []
     for i, s in enumerate(served):
         key = by_index.get(i)
-        if s.drafted_by == OPERATOR and key in names:
+        if s.prior_draft:
+            out.append({"set": s.label, "drafted_by": OPERATOR, "status": FILED, "document": s.prior_draft,
+                        PRIOR: True, "prior_job": s.prior_job, "told": True})  # fmt: skip
+        elif s.drafted_by == OPERATOR and key in names:
             out.append({"set": s.label, "drafted_by": s.drafted_by, "status": FILED, "document": names[key]})
         else:
             out.append({"set": s.label, "drafted_by": s.drafted_by, "status": BEING_PREPARED, "document": None})
@@ -479,9 +520,29 @@ def reply_lines(rows: list[dict[str, Any]]) -> list[str]:
     """The delivered reply's line per served set, in code (the renderer reads
     ``data/served-outcomes.json`` rows; nothing is left for a model to word)."""
     return [
-        f'{r["set"]}: filed as "{r["document"]}".' if r["status"] == FILED else f"{r['set']}: {BEING_PREPARED}."
+        prior_line(r["set"], r["document"])
+        if r.get(PRIOR)
+        else f'{r["set"]}: filed as "{r["document"]}".'
+        if r["status"] == FILED
+        else f"{r['set']}: {BEING_PREPARED}."
         for r in rows
     ]
+
+
+def prior_line(set_label: str, document: str) -> str:
+    """A set whose draft was already on the matter, worded by the endings table
+    (``endings.FIRM_MESSAGES["prior_draft_routed"]``); the broker's reply
+    (``delivered_matter``, ``served_prior``) says the same sentence."""
+    from .endings import FIRM_MESSAGES
+
+    return FIRM_MESSAGES["prior_draft_routed"].format(item=f'{set_label}, "{document}"') + "."
+
+
+def prior_reason(rows: list[dict[str, Any]]) -> str | None:
+    """A delivered verdict's reason when a set was named with its draft already
+    on the matter (``prior_draft_routed``, ``endings``); None otherwise."""
+    named = [str(r["set"]) for r in rows if r.get(PRIOR)]
+    return f"prior_draft_routed: {'; '.join(named)} already drafted on the matter" if named else None
 
 
 def to_file(found: list[ServedSet]) -> str:
@@ -489,6 +550,7 @@ def to_file(found: list[ServedSet]) -> str:
     rows = []
     for s in found:
         drop = {"other_label", "source", "request_text", *([] if s.form else served_form.FORM_KEYS)}
+        drop |= set() if s.prior_draft else {"prior_draft", "prior_job"}
         raw = {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(s).items() if k not in drop}
         raw.update({"request_text": s.request_text} if s.request_text else {})
         raw.update({"label": s.other_label} if s.set_type == OTHER else {})

@@ -6,7 +6,8 @@ The ops workspace writes one per saved matter from the hand drafts::
      "served_sets": [{"type", "set_number", "sha256", "request_count"}],
      "form": {"checked": [...], "kinds": {"<number>": "<kind>"}, "names": {"<number>": [...]}},
      "special": [{"n", "kind", "request_head"}],
-     "production": [{"n", "kind", "request_head"}]}
+     "production": [{"n", "kind", "request_head"}],
+     "exhibits": [{"letter", "title", "files": [{"name", "requests"} | "1. <name> (Request Nos. 2, 6)"]}]}
 
 The workspace's own hand-built keys use a second, shorter shape, read the
 same (2026-11-20: the loader read them as an empty key and the replay said
@@ -30,6 +31,7 @@ naming the field each entry lacked.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -95,6 +97,50 @@ class Key:
     names: dict[str, list[str]]
     items: dict[str, list[KeyItem]]
     dropped: list[str] = field(default_factory=list)
+    #: The hand Index of Exhibits, one line per file (``exhibit_lines``).
+    exhibits: list[KeyLine] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class KeyLine:
+    """One line of the key's Index of Exhibits: the file, its exhibit, and the
+    request numbers it lists (None when the key line names none)."""
+
+    letter: str
+    name: str
+    requests: tuple[int, ...] | None
+
+
+#: "1. Valley Ortho ledger.pdf (Request Nos. 2, 6)", as the hand index prints a line.
+_INDEX_LINE = re.compile(r"^\s*\d+\.\s*(.+?)\s*(?:\(Request Nos?\.\s*([^)]*)\))?\s*$", re.I)
+
+
+def _requests(v: Any) -> tuple[int, ...] | None:
+    if isinstance(v, str):
+        return tuple(int(x) for x in re.findall(r"\d+", v))
+    if isinstance(v, list):
+        return tuple(n for n in (_int(x) for x in v) if n is not None)
+    return None
+
+
+def exhibit_lines(raw: Any, dropped: list[str]) -> list[KeyLine]:
+    """``exhibits``: ``[{"letter", "title", "files": [{"name", "requests": [..]} | "<index line>"]}]``."""
+    out: list[KeyLine] = []
+    for i, e in enumerate(raw if isinstance(raw, list) else []):
+        letter = str(e.get("letter") or "").strip().upper() if isinstance(e, dict) else ""
+        if not letter or not isinstance(e.get("files"), list):
+            dropped.append(f"exhibits[{i}]")
+            continue
+        for f in e["files"]:
+            if isinstance(f, dict) and str(f.get("name") or "").strip():
+                out.append(KeyLine(letter, str(f["name"]).strip(), _requests(f.get("requests"))))
+                continue
+            m = _INDEX_LINE.match(f) if isinstance(f, str) else None
+            if m:
+                out.append(KeyLine(letter, m.group(1), _requests(m.group(2)) if m.group(2) else None))
+            else:
+                dropped.append(f"exhibits[{i}] line {str(f)[:40]!r}")
+    return out
 
 
 #: A set number as the keys spell it in words ("set": "One").
@@ -218,6 +264,7 @@ def parse(doc: Any) -> Key:
         names=names,
         items={name: _items(doc.get(name), name, dropped) for name in ITEM_LISTS},
         dropped=dropped,
+        exhibits=exhibit_lines(doc.get("exhibits"), dropped),
     )
 
 

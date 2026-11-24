@@ -96,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--recordings", type=Path, help="the model's recorded answers (default: UNITS/recordings.jsonl)")
     ap.add_argument("--model", default="recorded", help="the model id the recordings were made with")
+    ap.add_argument("--book", type=Path, help="the firm's phrase book: rehearse the firm-rules path (book_rehearse.py)")
     a = ap.parse_args(argv)
     if a.units is not None:
         if a.rules is None:

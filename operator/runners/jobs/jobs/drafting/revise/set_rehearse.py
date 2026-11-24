@@ -195,6 +195,8 @@ def main_set(a: Any) -> int:
     raw = json.loads(a.rules.read_text(encoding="utf-8"))
     rules = raw.get("rules") if isinstance(raw, dict) else raw
     rec = a.recordings or a.units / "recordings.jsonl"
+    if getattr(a, "book", None):
+        return _main_book(a, list(rules or []), rec, fmt)
     rep = rehearse_set(
         a.units, a.request.read_text(encoding="utf-8"), list(rules or []), rec, fmt=fmt, model=a.model, out=a.out
     )
@@ -214,3 +216,32 @@ def main_set(a: Any) -> int:
         print(f"  NEEDS A RECORDING: stage {n['stage']} sha {n['sha']}")
     print("REHEARSAL OK" if rep["ok"] else "REHEARSAL REFUSED")
     return 0 if rep["ok"] else 1
+
+
+def _main_book(a: Any, rules: list[dict[str, Any]], rec: Path, fmt: dict[str, Any] | None) -> int:
+    """``--book``: the firm-rules path (``book_rehearse.py``), scored per kind of change."""
+    from . import book_rehearse
+
+    rows = _rows(rec) if rec.is_file() else {}
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(a.out or tmp)
+        work.mkdir(parents=True, exist_ok=True)
+        rep = book_rehearse.rehearse(a.units, a.request.read_text(encoding="utf-8"), rules, rows, a.book, work, fmt)
+        (work / "rehearsal.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+    for d in rep["documents"]:
+        r = d["responses"]
+        print(
+            f"  {d['document']:<40} changed {d['changed']} correct {r['correct']} missed {r['missed']} extra {r['extra']}"
+        )
+    for what in ("responses", "index"):
+        t = rep["totals"][what]
+        print(f"  {what}: " + ", ".join(f"{c} {t[c]}" for c in score.COUNTS))
+    for kind, t in rep["totals"]["kinds"].items():
+        print(f"  {kind}: correct {t['correct']}, missed {t['missed']}, extra {t['extra']}")
+    req = rep["request"]
+    print(f"request: {req['outcome']}" + (f" ({req['reason']})" if req["reason"] else ""))
+    for n in rep["needed"]:
+        print(f"  NEEDS A RECORDING: stage {n['stage']} sha {n['sha']}")
+    ok = req["outcome"] == "delivered" and all(d["responses"]["extra"] == 0 for d in rep["documents"])
+    print("REHEARSAL OK" if ok else "REHEARSAL REFUSED")
+    return 0 if ok else 1

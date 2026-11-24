@@ -7,14 +7,22 @@ Authored as an optional top-level section of ``drafting-firm.yaml``::
 Absent, nothing reads it and every job runs as it did before the section
 existed. ``stages`` switches the rules stage on per mode, so revisions can go on
 before first drafts. The file is a list of entries ``{key, kind, text, names,
-sets, source}`` (design C); ``load`` reads it, the stage that uses it is built
-in its own change.
+sets, source}`` (design C). ``{item}`` in an entry's text is the response's own
+word for what it answers ("Request", "Interrogatory"); ``{exhibit}`` is the
+exhibit letters code fills from the document's own index.
+
+A rule whose own words are the firm's wording (quoted, or stated: "state that
+the responding party will not respond further") adds an entry of its own at the
+job's rule read (``reading.py``), keyed ``<rule id>#<clause>``, so such a rule
+needs no change to the book file.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from .types import MODES
@@ -23,6 +31,45 @@ KEY = "phrase_book"
 KEYS = ("path", "stages")
 KINDS = ("objection", "disposition", "transition", "statement")
 ENTRY_KEYS = ("key", "kind", "text", "names", "sets", "source")
+#: The fewest words a long-form objection's shared lead-in has (``Book.objection_lead``).
+LEAD_WORDS = 4
+
+_FOLD = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"', " ": " "})
+#: Exhibit letters as they read once folded: "a", "a and b", "a, b and c".
+_LETTERS = r"[a-z]{1,2}(?:(?:,\s*(?:and\s+)?|\s+and\s+)[a-z]{1,2})*"
+_CAPS = re.compile(r"\b[A-Z][a-z]+(?: [A-Z][a-z]+)*\b")
+_SLOT = re.compile(r"(\{item\}|\{exhibit\})")
+
+
+def norm(text: str) -> str:
+    """Curly quotes and spacing folded, case kept."""
+    return " ".join(str(text or "").translate(_FOLD).split())
+
+
+def fold(text: str) -> str:
+    """Words as two are compared: curly quotes, spacing and case folded."""
+    return norm(text).casefold()
+
+
+def bare(text: str) -> str:
+    """``fold`` with end punctuation off: "... Exhibit B" and "... Exhibit B." are one sentence."""
+    return fold(text).rstrip(" .;,:")
+
+
+@lru_cache(maxsize=512)
+def _pattern(text: str) -> re.Pattern[str]:
+    """An entry's words as a pattern over a ``bare`` sentence: ``{item}`` any
+    short run of words, ``{exhibit}`` exhibit letters (after "Exhibit" or
+    "Exhibits")."""
+    out = []
+    for piece in _SLOT.split(bare(text)):
+        if piece == "{item}":
+            out.append(r".{1,40}?")
+        elif piece == "{exhibit}":
+            out.append(_LETTERS)
+        else:
+            out.append(re.sub(r"exhibit\\ $", r"exhibits?\\ ", re.escape(piece)))
+    return re.compile("".join(out))
 
 
 def validate(body: object) -> list[str]:
@@ -64,6 +111,9 @@ class Entry:
     sets: tuple[str, ...] = ()
     source: str = ""
 
+    def to_dict(self) -> dict[str, Any]:
+        return {**vars(self), "names": list(self.names), "sets": list(self.sets)}
+
 
 @dataclass(frozen=True)
 class Book:
@@ -74,13 +124,49 @@ class Book:
         return self.entries[key].text.replace("{item}", item).replace("{exhibit}", exhibits)
 
     def find(self, sentence: str) -> str | None:
-        """The key of the entry whose words are this sentence (spacing and case
-        folded), else None."""
-        want = " ".join(sentence.split()).casefold()
+        """The key of the entry whose words are this sentence (quotes, spacing,
+        case and end punctuation folded; a slot matches what fills it), else None."""
+        want = bare(sentence)
         for k, e in self.entries.items():
-            if " ".join(e.text.split()).casefold() == want:
+            if bare(e.text) == want:
+                return k
+        for k, e in self.entries.items():
+            if _pattern(e.text).fullmatch(want):
                 return k
         return None
+
+    def of_kind(self, *kinds: str) -> list[Entry]:
+        return [e for e in self.entries.values() if e.kind in kinds]
+
+    def with_entries(self, entries: list[Entry]) -> Book:
+        """This book and ``entries``; an entry already here keeps its words."""
+        return Book({**{e.key: e for e in entries}, **self.entries})
+
+    def objection_lead(self) -> str:
+        """The words every objection entry starts with, up to and past
+        ``{item}`` ("Responding Party objects to this {item} on the"): the shape
+        a sentence written for one request must take. "" when fewer than two
+        objection entries share ``LEAD_WORDS`` or more words with the slot."""
+        texts = [e.text.split() for e in self.of_kind("objection")]
+        if len(texts) < 2:
+            return ""
+        lead: list[str] = []
+        for words in zip(*texts):
+            if len({w.casefold() for w in words}) != 1:
+                break
+            lead.append(words[0])
+        return " ".join(lead) if len(lead) >= LEAD_WORDS and "{item}" in lead else ""
+
+    def cased(self, words: str) -> str:
+        """``words`` with each run of capitalised words the book writes
+        ("Responding Party", "Request") in the book's casing, a capital first
+        letter and a full stop: a rule's stated words made the firm's sentence
+        without adding or changing a word."""
+        runs = sorted({m.group(0) for e in self.entries.values() for m in _CAPS.finditer(e.text)}, key=len)
+        out = norm(words).strip(" \"'")
+        for run in reversed(runs):
+            out = re.sub(rf"\b{re.escape(run)}\b", run, out, flags=re.I)
+        return (out[:1].upper() + out[1:]).rstrip(" .;,:") + "."
 
 
 class BookError(ValueError):

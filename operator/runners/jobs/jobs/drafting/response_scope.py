@@ -168,10 +168,22 @@ _PAGE = re.compile(r"\[p\.(\d+)\][^\n]*\n?")
 
 # ---- the firm input ------------------------------------------------------------------
 def validate(body: object) -> list[str]:
-    """``response_scope``'s closed shape: ``{patterns: {<category>: [regex, ...]}}``."""
-    if not isinstance(body, dict) or set(body) != {"patterns"}:
-        return [f"{KEY}: expected exactly {{patterns: {{<category>: [regex, ...]}}}}"]
-    pats = body["patterns"]
+    """``response_scope``'s closed shape: ``{patterns: {<category>: [regex, ...]},
+    exhibits: <the exhibit table>}``, each optional, one at least. The exhibit
+    table is ``exhibit_plan``'s (2026-11-23); without it nothing changes."""
+    if not isinstance(body, dict) or not body or not set(body) <= {"patterns", "exhibits"}:
+        return [f"{KEY}: expected {{patterns: {{<category>: [regex, ...]}}, exhibits: {{...}}}} (one or both)"]
+    out: list[str] = []
+    if "exhibits" in body:
+        from .exhibit_plan import validate as exhibits_valid
+
+        out += exhibits_valid(body["exhibits"], CATEGORIES)
+    if "patterns" not in body:
+        return out
+    return out + _patterns_valid(body["patterns"])
+
+
+def _patterns_valid(pats: object) -> list[str]:
     if not isinstance(pats, dict) or not pats:
         return [f"{KEY}.patterns: expected a map of one or more of {list(PRECEDENCE)}"]
     out = [f"{KEY}.patterns.{c}: not one of {list(PRECEDENCE)}" for c in pats if c not in PRECEDENCE]
@@ -193,7 +205,8 @@ Patterns = dict[str, list[re.Pattern[str]]]
 def patterns(firm_data: dict[str, Any] | None) -> Patterns:
     """The firm's patterns when it authored them, else ``DEFAULT_PATTERNS``."""
     body = (firm_data or {}).get(KEY)
-    raw: Mapping[str, Sequence[str]] = body["patterns"] if body is not None and not validate(body) else DEFAULT_PATTERNS
+    authored = body is not None and not validate(body) and "patterns" in body
+    raw: Mapping[str, Sequence[str]] = body["patterns"] if authored and body is not None else DEFAULT_PATTERNS
     return {c: [re.compile(p, re.I) for p in raw.get(c, ())] for c in PRECEDENCE}
 
 
@@ -515,8 +528,23 @@ def inventory(data: Path) -> str:
     )
     rows = [f for f in json.loads((data / SCOPE).read_text(encoding="utf-8"))["files"] if str(f["id"]) not in walled]
     lines = ["THE FILE INVENTORY (every document in the matter file, listed by code; no page text):", ""]
-    lines += ["| File | Folder | Category | Pages |", "| --- | --- | --- | --- |"]
-    lines += [f"| {f['name']} | {f.get('folder') or '/'} | {f['category']} | {f['pages']} |" for f in rows]
+    from . import exhibit_plan
+
+    plan = exhibit_plan.load(data)
+    if plan is None:
+        lines += ["| File | Folder | Category | Pages |", "| --- | --- | --- | --- |"]
+        lines += [f"| {f['name']} | {f.get('folder') or '/'} | {f['category']} | {f['pages']} |" for f in rows]
+        return "\n".join(lines) + "\n"
+    # The firm's exhibit table placed each file (exhibit_plan.py): a response
+    # produces from the exhibit its documents are in, and code writes the index.
+    letters = exhibit_plan.letter_of(plan)
+    held = ", ".join(f"Exhibit {e['letter']} ({e['title']})" for e in plan["exhibits"] if e["files"]) or "none"
+    lines[0:0] = [f"THE EXHIBITS THAT HOLD DOCUMENTS (placed by code): {held}.", ""]
+    lines += ["| File | Folder | Category | Pages | Exhibit |", "| --- | --- | --- | --- | --- |"]
+    lines += [
+        f"| {f['name']} | {f.get('folder') or '/'} | {f['category']} | {f['pages']} | {letters.get(str(f['id']), '-')} |"
+        for f in rows
+    ]
     return "\n".join(lines) + "\n"
 
 

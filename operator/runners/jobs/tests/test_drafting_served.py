@@ -146,19 +146,41 @@ def test_discovery_to_the_defense_plans_three_sets_to_each_defendant_at_the_capt
     assert [(p["label"], p["party"]) for p in plan] == [(k, p) for p in (DELTA, CITY) for k in (SROG, RFP, RFA)]
 
 
-def test_a_propounded_set_reads_its_caption_after_the_transcription_as_main_does(tmp_path, pricing, monkeypatch):
+def test_a_propounded_set_reads_its_caption_after_the_transcription_when_a_paper_may_still_gain_text(
+    tmp_path, pricing, monkeypatch
+):
     """FALSIFIER (final review, 11-19): an early caption read froze the wrong
-    paper's caption and wrote corrections from it. The caption is read once,
-    after the transcription; nothing plans or reads a caption before it."""
+    paper's caption and wrote corrections from it. A later complaint with no
+    text yet (a scan) could outrank the paper visible now, so the caption is
+    read once, after the transcription, and nothing plans before it."""
+    from drafting_testkit import make_pdf
+
+    seen: dict = {}
+    _stop_at_finish(monkeypatch, seen)
+    client, _seat = _two_defendants()
+    scan = ("d4", "First Amended Complaint 3-1-26.pdf", make_pdf([""]), "f-plead")
+    seat = seat_with([*standard_docs(), scan], record=_record("Delta Example Corporation", "City of Exampletown"))
+    r = _runner(tmp_path, pricing, DEFENSE, "discovery_set", client, seat, defaults=DEFAULTS)
+    r.run()
+    order = seen["state"]
+    assert order.index("transcribe") < order.index("caption") and "plan" not in order
+    assert not (r.data / "caption-plan.json").exists()
+    assert client.count("COPY THE CAPTION") == 1
+
+
+def test_a_propounded_set_plans_before_the_transcription_when_its_caption_paper_is_settled(
+    tmp_path, pricing, monkeypatch
+):
+    """B0: the complaint already carries its text and nothing could outrank it,
+    so the caption is read once, before the file, and the plan follows it."""
     seen: dict = {}
     _stop_at_finish(monkeypatch, seen)
     client, seat = _two_defendants()
     r = _runner(tmp_path, pricing, DEFENSE, "discovery_set", client, seat, defaults=DEFAULTS)
     r.run()
     order = seen["state"]
-    assert order.index("transcribe") < order.index("caption") and "caption-plan" not in order and "plan" not in order
-    assert not (r.data / "caption-plan.json").exists()
-    assert client.count("COPY THE CAPTION") == 1
+    assert order.index("caption") < order.index("plan") < order.index("transcribe")
+    assert client.count("COPY THE CAPTION") == 1 and len(seen["units"]) == 6
 
 
 def test_a_resumed_job_reads_the_caption_once_and_reuses_its_plan(tmp_path, pricing, monkeypatch):

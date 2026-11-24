@@ -59,8 +59,8 @@ def _srog():
     }
 
 
-def _parse(*sets_, tmp_path):
-    return served.parse(json.dumps({"sets": list(sets_)}).encode(), tmp_path, ["Gamma Example"])
+def _parse(*sets_, tmp_path, form=False):
+    return served.parse(json.dumps({"sets": list(sets_)}).encode(), tmp_path, ["Gamma Example"], form)
 
 
 # ---- 1. the keys ---------------------------------------------------------------------------
@@ -115,24 +115,22 @@ def test_some_form_keys_without_the_rest_and_form_keys_on_another_set_are_refuse
 # ---- 3. the Operator's form sets, still refused ---------------------------------------------
 
 
-def test_an_operator_form_set_is_refused_while_the_switch_is_off_however_valid(tmp_path):
-    assert served.FORM_SETS_BY_OPERATOR is False
+def test_an_operator_form_set_is_refused_for_a_firm_without_a_form_policy_however_valid(tmp_path):
     with pytest.raises(outcome.DraftingFailed, match="a form interrogatory set is drafted by SMD for now"):
         _parse(_form_set("operator"), tmp_path=tmp_path)
 
 
-def test_with_the_switch_on_an_operator_form_set_reads_and_is_not_numbered_one_to_n(tmp_path, monkeypatch):
-    monkeypatch.setattr(served, "FORM_SETS_BY_OPERATOR", True)
-    got = _parse(_form_set("operator"), tmp_path=tmp_path)
+def test_with_the_firms_policy_an_operator_form_set_reads_and_is_not_numbered_one_to_n(tmp_path):
+    got = _parse(_form_set("operator"), tmp_path=tmp_path, form=True)
     assert got[0].drafted_by == "operator" and got[0].checked == tuple(CHECKED)
     with pytest.raises(outcome.DraftingFailed, match="with additions attached is drafted by SMD"):
-        _parse(_form_set("operator", additions=True), tmp_path=tmp_path)
+        _parse(_form_set("operator", additions=True), tmp_path=tmp_path, form=True)
     with pytest.raises(outcome.DraftingFailed, match="not a form and revision the catalogue carries"):
-        _parse(_form_set("operator", form_revision="Rev. July 1, 1999"), tmp_path=tmp_path)
+        _parse(_form_set("operator", form_revision="Rev. July 1, 1999"), tmp_path=tmp_path, form=True)
     with pytest.raises(outcome.DraftingFailed, match="names all of"):
-        _parse({k: v for k, v in _form_set("operator").items() if k != "additions"}, tmp_path=tmp_path)
+        _parse({k: v for k, v in _form_set("operator").items() if k != "additions"}, tmp_path=tmp_path, form=True)
     with pytest.raises(outcome.DraftingFailed, match="is not our client"):
-        _parse(_form_set("operator", responding_party="Someone Else"), tmp_path=tmp_path)
+        _parse(_form_set("operator", responding_party="Someone Else"), tmp_path=tmp_path, form=True)
 
 
 # ---- 4. a frozen plan -----------------------------------------------------------------------

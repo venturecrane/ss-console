@@ -169,6 +169,31 @@ def cost(work: Path, scoped: dict[str, Any], served_doc: Any, firm_data: dict[st
     return {"dollars": est["usd"], "minutes": est["minutes"]["total"], "lines": lines, "estimate": est}
 
 
+def exhibits(work: Path, scoped: dict[str, Any], firm_data: dict[str, Any] | None, production: Path | None) -> dict:
+    """``exhibit_plan.place`` over the scoped copy's record, as the lane's scope
+    stage runs it, and, given a production response, ``exhibit_index``'s lines."""
+    from .. import exhibit_index as xi, exhibit_plan as xp
+
+    fn = S.entry("exhibits")
+    table = xp.table(firm_data)
+    if table is None:
+        raise ValueError("the firm file authors no response_scope.exhibits table (or it does not validate)")
+    data = work / "data"
+    placed = fn(scoped["record"]["files"], table, xp.walled_ids(data))
+    (data / xp.FILE).write_text(json.dumps(placed, indent=1), encoding="utf-8")
+    listed = None
+    if production is not None:
+        md = production.read_text(encoding="utf-8") if production.suffix.lower() != ".docx" else _docx_md(production)
+        listed = xi.index_lines(md, placed)[1]["listed"]
+    return {"placed": placed, "listed": listed}
+
+
+def _docx_md(path: Path) -> str:
+    from ..revise.prior import docx_to_md
+
+    return docx_to_md(path)
+
+
 def form_read(path: Path) -> Any:
     """``forms.read_stage.pixel_read``: the $0 pixel read of one served form file."""
     return S.entry("form-read")(path)

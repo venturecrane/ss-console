@@ -19,7 +19,11 @@ attorney:
   a mention (a memo about discovery, the 2026-10-12 incident) never counts, and a
   prior set the file does not bear out, or whose count cannot be read, is named
   for the attorney instead. The proof of service's
-  ``{{FILL: ... | at service}}`` slots stay verbatim for the person serving;
+  ``{{FILL: ... | at service}}`` slots stay verbatim for the person serving.
+  A set of requests for admission gets the section 2033.050 declaration by the
+  same cumulative rule over prior admission sets, every request counted, when
+  the firm authored that form (``attachments.decl_2033_050``); one decision
+  serves both sections (``counts.declaration``);
 * reserved judgment: in a mediation brief, the case-value section opens with an
   ``{{ATTORNEY}}`` marker, and a paragraph about settlement authority, the
   target figure or the bracket carries no dollar figure. The valuation
@@ -42,7 +46,7 @@ DISCOVERY = ("discovery_set", "discovery_response")
 NOTES_MARK = "=== ATTORNEY NOTES ==="
 NEEDS_ATTORNEY = "=== NEEDS THE ATTORNEY ==="
 SPECIAL_LIMIT = 35
-DECL_LINE = re.compile(r"(?i)declaration for additional discovery|declaration\b.*2030\.050")
+DECL_LINE = re.compile(r"(?i)declaration for additional discovery|declaration\b.*20(?:30|33)\.050")
 POS_LINE = re.compile(r"(?i)^\s*(#{1,6}\s+|\*\*)?\s*proof of service\b")
 RESERVED = re.compile(
     r"(?i)\b(settlement\s+authority|authority\s+to\s+settle|settlement\s+target|target\s+(?:figure|number|amount)|"
@@ -224,16 +228,40 @@ class DeclDecision:
     #: Mentions that are not the set itself (a memo about discovery): not counted.
     ignored: list[str] = field(default_factory=list)
     served: list[str] = field(default_factory=list)
+    #: The set's kind: special interrogatories, or requests for admission
+    #: (section 2033.050, the same cumulative rule over prior admission sets).
+    variant: str = "special_interrogatories"
+    prior_admission: int = 0
+
+    @property
+    def prior(self) -> int:
+        """The proven prior requests of this set's own kind to this party."""
+        return self.prior_admission if self.variant == "requests_for_admission" else self.prior_special
 
     @property
     def total(self) -> int:
-        return self.this_set + self.prior_special
+        return self.this_set + self.prior
+
+    @property
+    def key(self) -> str | None:
+        """The declaration this set needs (``counts.declaration``), or None."""
+        from . import counts
+
+        return counts.declaration(self.variant, self.this_set, self.prior)
 
     @property
     def attach(self) -> bool:
         """Only a PROVEN cumulative count over the limit: the declaration's
         paragraph 3 says so under penalty of perjury."""
-        return self.this_set > 0 and self.total > SPECIAL_LIMIT
+        return self.key is not None
+
+    @property
+    def section(self) -> str:
+        return "2033.050" if self.variant == "requests_for_admission" else "2030.050"
+
+    @property
+    def words(self) -> str:
+        return "requests for admission" if self.variant == "requests_for_admission" else "special interrogatories"
 
 
 #: A special interrogatory's own label: the line holds the label and nothing
@@ -261,8 +289,10 @@ def decl_decision(md: str, digest: str, corpus: Mapping[str, str] | None = None)
     format_check and the pre-delivery review apply. ``corpus`` is the matter's
     document texts by name; without it no prior set can be proven."""
     doc, _ = split_notes(md)
-    n = special_count(doc)
     resp, prop = party(doc, "RESPONDING PARTY"), party(doc, "PROPOUNDING PARTY")
+    if sets_kinds(doc) == ["requests_for_admission"]:
+        return _admission_decision(doc, digest, corpus or {}, resp, prop)
+    n = special_count(doc)
     d = DeclDecision(this_set=n, prior_special=0, prior_form=0)
     for s in prior_sets(digest):
         if "interrogator" not in s.kind:
@@ -284,6 +314,38 @@ def decl_decision(md: str, digest: str, corpus: Mapping[str, str] | None = None)
             d.served.append(f"{s.title} ({s.count}, {what})")
         else:
             d.prior_form += int(s.count or 0)
+            d.served.append(f"{s.title} ({s.count}, {what})")
+    return d
+
+
+def _admission_decision(
+    doc: str, digest: str, corpus: Mapping[str, str], resp: str | None, prop: str | None
+) -> DeclDecision:
+    """Section 2033.050: this set's requests for admission, every one counted,
+    plus the requests in prior admission sets to the same party that a served
+    copy in the file bears out. The same proof the interrogatory rule uses."""
+    from .set_items import count
+
+    d = DeclDecision(
+        this_set=count(doc, "requests_for_admission"), prior_special=0, prior_form=0, variant="requests_for_admission"
+    )
+    for s in prior_sets(digest):
+        if kind_of(s.kind) != "admission":
+            continue
+        if resp is None or prop is None:
+            d.unreadable.append(f"{s.title} (this set's propounding or responding party is not stated)")
+            continue
+        if not _same(s.responding, resp) or not _same(s.propounding, prop):
+            continue
+        how, what = proof(s, corpus)
+        if how == "mention":
+            d.ignored.append(what)
+        elif how == "doubtful":
+            d.doubtful.append(what)
+        elif how == "unreadable":
+            d.unreadable.append(s.title)
+        else:
+            d.prior_admission += int(s.count or 0)
             d.served.append(f"{s.title} ({s.count}, {what})")
     return d
 
@@ -348,10 +410,12 @@ def _fill_decl(text: str, d: DeclDecision, doc: str = "", declarant: str | None 
         if who:
             text = re.sub(rf"`?\{{\{{FILL: {slot} party, as captioned[^}}]*\}}\}}`?", lambda _m, w=who: w, text)
     text = re.sub(r"`?\{\{FILL: number of special interrogatories in this set[^}]*\}\}`?", str(d.this_set), text)
+    text = re.sub(r"`?\{\{FILL: number of requests for admission in this set[^}]*\}\}`?", str(d.this_set), text)
     if d.unreadable:
         why = "the file shows a prior set served, but its count is not readable: " + "; ".join(d.unreadable)
         text = re.sub(
-            r"`?\{\{FILL: number of (?:interrogatories previously|those that were not)[^}]*\}\}`?",
+            r"`?\{\{FILL: number of (?:interrogatories previously|those that were not|requests for admission "
+            r"previously)[^}]*\}\}`?",
             f"{{{{ATTORNEY: {why}}}}}",
             text,
         )
@@ -360,6 +424,9 @@ def _fill_decl(text: str, d: DeclDecision, doc: str = "", declarant: str | None 
             r"`?\{\{FILL: number of interrogatories previously[^}]*\}\}`?", str(d.prior_special + d.prior_form), text
         )
         text = re.sub(r"`?\{\{FILL: number of those that were not[^}]*\}\}`?", str(d.prior_special), text)
+        text = re.sub(
+            r"`?\{\{FILL: number of requests for admission previously[^}]*\}\}`?", str(d.prior_admission), text
+        )
     return text
 
 
@@ -480,6 +547,90 @@ def strip_attachments(doc: str) -> tuple[str, bool]:
     return doc, False
 
 
+def _form(firm: Any, key: str) -> str | None:
+    """The firm's authored attachment form, or None when it authored none
+    (``decl_2033_050`` is optional: absent, no admission set carries one)."""
+    try:
+        return firm.attachment(key)
+    except KeyError:
+        return None
+
+
+def _declare(
+    doc: str, firm: Any, digest: str, corpus: Mapping[str, str] | None, declarant: str | None
+) -> tuple[str | None, list[str]]:
+    """(the declaration page a set carries, or None; the notes about it). One
+    decision (``DeclDecision.key``, ``counts.declaration``) for both sections."""
+    from . import counts
+
+    d = decl_decision(doc, digest, corpus)
+    if not d.this_set:
+        return None, []
+    rfa = d.variant == "requests_for_admission"
+    form = _form(firm, d.key) if d.key else None
+    if rfa and form is None and not counts.enabled(getattr(firm, "data", None)):
+        return None, []  # dark: neither the 2033.050 form nor the firm's counts are authored
+    sec, words, notes = d.section, d.words, []
+    page = _fill_decl(form, d, doc, declarant) if form else None
+    if page:
+        why = (
+            f"{d.total} {words} to this party ({d.this_set} in this set, {d.prior} "
+            f"before in served sets: {'; '.join(d.served) or 'the file shows none served'})"
+        )
+        if d.unreadable:
+            why += "; a served prior set's count is not readable, so paragraph 4 is left to the attorney"
+        notes.append(f"section {sec} declaration attached: {why}")
+    elif d.key:
+        notes.append(
+            f"section {sec}: {d.total} {words} to this party ({d.this_set} in this set, {d.prior} in served prior "
+            f"sets); no section {sec} declaration form is on file for the firm, so none is attached"
+        )
+    else:
+        notes.append(
+            f"section {sec}: {d.total} {words} to this party ({d.this_set} in this set, "
+            f"{d.prior} in served prior sets); no declaration, the count does not exceed {SPECIAL_LIMIT}"
+        )
+    notes += [
+        f"Section {sec}: paragraph 4 counts no earlier set; the file holds this draft but no service of it: {x}"
+        for x in d.doubtful
+    ]
+    notes += [
+        f"Section {sec}: {x} is a note about discovery, not a served set, so paragraph 4 does not count it"
+        for x in d.ignored
+    ]
+    return page, notes
+
+
+def decl_problems(where: str, text: str, digest: str, corpus: Mapping[str, str] | None) -> list[tuple[str, str]]:
+    """The review's code check of a filed set's declaration, (check, finding)
+    each a MUST-FIX: a declaration only where ``DeclDecision.key`` names that
+    section, and its paragraph 5 counting the set it is attached to."""
+    if not DECL_LINE.search(text):
+        return []
+    d = decl_decision(text, digest, corpus)
+    has = (
+        "2033.050"
+        if re.search(r"(?i)declaration\b[^\n]{0,80}2033\.050|2033\.050[^\n]{0,80}declaration", text)
+        else "2030.050"
+    )
+    check = f"1 section {has} declaration"
+    out = []
+    if d.section != has:
+        out.append((check, f"{where} carries a section {has} declaration on a set of {d.words}"))
+    elif not d.attach:
+        out.append(
+            (
+                check,
+                f"{where} carries a section {has} declaration, but the proven cumulative count is {d.total} "
+                f"({d.this_set} in this set, {d.prior} in served prior sets), not over 35",
+            )
+        )
+    para5 = re.search(r"(?i)contains\s+a\s+total\s+of\s+(\d+)\s+(?:specially\s+prepared|requests)", text)
+    if para5 and int(para5.group(1)) != d.this_set:
+        out.append((check, f"{where}: the declaration counts {para5.group(1)}; the set has {d.this_set}"))
+    return out
+
+
 def attach(
     doc: str,
     cls: str,
@@ -488,46 +639,34 @@ def attach(
     corpus: Mapping[str, str] | None = None,
     declarant: str | None = None,
     firm_address: list[str] | None = None,
+    facts: Any = None,
 ) -> tuple[str, list[str]]:
     """The served attachments, appended by the job in the order the firm serves
     them: the document, then the section 2030.050 declaration (a special
-    interrogatory set over the PROVEN cumulative limit), then the proof of
+    interrogatory set over the PROVEN cumulative limit) or the section 2033.050
+    declaration (a set of requests for admission over it, when the firm
+    authored that form), then the proof of
     service (every discovery set and response). Authoring comments are
     stripped; every ``{{FILL: ... | at service}}`` slot stays verbatim for the
     person serving. Appended after the audit and the gate: the firm's fixed
     text is never audited. ``corpus`` (document texts by name) is what proves a
-    prior set served (``decl_decision``)."""
+    prior set served (``decl_decision``). ``facts`` is the set's recorded
+    counts (``counts.facts``, present only when the firm authored its
+    counts): the notes then carry its "Set sizes" lines."""
     if cls not in DISCOVERY:
         return doc, []
     doc, removed = strip_attachments(doc)
     notes = ["the firm's own declaration and proof of service forms are used"] if removed else []
     parts = [doc.rstrip()]
-    if cls == "discovery_set" and special_count(doc) > 0:
-        d = decl_decision(doc, digest, corpus)
-        if d.attach:
-            parts.append(_fill_decl(firm.attachment("decl_2030_050"), d, doc, declarant))
-            why = (
-                f"{d.total} special interrogatories to this party ({d.this_set} in this set, {d.prior_special} "
-                f"before in served sets: {'; '.join(d.served) or 'the file shows none served'})"
-            )
-            if d.unreadable:
-                why += "; a served prior set's count is not readable, so paragraph 4 is left to the attorney"
-            notes.append(f"section 2030.050 declaration attached: {why}")
-        elif d.this_set:
-            notes.append(
-                f"section 2030.050: {d.total} special interrogatories to this party ({d.this_set} in this set, "
-                f"{d.prior_special} in served prior sets); no declaration, the count does not exceed {SPECIAL_LIMIT}"
-            )
-        notes += [
-            f"Section 2030.050: paragraph 4 counts no earlier set; the file holds this draft but no service of it: {x}"
-            for x in d.doubtful
-        ]
-        notes += [
-            f"Section 2030.050: {x} is a note about discovery, not a served set, so paragraph 4 does not count it"
-            for x in d.ignored
-        ]
     if cls == "discovery_set":
-        notes += prior_set_notes(doc, digest, corpus)
+        page, more = _declare(doc, firm, digest, corpus, declarant)
+        parts += [page] if page else []
+        notes += more + prior_set_notes(doc, digest, corpus)
+        if facts is not None:  # the firm's counts are authored (counts.at_gate recorded them)
+            from . import counts
+
+            d = decl_decision(doc, digest, corpus)
+            notes += counts.sizes_note(facts, d.total, d.key, page is not None)
     pos, filled = fill_pos(COMMENT.sub("", firm.attachment("pos")).strip(), doc, corpus or {}, firm_address or [])
     parts.append(pos)
     notes += filled

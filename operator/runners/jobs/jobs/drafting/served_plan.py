@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import parties, served as served_mod, served_find, sets
+from . import amended, challenge, parties, served_find, sets
 from .forms import lane_hook, read_stage
 from .outcome import DraftingFailed
 from .served import PLAN_STOPS, PLANNED_CLASSES, clients_of, frozen, has_plan, outcomes, plan_units, review_map
@@ -61,7 +61,7 @@ class DiscoveryPlan:
             lane_hook.before_spend(self)  # a served form set's policy, rules and boxes (forms/lane_hook.py)
         except DraftingFailed as exc:
             code = str(exc).split(":", 1)[0]
-            if code in PLAN_STOPS or code in lane_hook.STOPS:
+            if code in PLAN_STOPS or code in lane_hook.STOPS or code == "challenge_unread":
                 stop_note(self.job.job_dir, self.data, str(exc), served_shape=code not in lane_hook.POLICY_STOPS)
             raise
 
@@ -95,13 +95,19 @@ class DiscoveryPlan:
             clients=clients_of(self.data),
             other_side=other_side(self.data),
             title=self._title,
+            form_by_operator=lane_hook.by_operator(self.firm.data),
         )
         # Each served form set the Operator drafts: its boxes read before the plan
-        # (forms/read_stage.py); with the switch off nothing is read or spent.
+        # (forms/read_stage.py); a firm with no form policy reads and spends nothing.
         read_stage.read_found(
             self.data, self.job.job_dir, self.doorway, model,
-            by_operator=served_mod.FORM_SETS_BY_OPERATOR, log=self.log,
+            by_operator=lane_hook.by_operator(self.firm.data), log=self.log,
         )  # fmt: skip
+        if amended.active(self.data):
+            # Amended responses: the job is the amended lane's from here (its proof
+            # key), and the other side's letters are read before the plan.
+            amended.mark_envelope(self.job.job_dir)
+            amended.challenge_stage(self.data, self.job.job_dir, amended.asker(self))
 
     def _freeze_plan(self, plan: list[dict[str, Any]]) -> None:
         self._put("units", plan)
@@ -110,7 +116,13 @@ class DiscoveryPlan:
         """A fresh unit plan (``finish.units`` freezes it). With no default
         sets authored, a propounded set plans exactly as it always did."""
         if self.cls == "discovery_response":
-            return plan_units(frozen(self.data, self.job.job_dir))
+            served = frozen(self.data, self.job.job_dir, lane_hook.by_operator(self.firm.data))
+            if amended.active(self.data):
+                ch = challenge.load(self.data)
+                if ch is None:
+                    raise challenge.Unread("the letters were not read before the plan")
+                return amended.plan_units(served, ch)
+            return plan_units(served)
         if self.cls != "discovery_set":
             return parties.plan_units([], [])
         req = self.job.request_text
@@ -127,11 +139,13 @@ class DiscoveryPlan:
         if not has_plan(plan):
             return None
         names = {u.key: self._names(u)["draft"] for u in self.units()}
-        return outcomes(frozen(self.data, self.job.job_dir), plan, names)
+        return amended.relabel(
+            outcomes(frozen(self.data, self.job.job_dir, lane_hook.by_operator(self.firm.data)), plan, names), self.data
+        )
 
     def served_review(self) -> dict[str, dict[str, Any]] | None:
         """What the review's response checks count against; None without a served plan."""
         plan = self._state().get("units") or []
         if not has_plan(plan):
             return None
-        return review_map(frozen(self.data, self.job.job_dir), plan)
+        return review_map(frozen(self.data, self.job.job_dir, lane_hook.by_operator(self.firm.data)), plan)

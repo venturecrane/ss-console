@@ -32,16 +32,18 @@ from __future__ import annotations
 import io
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from .. import firm_wording
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, converge, format_check, gate, nestquote, page_limits, pincheck, quote_end
-from . import base_lay, library_pick, pleading, prerender, render
+from . import base_lay, counts, library_pick, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, parties as parties_mod, settle as settle_mod
-from . import repair_budget, repair_guard, served as served_mod
+from . import amended, exhibit_index, exhibit_plan, repair_budget, repair_guard, served as served_mod
+from .meetconfer import memo as mc_memo
 from .forms import lane_hook as form_hook
 from .rulebook import hook as rule_hook
 from .finish_review import FINAL, FinishReview
@@ -53,6 +55,11 @@ MAX_REPAIRS = 2
 #: (``repair_budget``); ``Finish._converge`` stops on non-convergence well before it in practice.
 REPAIR_CEILING = 8
 CONCURRENCY = 4
+#: Units drafted at once after the first of each party (``Finish._draft_units``).
+UNITS_AT_ONCE = 4
+#: Audit workers shared by the units drafting at once: in-flight model calls stay
+#: bounded (4 units x 2 workers), never 4 x ``CONCURRENCY``.
+CALLS_AT_ONCE = 8
 WALL_GATE = "[1]"
 
 
@@ -70,6 +77,26 @@ class Unit:
         return f"{self.key}:{name}" if self.key else name
 
 
+class SetDoorway:
+    """The job's doorway for one set's drafter: every call's ledger row carries
+    the set's key at the front of its ``custom_id``, so the set's own spend is
+    read from the ledger (``Finish.unit_spent``). Everything else is the job's."""
+
+    def __init__(self, inner: Any, key: str) -> None:
+        self._inner, self._key = inner, key
+
+    @staticmethod
+    def tag(key: str) -> str:
+        return f"{key}-"
+
+    def call(self, stage: str, **kw: Any) -> Any:
+        kw["custom_id"] = self.tag(self._key) + str(kw.get("custom_id") or "")
+        return self._inner.call(stage, **kw)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
 class Finish(FinishReview):
     """Mixin: ``DraftingRun`` supplies data, job, firm, cls, doorway, log,
     seat, _state/_put/_done/_is_done/_json/_atomic/_write, _context,
@@ -81,6 +108,7 @@ class Finish(FinishReview):
         firm: Any
         cls: str
         doorway: Any
+        budget: Any
         log: Callable[[str], None]
         date_stamp: str
         rule_layout: dict[str, Any]
@@ -111,7 +139,8 @@ class Finish(FinishReview):
         if plan is None:
             plan = self._plan()  # served_plan.py: the sets, the parties, the served sets
             self._freeze_plan(plan)
-        served = served_mod.frozen(self.data, self.job.job_dir) if served_mod.has_plan(plan) else []
+        by_op = form_hook.by_operator(self.firm.data)  # the firm's form policy (forms/lane_hook.py)
+        served = served_mod.frozen(self.data, self.job.job_dir, by_op) if served_mod.has_plan(plan) else []
         out = []
         titles = [parties_mod.unit_title(p) for p in plan]
         for p, title in zip(plan, titles):
@@ -123,9 +152,16 @@ class Finish(FinishReview):
             elif isinstance(p.get("served"), int):
                 # Every other served set, SMD's included, is answered separately.
                 rest = [s.label for i, s in enumerate(served) if i != p["served"]]
-                instr = served_mod.instruction(served[p["served"]], rest)
+                s = served[p["served"]]
+                # An amended set: only its challenged numbers (amended.py).
+                instr = (
+                    amended.instruction(self.data, s, p["numbers"])
+                    if p.get("numbers")
+                    else served_mod.instruction(s, rest)
+                )
             else:
                 instr = sets.Unit(p["variant"], p["label"], p.get("party")).instruction(others)
+            instr = counts.instruction(self, p.get("variant"), instr)  # the firm's number for the set (counts.py)
             out.append(Unit(p["key"], title or self._title, p["variant"], instr, d, p.get("party")))
         self._units = out
         return out
@@ -179,7 +215,11 @@ class Finish(FinishReview):
 
     def _converge(self, u: Unit, d: compose.Drafter, digest: str, corpus: str) -> int:
         """A served set (``compose.STRICT_CLASSES``) is clean, files with open
-        items, or holds (``converge.served``, its rules and their history)."""
+        items, or holds (``converge.served``, its rules and their history). A
+        production unit with an exhibit plan also has every audit carry the
+        exhibit findings code finds (``exhibit_index.watch``)."""
+        if exhibit_index.applies(self.data, u.variant):
+            exhibit_index.watch(d, self.data)
         return converge.served(d, self.cls, u.label, digest, corpus, repair_budget.plan(self, u, REPAIR_CEILING))
 
     def _canon(self, u: Unit) -> Unit | None:
@@ -201,18 +241,32 @@ class Finish(FinishReview):
             "requests use)." + served + "\n\n" + front
         ]
 
+    def unit_spent(self, key: str) -> float:
+        """One set's priced model calls so far: the ledger rows its drafter
+        tagged (``SetDoorway``). The repair budget meters each set by this."""
+        tag, total = SetDoorway.tag(key), 0.0
+        for path in self.budget.ledgers:
+            for line in path.read_text(encoding="utf-8").splitlines() if path.is_file() else []:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if str(row.get("custom_id") or "").startswith(tag):
+                    total += self.budget.pricing.price_row(row)
+        return total
+
     def _drafter(self, u: Unit) -> compose.Drafter:
         context = ([u.instruction] if u.instruction else []) + self._shared(u) + self._context()
         cp = self.data / "caption.json"
         cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else None
         d = compose.Drafter(
             u.data,
-            self.doorway,
+            SetDoorway(self.doorway, u.key) if u.key else self.doorway,
             self.firm,
             self.cls,
             self.job.request_text,
             context,
-            CONCURRENCY,
+            getattr(self, "_unit_workers", CONCURRENCY),  # its share while units draft at once
             self.log,
             skeleton=caption_stage.fill_skeleton(self.firm.skeleton(self.cls), cap),
         )
@@ -239,6 +293,7 @@ class Finish(FinishReview):
             fronted, _ = self._front(u, doc)
             if fronted != doc:
                 self._uatomic(u, "draft-v1.md", self._join(fronted, end))
+            counts.after_compose(self, u, d, digest)  # one "more requests" pass below the firm's minimum
         corpus = self._corpus_text()
         strict = self.cls in compose.STRICT_CLASSES
         version = self._converge(u, d, digest, corpus) if strict else self._repair_rounds(d, digest, corpus)
@@ -308,7 +363,10 @@ class Finish(FinishReview):
             doc, caps = sets.enforce_caps(doc)
             doc, fronted = self._front(u, doc)
             doc, marked = sets.compound_markers(doc)
+            doc = counts.at_gate(self, u, doc)  # numbered in order; counts.json (counts.py)
             self._uwrite(u, "caps.json", caps + fronted + marked)
+        if amended.is_unit(u.label):
+            doc, _titled = amended.retitle(doc)  # the title reads AMENDED, by code (amended.py)
         md = self._join(doc, notes)
         self._uatomic(u, FINAL, md)
         if log:
@@ -346,6 +404,12 @@ class Finish(FinishReview):
                 + "; ".join(g["refusals"])[:400]
             )
         staged = rule_hook.at_gate(self, u, md)  # the firm's rules stage: a no-op unless phrase_book switches it on
+        if exhibit_index.applies(self.data, u.variant):
+            # The Index of Exhibits, by code from the firm's exhibit plan (exhibit_index.py).
+            body, end = render.split_notes(staged)
+            body, rec = exhibit_index.write(body, exhibit_plan.load(self.data) or {})
+            exhibit_index.keep(u.data, rec)
+            staged = self._join(body, end)
         if staged != md:
             md = staged
             self._uatomic(u, FINAL, md)
@@ -374,7 +438,7 @@ class Finish(FinishReview):
         ]
         body_fills = fills_located(doc)  # the set's own body, before the job's attachments
         doc, attached = render.attach(
-            doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(lines), address
+            doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(lines), address, counts.facts(u)
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
@@ -383,7 +447,8 @@ class Finish(FinishReview):
         path, report, laid, checked = base_lay.lay_out(
             doc, dest, self.cls, fmt, paper, made_in.held, made_in.rules, styles=made_in.styles
         )
-        res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
+        attachments = self.firm.data["attachments"]
+        res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites, attachments)
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check
             # that blocks, behind the audit's TERM verdict (compose.py).
@@ -418,7 +483,15 @@ class Finish(FinishReview):
                 "located": markers_located(doc) + body_fills,
                 # The renderer's own report stays here, never in the attorney
                 # notes ("named styles defined on the starter base", 2026-10-13).
-                "notes": [*attached, *reserved, *cited, *laid, *self.rule_notes],
+                "notes": [
+                    *attached,
+                    *reserved,
+                    *cited,
+                    *laid,
+                    *self.rule_notes,
+                    *exhibit_index.notes(u.data),
+                    *(amended.unit_notes(self.data, u.key) if amended.is_unit(u.label) else []),
+                ],
                 "render_report": report.get("notes", []),
             },
         )
@@ -437,10 +510,51 @@ class Finish(FinishReview):
             out.append(review_mod.Paper(u.key, u.label, format_check.doc_text(d), r["paper"]))
         return out
 
+    def _one(self, u: Unit, digest: str) -> None:
+        self._render_unit(u, self._gate(u, self._draft(u, digest)), digest)
+
+    def _draft_units(self, digest: str) -> None:
+        """Every unit drafted, gated and rendered (2026-11-23: a 12-set request ran
+        12 rounds one after another). The first unit served on each party goes
+        first, alone, as before: the others align to it (``_canon``). The rest
+        draft ``UNITS_AT_ONCE`` at a time, each with its share of
+        ``CALLS_AT_ONCE`` audit workers, so the model calls in flight stay
+        bounded and the work (so the cost) is the same. Each unit's stages are
+        recorded as they finish (a resume skips them). When units fail, the
+        units not yet started are cancelled, the running ones finish, and the
+        job ends with the failure of the earliest failed unit in plan order."""
+        units = self.units()
+        self.corpus()  # the shared caches, filled once before any thread reads them
+        parties: set[str | None] = set()
+        first, rest = [], []
+        for u in units:
+            (rest if u.party in parties else first).append(u)
+            parties.add(u.party)
+        for u in first:
+            self._one(u, digest)
+        if not rest:
+            return
+        at_once = min(UNITS_AT_ONCE, len(rest))
+        self._unit_workers = max(1, CALLS_AT_ONCE // at_once)
+        failed: dict[str, BaseException] = {}
+        try:
+            with ThreadPoolExecutor(max_workers=at_once, thread_name_prefix="unit") as pool:
+                futures = {pool.submit(self._one, u, digest): u for u in rest}
+                for f in as_completed(futures):
+                    exc = None if f.cancelled() else f.exception()
+                    if exc is None:
+                        continue
+                    failed[futures[f].key] = exc
+                    for g in futures:
+                        g.cancel()  # not yet started; the running ones finish and record their stages
+        finally:
+            self._unit_workers = CONCURRENCY
+        if failed:
+            raise next(failed[u.key] for u in rest if u.key in failed)
+
     def _finish(self, digest: str) -> None:
         """Every unit rendered, then notes, review, manifest."""
-        for u in self.units():
-            self._render_unit(u, self._gate(u, self._draft(u, digest)), digest)
+        self._draft_units(digest)
         notes_md = self._notes(digest)
         rec = self._review(digest, notes_md)
         notes_md = self._notes(digest)  # as reviewed (a notes rewrite replaced it)
@@ -458,7 +572,9 @@ class Finish(FinishReview):
         out, nm = deliver.out_dir(self.data), self._names()
         notes_md = notes_md.rstrip("\n") + "\n" + "\n".join(review_mod.notes_section(rec)) + "\n"
         notes = deliver.render_plain(notes_md, out, nm["notes"], str(self.firm.get("firm", "display_name")))
-        files = [("draft", Path(self._rendered(u)["path"])) for u in self.units()] + [("attorney_notes", notes)]
+        files = [("draft", Path(self._rendered(u)["path"])) for u in self.units()]
+        memo = mc_memo.build(self)  # an amended job's meet-and-confer memo (meetconfer/memo.py); None otherwise
+        files += ([("draft", memo)] if memo else []) + [("attorney_notes", notes)]
         deliver.write_manifest(out, nm["folder"], files)
         self._done("manifest")
         self._done("render", markers=self._all_markers())

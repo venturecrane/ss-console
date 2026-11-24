@@ -22,6 +22,7 @@ unread; the job continues without it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -189,12 +190,22 @@ def _line(text: str, value: str) -> str:
     return value
 
 
-def cached(data: Path) -> dict[str, Any] | None:
-    p = data / "caption-read.json"
+def _cache_name(doc: dict[str, Any]) -> str:
+    """One cache file per court document read: the stage may read a second when
+    the first omits a party (caption_stage). The unkeyed ``caption-read.json``
+    of an older attempt is never reused: it does not say which document it read,
+    and the ranking that chose it changed (2026-11-23, a fee summary)."""
+    key = str(doc.get("id") or doc.get("name") or doc.get("source_path") or "")
+    return f"caption-read-{hashlib.sha256(key.encode('utf-8')).hexdigest()[:16]}.json"
+
+
+def cached(data: Path, doc: dict[str, Any]) -> dict[str, Any] | None:
+    p = data / _cache_name(doc)
     return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
 
 
-def save(data: Path, got: dict[str, Any]) -> None:
-    tmp = data / ".caption-read.json.tmp"
+def save(data: Path, doc: dict[str, Any], got: dict[str, Any]) -> None:
+    name = _cache_name(doc)
+    tmp = data / f".{name}.tmp"
     tmp.write_text(json.dumps(got, indent=1), encoding="utf-8")
-    tmp.replace(data / "caption-read.json")
+    tmp.replace(data / name)

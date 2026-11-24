@@ -19,7 +19,13 @@ two extra words among its words, in order ("Northfield Joint Union High
 School District" names the caption's "Northfield Joint Union School
 District"); one phrase that could be two caption parties stops. A capitalized
 phrase carrying half or more of an unnamed party's words is a near miss and
-stops, quoting both spellings: a party is never dropped silently. So the request decides the split: "City of X" named in the request is
+stops, quoting both spellings: a party is never dropped silently. A caption's
+person printed surname first ("DOE, JANE": two pieces joined by one comma) is
+also named by the request's given-first spelling ("Jane Doe"), the same whole
+words, with one middle name or initial printed on one side only (2026-11-23: a
+request named four individuals given name first, the caption printed each
+surname first, no name matched and the paid job stopped); the party planned is
+the caption's printed form. So the request decides the split: "City of X" named in the request is
 its own party even inside the District's value.
 
 * Two or more distinct names in the request: one unit per (named party, set).
@@ -58,7 +64,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import caption as caption_mod, sets
+from . import caption as caption_mod, person_name, sets
 from .outcome import DraftingFailed
 
 OVERRIDE = "parties.json"
@@ -213,11 +219,39 @@ def _tokens(text: str) -> list[tuple[str, int, int]]:
     return [(m.group(0).lower(), m.start(), m.end()) for m in re.finditer(r"[A-Za-z0-9']+", text or "")]
 
 
+def _surname_first(name: str) -> tuple[str, str] | None:
+    """A person printed "SURNAME, GIVEN [MIDDLE]" (two pieces joined by one
+    comma, one to three words each, no entity or suffix word): (given, surname)
+    as printed; None for any other name."""
+    sp = _pieces(name)
+    if len(sp) != 2 or name[sp[0][1] : sp[1][0]].strip() != ",":
+        return None
+    sur, giv = (name[a:b] for a, b in sp)
+    s_words, g_words = _words_all(sur), _words_all(giv)
+    if not (0 < len(s_words) <= 3 and 0 < len(g_words) <= 3):
+        return None
+    if any(w in _ENTITY or w in _STOP for w in s_words + g_words):
+        return None
+    return giv, sur
+
+
+def _given_first_hits(text: str, c: Candidate) -> list[tuple[int, int, Candidate]]:
+    """Where ``text`` names the caption's surname-first person ``c`` given name first."""
+    got = _surname_first(c.text)
+    if got is None:
+        return []
+    toks = _tokens(text)
+    found = person_name.spans([t for t, _a, _b in toks], _words_all(got[0]), _words_all(got[1]), _DETERMINERS)
+    return [(toks[i][1], toks[j][2], c) for i, j in found]
+
+
 def _hits(text: str, c: Candidate) -> list[tuple[int, int, Candidate]]:
-    """Where ``text`` names ``c``: a run of pieces word for word, a single piece
-    also with up to ``_EXTRA`` extra words in the request's spelling."""
+    """Where ``text`` names ``c``: a run of pieces word for word (a surname-first
+    person also given name first), a single piece also with up to ``_EXTRA``
+    extra words in the request's spelling."""
     if c.pieces > 1:
-        return [(m.start(), m.end(), c) for m in _pattern(c.text).finditer(text or "")]
+        exact = [(m.start(), m.end(), c) for m in _pattern(c.text).finditer(text or "")]
+        return exact + _given_first_hits(text, c)
     toks, mine, out = _tokens(text), [t for t, _a, _b in _tokens(c.text)], []
     words = [t for t, _a, _b in toks]
     at = 0
@@ -593,15 +627,31 @@ _TITLE = re.compile(r"(?i)\b(?:interrogator(?:y|ies)|admissions?|production)\b.*
 PARTY_TERMS = frozenset({"YOU", "YOUR", "RESPONDING PARTY", "DEFENDANT"})
 
 
-def _swap(text: str, other: str, party: str) -> str:
-    def sub(m: re.Match[str]) -> str:
-        return party.upper() if m.group(0).isupper() else party
+def _spellings(name: str) -> list[str]:
+    """``name`` as the caption prints it, and for a surname-first person also
+    given name first, with and without a middle name."""
+    got = _surname_first(name)
+    return [name] if got is None else person_name.spellings(name, *got)
 
-    return re.sub(re.escape(other), sub, text, flags=re.I)
+
+def _swap(text: str, other: str, party: str) -> str:
+    """``text`` with each spelling of ``other`` replaced by ``party``: the
+    caption's spelling by the party's, a given-first one by the party's
+    given-first spelling when it has one."""
+    mine = _spellings(party)
+    for k, spelling in enumerate(_spellings(other)):
+        to = mine[1] if k and len(mine) > 1 else party
+
+        def sub(m: re.Match[str], to: str = to) -> str:
+            return to.upper() if m.group(0).isupper() else to
+
+        text = re.sub(re.escape(spelling), sub, text, flags=re.I)
+    return text
 
 
 def _names(text: str, party: str) -> bool:
-    return f" {' '.join(_words(party))} " in f" {' '.join(_words(text))} "
+    words = f" {' '.join(_words(text))} "
+    return any(f" {' '.join(_words(s))} " in words for s in _spellings(party))
 
 
 def bind(doc: str, party: str, theirs: list[str]) -> tuple[str, list[str], list[str]]:

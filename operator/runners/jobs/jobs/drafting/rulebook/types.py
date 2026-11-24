@@ -27,7 +27,7 @@ class Instruction:
 
     source: str
     quote: str
-    numbers: tuple[int, ...] = ()
+    numbers: tuple[str, ...] = ()
     doc_type: str = ""
     act: str = ""
     keys: tuple[str, ...] = ()
@@ -115,15 +115,101 @@ class Fresh:
         return bool(self.changed or self.added or self.removed)
 
 
+#: The document types a clause names (design C), and the set type each response
+#: document answers.
+DOC_TYPES: tuple[str, ...] = (
+    "rfp_response", "srog_response", "frog_response", "rfa_response", "index", "rfp_set", "srog_set", "rfa_set",
+)  # fmt: skip
+#: The propounded set each set type is, for clauses that check a set (``sets_check``).
+SET_OF: dict[str, str] = {
+    "requests_for_production": "rfp_set",
+    "special_interrogatories": "srog_set",
+    "requests_for_admission": "rfa_set",
+}
+SET_DOC: dict[str, str] = {
+    "requests_for_production": "rfp_response",
+    "special_interrogatories": "srog_response",
+    "form_interrogatories": "frog_response",
+    "requests_for_admission": "rfa_response",
+}
+#: The word a phrase-book ``{item}`` slot takes in each response document.
+ITEM_WORD: dict[str, str] = {
+    "rfp_response": "Request",
+    "srog_response": "Interrogatory",
+    "frog_response": "Interrogatory",
+    "rfa_response": "Request",
+}
+#: What a clause asks of a response. ``other`` is composed under the rule's own
+#: words and never checked or made by code.
+ACTS: tuple[str, ...] = ("add_objection", "use_phrase", "remove_part", "count", "forbid_topic", "other")
+#: The acts code makes.
+MADE: tuple[str, ...] = ("add_objection", "use_phrase", "remove_part")
+#: The acts code checks a propounded set for, never writes: a finding goes to the set lane's repair.
+CHECKED: tuple[str, ...] = ("count", "forbid_topic")
+#: Sentence roles.
+ROLES: tuple[str, ...] = ("transition", "objection", "disposition", "other")
+
+
+@dataclass(frozen=True)
+class Clause:
+    """One thing a rule asks, read from its words and verified against them by
+    code (``reading.check``). ``standing`` false: said of one matter's response
+    (a segment the rule labels "Response #9:"), never applied by this stage.
+    ``when``: ``judged`` per item by the grid, ``always`` for every item of its
+    document types, ``numbers`` for the items in ``numbers`` only."""
+
+    rule: str
+    n: int
+    quote: str
+    standing: bool
+    doc_types: tuple[str, ...]
+    act: str
+    keys: tuple[str, ...] = ()
+    grounds: tuple[str, ...] = ()
+    when: str = "judged"
+    numbers: tuple[str, ...] = ()
+
+    @property
+    def id(self) -> str:
+        return f"{self.rule}#{self.n}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {**vars(self), "keys": list(self.keys), "grounds": list(self.grounds),
+                "doc_types": list(self.doc_types), "numbers": list(self.numbers)}  # fmt: skip
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "Clause":
+        return cls(**{**d, **{k: tuple(d.get(k) or ()) for k in ("keys", "grounds", "doc_types", "numbers")}})
+
+
+@dataclass(frozen=True)
+class Cell:
+    """The grid's answer for one item and one judged clause, checked by code:
+    ``apply`` with the book keys (or, with no sentence in the book, the
+    grounds), the response's own sentences it replaces or removes, and the
+    exhibits by title; ``complies``; ``conflict``."""
+
+    item: str
+    clause: str
+    state: str
+    keys: tuple[str, ...] = ()
+    grounds: tuple[str, ...] = ()
+    sentences: tuple[str, ...] = ()
+    exhibits: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True)
 class Part:
     """One sentence of a response: its role (transition, objection, disposition,
-    other), the phrase-book key it matches, and the ground it states."""
+    other), the phrase-book key it matches, and the ground it states. ``block``
+    and ``at``: where it sits in the document's blocks (``responses.read``)."""
 
     text: str
     role: str
     key: str = ""
     ground: str = ""
+    block: int = -1
+    at: int = -1
 
 
 @dataclass(frozen=True)

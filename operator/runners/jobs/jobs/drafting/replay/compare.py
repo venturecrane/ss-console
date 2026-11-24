@@ -187,6 +187,50 @@ def cost(projection: Any) -> Section:
     return sec.finish()
 
 
+def _stem(name: str) -> str:
+    return re.sub(r"\.[A-Za-z0-9]{2,5}$", "", norm(name)).casefold()
+
+
+def exhibits(key: Key, placed: Any, listed: list[dict[str, Any]] | None) -> Section:
+    """The key's Index of Exhibits against code's: per file, its exhibit (the
+    plan, ``exhibit_plan.place``) and, with a production response, the request
+    numbers its line lists (``exhibit_index``). Files compare by name without
+    extension. Bar (plan A3): extra 0; every miss is listed with code's reason."""
+    sec = Section("exhibits vs key")
+    if not key.exhibits:
+        sec.notes.append("the key has no exhibits; nothing compared")
+        return sec.finish()
+    plan = placed if isinstance(placed, dict) else {}
+    where = {_stem(f["name"]): e["letter"] for e in plan.get("exhibits") or [] for f in e.get("files") or []}
+    why = {_stem(f["name"]): str(f.get("reason") or "") for f in plan.get("left_out") or []}
+    lines = {(e["letter"], _stem(n)): list(e["requests"]) for e in listed or [] for n in e["files"]}
+    wanted = {(k.letter, _stem(k.name)) for k in key.exhibits}
+    for k in key.exhibits:
+        s = _stem(k.name)
+        got = where.get(s)
+        row: dict[str, Any] = {"file": k.name, "key": k.letter, "code": got or "-"}
+        if got is None:
+            sec.mismatches.append(
+                f"{k.name}: missed (key Exhibit {k.letter}; code left it out: {why.get(s) or 'not in the file'})"
+            )
+        elif got != k.letter:
+            sec.mismatches.append(f"{k.name}: code placed it in Exhibit {got}, the key in Exhibit {k.letter}")
+        if listed is not None and k.requests is not None and got == k.letter:
+            nums = lines.get((k.letter, s))
+            row.update(requests_key=list(k.requests), requests_code=nums)
+            if nums is None or sorted(nums) != sorted(k.requests):
+                sec.mismatches.append(f"{k.name}: Request Nos. {nums} in code's index, {list(k.requests)} in the key")
+        sec.rows.append(row)
+    extra = sorted(lines) if listed is not None else sorted((x, s) for s, x in where.items())
+    for letter, s in extra:
+        if (letter, s) not in wanted and s not in {_stem(k.name) for k in key.exhibits if k.letter != letter}:
+            sec.rows.append({"file": s, "key": "-", "code": letter})
+            sec.mismatches.append(f"{s}: extra (code placed it in Exhibit {letter}; not in the key's index)")
+    if listed is None:
+        sec.notes.append("no production response given (--production): request numbers not compared")
+    return sec.finish()
+
+
 def form_read(label: str, key_checked: list[str] | None, read: Any) -> Section:
     """The pixel read's checked numbers against the key's."""
     sec = Section(f"form pixel read ({label})")

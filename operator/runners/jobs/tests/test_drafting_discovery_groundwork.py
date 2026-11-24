@@ -148,10 +148,9 @@ def test_the_hooks_return_what_they_were_given_on_or_off(stages):
     assert hook.enabled(_run(data).firm, "revise") is bool(stages and "revise" in stages)
 
 
-def test_the_counts_declaration_is_an_interface_only():
+def test_the_counts_interfaces_answer_with_nothing_recorded():
     assert counts.facts(object()) is None
-    with pytest.raises(NotImplementedError):
-        counts.declaration("requests_for_admission", 40)
+    assert counts.declaration("requests_for_admission", 40) == "decl_2033_050"
 
 
 def test_a_challenge_carries_the_letters_own_words():
