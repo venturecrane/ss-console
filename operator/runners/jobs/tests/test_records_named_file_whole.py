@@ -125,6 +125,54 @@ def test_framing_never_hides_a_part() -> None:
     )
 
 
+def test_a_folder_frames_a_name_only_when_the_words_call_it_a_folder() -> None:
+    """Re-review of #4210: the folder's words were subtracted whether or not the
+    request named the folder, so "the Banner ER records" sent Banner.pdf (in a
+    folder ER) whole instead of the ER pages."""
+    assert not rank.names_whole(_item("the Banner ER records"), "Banner.pdf", folder="ER")
+    assert rank.names_whole(_item("Banner.pdf from the ER folder"), "Banner.pdf", folder="ER")
+    assert rank.names_folder(_item("the records in the Medical folder"), "Medical")
+    assert not rank.names_folder(_item("the Medical records"), "Medical")
+
+
+class _FolderSeat(FakeSmokeball):
+    """A matter whose PDFs sit in named folders."""
+
+    def __init__(self, folders: dict[str, str]) -> None:
+        super().__init__()
+        self.folders = folders  # folder id -> name
+
+    def add_in(self, n: int, name: str, data: bytes, folder_id: str) -> str:
+        f = self.add(n, name, data)
+        self.rows[-1]["folder"] = {"id": folder_id}
+        self.meta[f]["folder"] = {"id": folder_id}
+        return f
+
+    def get(self, path: str, **params: Any) -> Any:
+        if path.endswith("/documents/folders"):
+            return {"value": [{"folders": [{"id": k, "name": v} for k, v in self.folders.items()]}]}
+        return super().get(path, **params)
+
+
+@pytest.mark.parametrize("name", ["Medical Records.pdf", "Medical.pdf"])
+def test_words_naming_a_folder_of_several_pdfs_send_no_file_whole(
+    tmp_path: Path, env: dict[str, Path], model: FakeFinderModel, name: str
+) -> None:
+    """FALSIFIER: "the records in the Medical folder" sent the one file whose
+    name matched (Medical Records.pdf, or Medical.pdf) whole, from a folder of
+    several."""
+    sb = _FolderSeat({"F1": "Medical", "F2": "Billing"})
+    sb.add_in(1, name, pdf(6), "F1")
+    sb.add_in(2, "Northside Clinic records.pdf", pdf(10), "F1")
+    sb.add_in(3, "Invoice.pdf", pdf(2), "F2")
+    asked = "the records in the Medical folder"
+    r, _v = _run(tmp_path, env, sb, [_item(asked)], f"Please send me {asked}.")
+    cuts = json.loads((r.data / "cuts.json").read_text()) if (r.data / "cuts.json").is_file() else []
+    assert not any(c["pages"] == "" and c["page_count"] == 6 for c in cuts), cuts
+    located = list((r.data / "locate").rglob("*.json")) if (r.data / "locate").is_dir() else []
+    assert not any(json.loads(p.read_text()).get("namedFile") for p in located)
+
+
 def test_the_live_phrasing_goes_whole_end_to_end(tmp_path: Path, env: dict[str, Path], model: FakeFinderModel) -> None:
     stored = pdf(17)
     sb = FakeSmokeball()

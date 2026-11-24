@@ -116,6 +116,13 @@ def test_the_parse_flags_every_from_the_sender_s_own_words() -> None:
         "all pages of the police report",
         "every page of the deposition transcript",
         "all the deposition",  # "all" before a singular is not a kind
+        # Re-review of #4210: a determiner or adjective before the part word.
+        "the declaration with all its exhibits",
+        "the complaint and all its exhibits",
+        "the deposition and all of its exhibits",
+        "every attached exhibit",
+        "all those exhibits",
+        "each of them whole",
     ],
 )
 def test_all_of_one_document_is_never_every(asked: str) -> None:

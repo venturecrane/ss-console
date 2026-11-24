@@ -156,14 +156,31 @@ def check(raw: Any, request_text: str) -> list[dict[str, Any]]:
 #: the emails from the adjuster"), "all" only before a plural. Never the parts
 #: of one document: "the declaration with all exhibits", "all pages of the
 #: police report", "every page of the transcript" (review of #4210).
-_EVERY = re.compile(r"\b(every|each|all)\s+(?:of\s+)?(?:the\s+|my\s+|our\s+|his\s+|her\s+|their\s+)?([a-z]+)", re.I)
+_WORDS = re.compile(r"[a-z]+")
+_QUANTIFIERS = frozenset({"every", "each", "all"})
+#: Words between the quantifier and the kind it counts.
+_DETERMINERS = frozenset("of the my our his her their its these those attached other remaining".split())
+#: A pronoun after the quantifier counts what was already named ("each of them"):
+#: never a kind.
+_PRONOUNS = frozenset({"them", "it", "they"})
 _PARTS = frozenset("page pages exhibit exhibits attachment attachments tab tabs enclosure enclosures".split())
 
 
 def _asks_every(asked: str) -> bool:
-    for m in _EVERY.finditer(asked):
-        word, noun = m.group(1).lower(), m.group(2).lower()
-        if noun in _PARTS:
+    """every/each/all counting a KIND of document. Never the parts of one
+    document: a part word within the next three words ("all its exhibits",
+    "every attached exhibit", "all those exhibits") or a pronoun ("each of
+    them whole") means the quantifier counts pieces of something already
+    named (re-review of #4210)."""
+    words = _WORDS.findall(asked.lower())
+    for i, word in enumerate(words):
+        if word not in _QUANTIFIERS:
+            continue
+        following = words[i + 1 : i + 4]
+        if _PARTS & set(following):
+            continue
+        noun = next((w for w in words[i + 1 :] if w not in _DETERMINERS), "")
+        if not noun or noun in _PRONOUNS or noun in _PARTS:
             continue
         if word == "all" and not noun.endswith("s"):
             continue

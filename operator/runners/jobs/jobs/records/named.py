@@ -52,12 +52,16 @@ def named_file(run: Any, mid: str, rec: dict[str, Any], files: dict[str, Any]) -
     def folder_of(r: dict[str, Any]) -> str:
         return folders.get(mf._folder_id(r) or "", "").rsplit("/", 1)[-1]
 
+    by_folder: dict[str, list[str]] = {}
+    for r in pdfs:
+        by_folder.setdefault(folder_of(r), []).append(str(r["id"]))
+    if any(len(ids) > 1 and rank.names_folder(rec, label) for label, ids in by_folder.items()):
+        # The words name a folder of several PDFs ("the records in the Medical
+        # folder"): that is not one named file, so none goes whole.
+        return None
     # The file's own folder may frame its name ("X.pdf from the Statements folder").
     hits = {str(r["id"]) for r in pdfs if rank.names_whole(rec, r.get("name"), folder=folder_of(r))}
     if not hits:
-        by_folder: dict[str, list[str]] = {}
-        for r in pdfs:
-            by_folder.setdefault(folder_of(r), []).append(str(r["id"]))
         hits = {ids[0] for label, ids in by_folder.items() if len(ids) == 1 and rank.names_whole(rec, label)}
     if len(hits) != 1:
         return None

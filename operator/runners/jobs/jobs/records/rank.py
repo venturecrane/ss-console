@@ -96,6 +96,18 @@ _MATTER_REF = re.compile(r"\bmatter\s+(?:no\.?\s*|number\s+|#\s*)?[\w./-]*\d[\w.
 _PAGE_COUNT = re.compile(r"\b(\d+)[\s-]pages?\b", re.I)
 
 
+def names_folder(rec: dict[str, Any], folder: Any) -> bool:
+    """Do the record's words name ``folder`` as a folder: its name followed by
+    the word "folder" ("from the Discovery folder")? Only then do the folder's
+    words frame a file's name (re-review of #4210: "the Banner ER records" is
+    the ER part of Banner.pdf, never Banner.pdf because it sits in a folder ER)."""
+    name = " ".join(_WORD.findall(str(folder or "").casefold()))
+    if not name:
+        return False
+    asked = " ".join(_WORD.findall(str(rec.get("asked") or "").casefold()))
+    return re.search(rf"\b{re.escape(name)} folder\b", asked) is not None
+
+
 def names_whole(rec: dict[str, Any], label: Any, folder: Any = "") -> bool:
     """Does the record NAME the file called ``label`` (a file's name, or its
     folder's), asking for the whole of it? Code, never a model: every word of
@@ -118,7 +130,8 @@ def names_whole(rec: dict[str, Any], label: Any, folder: Any = "") -> bool:
     want = tokens(label) - STOP - CREDENTIALS - {"pdf"}
     if not want or not want <= asked:
         return False
-    extra = asked - want - _WHOLE_EXTRA - _FRAMING - (tokens(folder) - STOP - CREDENTIALS)
+    framed = tokens(folder) - STOP - CREDENTIALS if names_folder(rec, folder) else set()
+    extra = asked - want - _WHOLE_EXTRA - _FRAMING - framed
     if extra and (extra - {t for t in extra if t.isdigit() and t in counts} or not asked & {"page", "pages"}):
         return False
     return True
@@ -172,6 +185,7 @@ __all__ = [
     "date_tokens",
     "extension",
     "is_pdf",
+    "names_folder",
     "names_whole",
     "rank",
     "score",
