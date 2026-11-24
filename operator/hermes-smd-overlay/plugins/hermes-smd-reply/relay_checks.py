@@ -46,7 +46,7 @@ from shared import (
     turn_says,
 )
 
-from . import binding, held_notice, job_reply, notice, relay, working_drafts
+from . import binding, held_notice, job_reply, limit_check, notice, relay, working_drafts
 
 _PACKAGE = __name__.rpartition(".")[0]
 #: The plugin module this copy of the steps serves. The plugin drops any earlier
@@ -363,7 +363,9 @@ def body_and_facts(
         return None
     # A turn's fixed sentence owns its own wording (5a), so the limit rule
     # reads only replies the model wrote freely.
-    if say is None and limit_held(origin, reply_to, send_text, send_html):
+    lim = say is None and limit_check.stated(origin, reply_to, send_text, send_html, _LIMIT_HOLDS)
+    if lim:
+        _plugin._held(limit_check.LIMIT_HOLD_REASON, origin, rule=lim[0], _detail=lim[1])
         return None
     if facts is not None and not facts_hold:
         # The invariant, checked on the body that would go: no marker, and
@@ -420,11 +422,6 @@ MECHANICS_HOLD_REASON = "mechanics_named"
 _SAY_MAX = 1024
 
 
-#: The broker's comparison and its HTML reading, kept where the register is.
-_norm = turn_says.norm
-_from_html = turn_says.from_html
-
-
 #: The register (``shared.turn_says``), one per load of this module, which is
 #: one per load of the plugin.
 TurnSays = turn_says.TurnSays
@@ -435,6 +432,8 @@ _TURN_SAYS = TurnSays()
 #: runs out). Past ``SAY_MAX_REDRAFTS`` redrafts the model is told to stop; the
 #: hold stays ``fixed_wording``, which pages SMD as ``reply_held:fixed_wording``.
 _SAY_HOLDS = held_notice.HoldCounter()
+#: The limit rule's own redraft count (``limit_check``), per load as 5a's is.
+_LIMIT_HOLDS = held_notice.HoldCounter()
 SAY_MAX_REDRAFTS = 2
 SAY_STOP_DETAIL = notice.FIXED_WORDING_STOP
 
@@ -516,35 +515,6 @@ def mechanics_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -
     if hold is not None:
         _plugin._held(MECHANICS_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
     return hold is not None
-
-
-def limit_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -> bool:
-    """2026-11-24 (A&P, matter-file request): the Operator told an attorney
-    "I cannot attach files to this reply" and then "my document reader cannot
-    open that format ... This is a limit of how I read files". The owner's rule:
-    the Operator never states a limit of its own to a person; it says
-    ``reply_could_not.LOOK_INTO`` and SMD does the work, paged by that
-    sentence's ``looking_into`` code on the sent row. A reply to anyone but
-    SMD that states one is held here with the sentence to use, under the same
-    redraft cap as 5a, counted on its own (``turn_says.limit_hold``); past it the hold stands and
-    pages SMD."""
-    hold = turn_says.limit_hold(
-        reply_to,
-        send_text,
-        send_html,
-        lambda: _LIMIT_HOLDS.note(origin.message_id),
-        notice.LIMIT_STOP,
-    )
-    if hold is not None:
-        _plugin._held(LIMIT_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
-    return hold is not None
-
-
-#: The hold reason of a reply that states a limit of the Operator's own.
-LIMIT_HOLD_REASON = "limit_named"
-#: The limit rule's own redraft count per email (review of #4210): a fixed-
-#: wording or mechanics hold on the same email does not use up its redrafts.
-_LIMIT_HOLDS = held_notice.HoldCounter()
 
 
 def turn_say(session_id: str, origin: Any, send_text: str, send_html: str) -> bool:

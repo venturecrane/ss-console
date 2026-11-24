@@ -6,7 +6,7 @@ it could not open the emails, "my document reader cannot open that format ...
 This is a limit of how I read files in Smokeball". The owner's rule: where the
 Operator cannot do what was asked, it says ``reply_could_not.LOOK_INTO`` and
 SMD does the work. The relay holds a reply that states a limit (step 5,
-``relay_checks.limit_held``), and the sentence that replaces it is stamped
+``limit_check.stated``), and the sentence that replaces it is stamped
 ``looking_into``, so the request still reads NOT FULFILLED and pages SMD.
 
 The texts here are paraphrased and invented for this test (ADR 0081: no client
@@ -23,6 +23,16 @@ import pytest
 from shared import reply_could_not
 from shared.recipient_classifier import RecipientClass
 from tests.test_relay_steps import SENDER, _Cfg, _held, _origin, mod  # noqa: F401 - the fixture
+
+
+def _limit(plugin: Any, origin: Any, reply_to: Any, text: str, html: str) -> bool:
+    """The relay's step-5 limit check, as ``body_and_facts`` calls it."""
+    rc = plugin.relay_checks
+    hold = rc.limit_check.stated(origin, reply_to, text, html, rc._LIMIT_HOLDS)
+    if hold is not None:
+        plugin._held(rc.limit_check.LIMIT_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
+    return hold is not None
+
 
 #: What the Operator said to the attorney, paraphrased.
 LIMIT_REPLIES = [
@@ -89,38 +99,36 @@ def test_the_limit_rule_counts_its_redrafts_apart_from_other_holds(mod: Any) -> 
     origin = _origin()
     for _ in range(mod.relay_checks.SAY_MAX_REDRAFTS + 1):
         mod.relay_checks._SAY_HOLDS.note(origin.message_id)
-    mod.relay_checks.limit_held(origin, SENDER, LIMIT_REPLIES[0], "")
+    _limit(mod, origin, SENDER, LIMIT_REPLIES[0], "")
     detail = next(c[2]["_detail"] for c in mod.calls if c[0] == "_held")
     assert detail != mod.notice.LIMIT_STOP and reply_could_not.LOOK_INTO in detail
 
 
 def test_a_reply_stating_a_limit_is_held_with_the_sentence_to_use(mod: Any) -> None:  # noqa: F811
     origin = _origin()
-    held = mod.relay_checks.limit_held(origin, SENDER, LIMIT_REPLIES[1], "")
+    held = _limit(mod, origin, SENDER, LIMIT_REPLIES[1], "")
     assert held is True and _held(mod) == ["limit_named"]
     detail = next(c[2]["_detail"] for c in mod.calls if c[0] == "_held")
     assert reply_could_not.LOOK_INTO in detail and "my document reader cannot open" in detail
 
 
 def test_the_html_part_is_read_too(mod: Any) -> None:  # noqa: F811
-    held = mod.relay_checks.limit_held(
-        _origin(), SENDER, "", "<p>I cannot attach files to this reply.</p>"
-    )
+    held = _limit(mod, _origin(), SENDER, "", "<p>I cannot attach files to this reply.</p>")
     assert held is True
 
 
 def test_the_redraft_passes_and_smd_is_never_held(mod: Any) -> None:  # noqa: F811
     origin = _origin()
     redraft = "Thanks Chris.\n\n" + reply_could_not.LOOK_INTO
-    assert mod.relay_checks.limit_held(origin, SENDER, redraft, "") is False
-    assert mod.relay_checks.limit_held(origin, "team@smd.services", LIMIT_REPLIES[0], "") is False
+    assert _limit(mod, origin, SENDER, redraft, "") is False
+    assert _limit(mod, origin, "team@smd.services", LIMIT_REPLIES[0], "") is False
     assert _held(mod) == []
 
 
 def test_past_the_redraft_cap_the_model_is_told_to_stop(mod: Any) -> None:  # noqa: F811
     origin = _origin()
     for _ in range(mod.relay_checks.SAY_MAX_REDRAFTS + 1):
-        mod.relay_checks.limit_held(origin, SENDER, LIMIT_REPLIES[0], "")
+        _limit(mod, origin, SENDER, LIMIT_REPLIES[0], "")
     details = [c[2]["_detail"] for c in mod.calls if c[0] == "_held"]
     assert details[-1] == mod.notice.LIMIT_STOP
     assert mod.notice.LIMIT_STOP not in details[:-1]
