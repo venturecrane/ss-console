@@ -39,7 +39,7 @@ iteration does not page SMD.
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .library import _entry_folder_id, _listing, _walk_folders, list_matter_files
 
@@ -207,3 +207,64 @@ def refused(
         "note": _NOTES[status],
         **extra,
     }
+
+
+# ---- The refusals each tool returns, shaped here so the tools stay short ----
+
+
+def text_refusal(matter_id: str, file_name: str, *, as_text: bool) -> dict[str, Any] | None:
+    """``add_file``'s refusal of text content filed as a text document, else None."""
+    if not is_text_document(file_name, as_text=as_text):
+        return None
+    reason = ["a document is filed as Word with render_docx_draft, never as a text file"]
+    return refused(matter_id, file_name, "text_document", reason)
+
+
+def list_refusal(
+    get_client: Callable[[], Any],
+    matter_id: str,
+    file_name: str,
+    markdown: str,
+    held_out: list[str],
+    listed_folder_id: str | None,
+) -> dict[str, Any] | None:
+    """``render_docx_draft``'s held-out-name and count refusals, else None. The
+    client is built only when a folder is to be counted."""
+    named = withheld_named(markdown, held_out)
+    if named:
+        why = "held-out documents are named in the draft: " + ", ".join(named) + "; remove them from the document"
+        return refused(matter_id, file_name, "held_out_named", [why])
+    if not listed_folder_id:
+        return None
+    miss = count_refusal(get_client(), matter_id, listed_folder_id, markdown, held_out)
+    return refused(matter_id, file_name, miss[0], [miss[1]]) if miss else None
+
+
+def record_refusal(matter_id: str, file_name: str, verdict: Any) -> dict[str, Any]:
+    """A failed record check: ``revise`` when a redraft can clear it, else ``refused``."""
+    return refused(
+        matter_id,
+        file_name,
+        "record_check",
+        verdict.refusals,
+        status=REVISE if verdict.disposition in REVISABLE_RECORD_CHECK else REFUSED,
+        recordCheck=verdict.disposition,
+        warnings=verdict.warnings,
+        infos=verdict.infos,
+        checkedSources=verdict.checked_sources,
+    )
+
+
+def render_refusal(
+    matter_id: str,
+    file_name: str,
+    refusal: str,
+    format_applied: Any,
+    library: Any,
+    *,
+    reason: str = "format_refused",
+    status: str = REFUSED,
+) -> dict[str, Any]:
+    """A format or template-name refusal from either render tool."""
+    extra = {"libraryResolution": library} if library is not None else {}
+    return refused(matter_id, file_name, reason, [refusal], status=status, formatApplied=format_applied, **extra)

@@ -1305,15 +1305,11 @@ def add_file(
             "add_file: supply exactly one of content_text (plain text, encoded "
             f"server-side) or content_base64 (binary) — got {supplied}"
         )
-    from .list_check import is_text_document, refused
+    from .list_check import text_refusal
 
-    if is_text_document(file_name, as_text=content_text is not None):
-        return refused(
-            matter_id,
-            file_name,
-            "text_document",
-            ["a document is filed as Word with render_docx_draft, never as a text file"],
-        )
+    refusal = text_refusal(matter_id, file_name, as_text=content_text is not None)
+    if refusal:
+        return refusal
     if content_text is not None:
         data = content_text.encode("utf-8")
     else:
@@ -1514,7 +1510,7 @@ def render_docx_template(
     Classified INTERNAL_WRITE at the overlay: the Operator writing a template
     into the firm's own record. Nothing leaves the firm."""
     from .library import classless_name_refusal, names_agree
-    from .list_check import REVISE, refused
+    from .list_check import REVISE, refused, render_refusal
     from .render import TemplateContentRefused, check_template_content
 
     file_name = file_name if file_name.lower().endswith(".docx") else f"{file_name}.docx"
@@ -1546,15 +1542,7 @@ def render_docx_template(
                 "FIRST and then file under the authored name."
             )
     if refusal:
-        return refused(
-            matter_id,
-            file_name,
-            reason,
-            [refusal],
-            status=status,
-            formatApplied=format_applied,
-            **({"libraryResolution": library} if library is not None else {}),
-        )
+        return render_refusal(matter_id, file_name, refusal, format_applied, library, reason=reason, status=status)
     result = add_file(
         matter_id,
         file_name,
@@ -1751,7 +1739,7 @@ def render_docx_draft(
     Classified INTERNAL_WRITE at the overlay: the Operator saving its own work
     product into the firm's record. Nothing leaves the firm; delivery to anyone
     outside is a separate, separately-gated act."""
-    from .list_check import REVISABLE_RECORD_CHECK, REVISE, count_refusal, refused, withheld_named
+    from .list_check import REVISE, list_refusal, record_refusal, refused, render_refusal
     from .record_check import run_record_check
     from .render import TemplateContentRefused, check_draft_content
 
@@ -1762,18 +1750,9 @@ def render_docx_draft(
     except TemplateContentRefused as exc:
         return refused(matter_id, file_name, "content_gate", [str(v) for v in exc.violations], status=REVISE)
     held_out = list(held_out_file_names or ())
-    named = withheld_named(draft_markdown, held_out)
-    if named:
-        return refused(
-            matter_id,
-            file_name,
-            "held_out_named",
-            ["held-out documents are named in the draft: " + ", ".join(named) + "; remove them from the document"],
-        )
-    if listed_folder_id:
-        miss = count_refusal(_get_client(), matter_id, listed_folder_id, draft_markdown, held_out)
-        if miss:
-            return refused(matter_id, file_name, miss[0], [miss[1]])
+    listed = list_refusal(_get_client, matter_id, file_name, draft_markdown, held_out, listed_folder_id)
+    if listed:
+        return listed
 
     # The ten mechanical gates, against this matter's own record. Nothing is
     # rendered or uploaded until they pass — see record_check.py for the
@@ -1787,28 +1766,11 @@ def render_docx_draft(
         vision_sources=vision_sources,
     )
     if not verdict.passed:
-        return refused(
-            matter_id,
-            file_name,
-            "record_check",
-            verdict.refusals,
-            status=REVISE if verdict.disposition in REVISABLE_RECORD_CHECK else "refused",
-            recordCheck=verdict.disposition,
-            warnings=verdict.warnings,
-            infos=verdict.infos,
-            checkedSources=verdict.checked_sources,
-        )
+        return record_refusal(matter_id, file_name, verdict)
 
     data, format_applied, refusal, library = _render_with_format(draft_markdown, document_class, matter_id)
     if refusal:
-        return refused(
-            matter_id,
-            file_name,
-            "format_refused",
-            [refusal],
-            formatApplied=format_applied,
-            **({"libraryResolution": library} if library is not None else {}),
-        )
+        return render_refusal(matter_id, file_name, refusal, format_applied, library)
     result = add_file(
         matter_id,
         file_name,
