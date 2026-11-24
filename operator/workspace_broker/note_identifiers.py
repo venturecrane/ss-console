@@ -191,26 +191,6 @@ _REFERENCE_BEFORE_RE = re.compile(
 #: The word right after a figure that makes it a reference ("100-500 pages").
 _REFERENCE_AFTER_RE = re.compile(r"\s*(?:pages?|pp\b|items?|lines?|words?|days?|exhibits?)\b", re.IGNORECASE)
 _SENTENCE_BREAK_RE = re.compile(r"[.!?\n]")
-#: What before a digit run makes it an identifier, never a run-together count:
-#: "Matter 203795", "Case No. 203795", "#203795", "phone 6025551".
-_ID_BEFORE_RE = re.compile(
-    r"(?:\b(?:matter|case|file|claim|policy|account|acct|invoice|order|ref|reference|no|number|phone|tel|"
-    r"fax|cell|mobile|ph|ext)\b\.?|#)\s*[:#.\-]?\s*$",
-    re.IGNORECASE,
-)
-
-
-def _split_readings(run: str) -> tuple[str, str] | None:
-    """A run-together figure of 4 to 6 digits read as two numbers of equal
-    length, the first no larger than the second ("120125" -> 120 and 125), or
-    None."""
-    if len(run) % 2 or not 4 <= len(run) <= 6:
-        return None
-    half = len(run) // 2
-    lo, hi = run[:half], run[half:]
-    if lo.startswith("0") or hi.startswith("0") or int(lo) > int(hi):
-        return None
-    return lo, hi
 
 
 def _sentence_around(text: str, start: int, end: int) -> tuple[str, str]:
@@ -232,28 +212,19 @@ def _is_count(text: str, start: int, end: int) -> bool:
 
 
 def anchor_numbers(anchor: str) -> tuple[set[str], list[tuple[int, int]]]:
-    """``(runs, ranges)``: every digit run the anchor carries, with the two
-    readings of a run-together count, and every count range the anchor states.
+    """``(runs, ranges)``: every digit run the anchor carries, and every count
+    range the anchor states.
 
-    WHY (A&P, 2026-11-23). An attorney asked to cut a set to "the most important
-    120125", meaning 120 to 125; SMD's note saying "cut to the 120 most
-    important" was refused because 120 is not literally in his email. A number
-    read from his own figure (its two halves only), or one inside a count range
-    he wrote, is his number. A matter, case or phone number is never split, and
-    a reference range ("pages 1-500") vouches for nothing between its ends."""
+    WHY (A&P, 2026-11-23). An attorney asked to cut a set to 120 to 125; SMD's
+    note saying "cut to the 120 most important" names a number inside the range
+    he wrote, so it is his number. Only a COUNT range vouches for the numbers
+    between its ends (``_is_count``); a reference range ("pages 1-500") vouches
+    for nothing. A run-together figure ("120125") vouches only for itself: which
+    reading fits is decided elsewhere, against the counts in the matter."""
     text = anchor or ""
     runs = {m.group(0) for m in _BARE_RUN_RE.finditer(text)}
     ranges: list[tuple[int, int]] = []
     shaped = [h.span for h in structured(text)]
-    for m in re.finditer(r"(?<![0-9])\d+(?![0-9])", text):
-        split = _split_readings(m.group(0))
-        if not split or _inside(m.span(), shaped):
-            continue
-        if _ID_BEFORE_RE.search(text[max(0, m.start() - 30) : m.start()]):
-            continue
-        if not _is_count(text, m.start(), m.end()):
-            continue
-        runs.update(split)
     for m in _RANGE_RE.finditer(text):
         lo, hi = int(m.group(1)), int(m.group(2))
         # A count range, not a date or case number, and not a phone number's
@@ -271,9 +242,8 @@ def uncorroborated(note: str, anchor: str, *, now: datetime.datetime | None = No
     """The identifiers in ``note`` that ``anchor`` (the request's subject and
     body as text) does not carry. Empty means every identifier corroborates.
 
-    A bare number corroborates when the anchor carries it as a digit run, as one
-    half of a run-together count, or inside a count range the anchor states
-    (``anchor_numbers``)."""
+    A bare number corroborates when the anchor carries it as a digit run or it
+    lies inside a count range the anchor states (``anchor_numbers``)."""
     note_hits = structured(note)
     anchor_hits = structured(anchor)
     known = {h.canonical for h in anchor_hits}
