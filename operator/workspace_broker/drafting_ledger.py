@@ -67,7 +67,7 @@ import sqlite3
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
-from . import drafting_attachments, drafting_progress
+from . import drafting_attachments, drafting_new_ask, drafting_progress
 from .cycle_window import cycle_window
 from .lane_ledger import RecentJobs, ReplyOnce, SpendMeter, StateRecord, require_cents
 
@@ -309,6 +309,7 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
         if REVISE_COLUMN not in cols:
             conn.execute(ADD_REVISE_SQL)
         drafting_progress.ensure(conn)  # the progress note's columns (2026-11-24)
+        drafting_new_ask.ensure(conn)  # the request's words, to tell a new ask from a change
 
     # -- the cycle's count -------------------------------------------------
     def allowance(
@@ -499,6 +500,7 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
                     revise["prior_job_id"] if revise else None,
                 ),
             )
+            drafting_new_ask.record(conn, job_id, env["request_text"])
             conn.commit()
         finally:
             conn.close()

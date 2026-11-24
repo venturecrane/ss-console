@@ -41,6 +41,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from . import drafting_new_ask
 from .drafting_ledger import MAX_REQUEST_TEXT, DraftingLedger
 
 #: What a request email can hold in one go (the index keeps about 4,000).
@@ -150,7 +151,9 @@ def filed_job(db: DraftingLedger, row: dict[str, Any], thread: set[str], by: str
     return ""
 
 
-def _whose(db: DraftingLedger, row: dict[str, Any], ref: str, by: str, thread: set[str], about: bool) -> str:
+def _whose(
+    db: DraftingLedger, row: dict[str, Any], ref: str, by: str, thread: set[str], about: bool, words: str
+) -> str:
     """The refusal of an email that may not reach this job, or "". ``about``: the
     email is about documents already filed, and reaches a draft of their kind on
     the matter when its thread holds one the sender asked for."""
@@ -160,8 +163,14 @@ def _whose(db: DraftingLedger, row: dict[str, Any], ref: str, by: str, thread: s
         return "same_email"
     if not ref or _bare(ref) not in thread:
         return "other_thread"
-    held = filed_job(db, row, thread, by) if about else _bare(row["request_ref"]) in thread
-    return "" if held else "other_thread"
+    if not about:
+        return "" if _bare(row["request_ref"]) in thread else "other_thread"
+    filed = filed_job(db, row, thread, by)
+    if not filed:
+        return "other_thread"
+    # An email asking for NEW documents is a job of its own, never words for a
+    # draft already running (``drafting_new_ask``, 2026-11-24).
+    return "new_ask" if drafting_new_ask.asks_new(words, [db.read(filed) or {}]) else ""
 
 
 def add_to_request(
@@ -190,7 +199,7 @@ def add_to_request(
         return out("no_such_job")
     named = {"matter_number": row["matter_number"], "document_class": row["document_class"], "job_id": job_id}
     about = request.get("about_filed") is True
-    refused = _whose(db, row, ref, by, thread, about)
+    refused = _whose(db, row, ref, by, thread, about, words)
     if refused:
         return out(refused, **named)
     if not about and not row.get("revise_of") and filed_job(db, row, thread):

@@ -52,10 +52,12 @@ def _sets(ref: str, text: str = "Draft special interrogatories to each defendant
     return _envelope(request_ref=ref, document_class=SETS, request_text=text)
 
 
-def _failed(broker, ref=ASKED) -> str:
+def _failed(broker, ref=ASKED, reason="stopped_by_smd: SMD took the sets over by hand") -> str:
+    """A failed job. By default SMD stopped it to file its sets by hand."""
     jid = call(broker, "drafting_job_submit", envelope=_sets(ref))["job_id"]
     call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="running", fields={})
-    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="failed", fields={"cents": 0, "reason": "x"})
+    fields = {"cents": 0, "reason": reason}
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="failed", fields=fields)
     return jid
 
 
@@ -190,3 +192,73 @@ def test_an_addition_in_a_thread_that_holds_filed_documents_says_so(tmp_path) ->
     assert got["filed_in_thread"] is True and got["matter_number"] == "900201" and got["matter_id"]
     alone = _add(broker, redraft, COMMENT, [OTHER, COMMENT])
     assert "filed_in_thread" not in alone
+
+
+#: The attorney's real ask in that thread, with the parties invented.
+MORE_SETS = "Please also prepare sets of discovery to the Hillcrest middle school and the Ashby school district."
+FOLLOW_UPS = (
+    "The interrogatories need to have follow up questions to provide useful information. If trained, describe "
+    "the training; if they saw it deleted, who deleted it and what."
+)
+
+
+def test_a_request_for_more_sets_in_the_thread_drafts_them_after_a_hand_filing(tmp_path) -> None:
+    """Review 2026-11-24: this held for SMD. FALSIFIER: drop ``asks_new`` from the
+    route and the new sets wait for a person instead of being drafted."""
+    broker, _db, _queue, _writer = _seat(tmp_path)
+    _failed(broker)
+    out = call(broker, "drafting_job_submit", envelope=_sets(COMMENT, MORE_SETS))
+    assert out["accepted"] and out["mode"] == "draft" and "underway_job_id" not in out
+
+
+def test_a_request_for_more_sets_beside_several_delivered_sets_drafts_them(tmp_path) -> None:
+    broker, _db, _queue, writer = _seat(tmp_path)
+    _delivered(broker, writer, drafts=5)
+    out = call(broker, "drafting_job_submit", envelope=_sets(COMMENT, MORE_SETS))
+    assert out["accepted"] and out["mode"] == "draft"
+
+
+def test_a_party_already_served_is_not_a_new_ask() -> None:
+    from workspace_broker.drafting_new_ask import asks_new
+
+    prior = [{"request_words": "Draft special interrogatories to Dana Ruiz and Lee Ortiz.", "delivery_json": None}]
+    assert asks_new("Revise the interrogatories to Dana Ruiz so they are shorter.", prior) is False
+    assert asks_new("Prepare interrogatories to Hillcrest Middle School.", prior) is True
+    assert asks_new(FOLLOW_UPS, prior) is False
+
+
+def test_the_follow_up_comment_still_holds_for_smd(tmp_path) -> None:
+    broker, _db, _queue, _writer = _seat(tmp_path)
+    _failed(broker)
+    out = call(broker, "drafting_job_submit", envelope=_sets(COMMENT, FOLLOW_UPS))
+    assert out["accepted"] is False and out["code"] == "prior_filed_by_smd"
+
+
+def test_a_retry_after_an_unfiled_failure_drafts_afresh(tmp_path) -> None:
+    """Nothing says SMD filed it (no proof, not stopped by SMD, nothing owed).
+    FALSIFIER: drop ``_smd_filed`` and "please try again" waits for a person."""
+    broker, _db, _queue, _writer = _seat(tmp_path)
+    _failed(broker, reason="runner_error: the render step failed")
+    out = call(broker, "drafting_job_submit", envelope=_sets(COMMENT, "Please try again."))
+    assert out["accepted"] and out["mode"] == "draft"
+
+
+def test_a_hand_filing_proof_makes_the_failed_job_smds(tmp_path) -> None:
+    broker, _db, _queue, writer = _seat(tmp_path)
+    jid = _failed(broker, reason="runner_error: the render step failed")
+    meta = {"lane": "drafting", "job_id": jid, "files": [{"file_id": "s-0", "size": 10, "sha256": "d" * 64}]}
+    row = {"action_type": "DELIVERY_PROVEN", "actor": "workspace-broker", "actor_role": "broker"}
+    writer.append({**row, "metadata": json.dumps(meta)})
+    out = call(broker, "drafting_job_submit", envelope=_sets(COMMENT, FOLLOW_UPS))
+    assert out["code"] == "prior_filed_by_smd"
+
+
+def test_more_sets_never_reach_a_running_draft_as_its_words(tmp_path) -> None:
+    """FALSIFIER: drop the ``new_ask`` check in ``_whose`` and the new parties'
+    sets are folded into a draft of other parties' sets."""
+    broker, _db, _queue, _writer = _seat(tmp_path)
+    broker.drafting.add_wait_seconds = 0.2
+    _failed(broker)
+    running = call(broker, "drafting_job_submit", envelope=_sets(OTHER))["job_id"]
+    got = _add(broker, running, COMMENT, [ASKED, COMMENT], about_filed=True, words=MORE_SETS)
+    assert got["result"] == "new_ask"

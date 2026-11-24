@@ -32,9 +32,10 @@ next reply in the thread revises them in place.
 from __future__ import annotations
 
 import json
+import sqlite3
 from typing import Any, Callable
 
-from . import drafting_revise_units as revise_units
+from . import drafting_new_ask, drafting_revise_units as revise_units
 from .drafting_threads import ThreadUnknown
 
 
@@ -65,7 +66,7 @@ SEVERAL_DRAFTS = "prior_several_drafts"
 PROPOUNDED_CLASS = "discovery_set"
 #: The failed jobs of a class on a matter read for a thread match, newest first.
 _FAILED_SQL = (
-    "SELECT id, request_ref FROM drafting_jobs WHERE matter_id=? AND document_class=? AND state='failed' "
+    "SELECT * FROM drafting_jobs WHERE matter_id=? AND document_class=? AND state='failed' "
     "ORDER BY created_at DESC LIMIT 10"
 )
 
@@ -76,6 +77,34 @@ def _failed_on_matter(db: Any, matter_id: str, klass: str) -> list[dict[str, Any
         return [dict(r) for r in conn.execute(_FAILED_SQL, (matter_id, klass))]
     finally:
         conn.close()
+
+
+def _smd_filed(db: Any, row: dict[str, Any]) -> bool:
+    """SMD filed this failed job's documents by hand: its delivery proof was
+    written (``jobs.drafting.deliver_by_smd``, the hand path), SMD stopped it to
+    take it over (``stopped_by_smd:``), or an owed item names it. Otherwise a
+    later email is a retry of an unfiled failure, and drafts afresh."""
+    if str(row.get("reason") or "").startswith("stopped_by_smd"):
+        return True
+    job_id = str(row["id"])
+    conn = db._connect()
+    try:
+        for sql in _HAND_SQL:
+            try:
+                if conn.execute(sql, (job_id,) if "json_extract" in sql else (f"%{job_id}%",)).fetchone():
+                    return True
+            except sqlite3.OperationalError:
+                continue  # a table not created on this seat yet records nothing
+    finally:
+        conn.close()
+    return False
+
+
+_HAND_SQL = (
+    "SELECT 1 FROM audit_log WHERE action_type='DELIVERY_PROVEN' AND json_extract(metadata,'$.lane')='drafting' "
+    "AND json_extract(metadata,'$.job_id')=? LIMIT 1",
+    "SELECT 1 FROM smd_owed WHERE detail LIKE ? LIMIT 1",
+)
 
 
 def _filed_by_smd(job_id: str) -> RouteRefused:
@@ -127,10 +156,16 @@ def route(
             )
         except ThreadUnknown:
             return _unanswered()
+        text = envelope["request_text"]
+        if drafting_new_ask.asks_new(text, [r for r in (prior, hand) if r is not None]):
+            # More documents asked for in the same thread ("also prepare sets to
+            # the school district"): a new job, never a change to the filed ones.
+            return None
         if prior is None:
-            # A failed job's thread with nothing delivered in it: the documents
-            # the reply is about were filed by SMD's hand, never a fresh redraft.
-            return _filed_by_smd(str(hand["id"])) if hand is not None else None
+            # A failed job's thread with nothing delivered in it: when SMD filed
+            # its documents by hand, the reply is about them, never a fresh
+            # redraft; an unfiled failure asked again drafts afresh.
+            return _filed_by_smd(str(hand["id"])) if hand is not None and _smd_filed(db, hand) else None
     if whole_set:
         return _route_set(db, delivered, prior, thread_of)
     files = db.proven_files(prior["id"])
