@@ -16,6 +16,6 @@ second copy of them.
 
 from __future__ import annotations
 
-from . import book, grid, hook, makers, parts, reading, stage, types, written
-
-__all__ = ["book", "grid", "hook", "makers", "parts", "reading", "stage", "types", "written"]
+# Submodules are imported by name where used (``from .rulebook import stage``), never here:
+# ``firm.py`` imports ``book`` to validate the firm file, and the fleet CLI runs that
+# validator in a bare interpreter with only pyyaml (bin/lib/fleet/lane_validate.py).
