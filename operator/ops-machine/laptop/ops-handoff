@@ -25,6 +25,14 @@
 # running (each task is told to write them, see PROGRESS_PREFIX).
 set -uo pipefail
 usage='usage: ops-handoff <client> "<task>" | ops-handoff <client> --results | ops-handoff <client> --say <session> "<message>"'
+# A message sent with --say becomes a new turn of the session it reaches. On
+# 2026-11-24 a task session answered such a message, ended its turn and sat
+# idle at its prompt, twice on one matter (about 75 minutes on an attorney's
+# last open request), because nothing told it to go back to its task. So while
+# the task has no outcome file yet, the message file ends with this line. The
+# workspace's stall watch (bin/ops-task-nudge) catches a session that stops
+# anyway.
+CARRY_ON='When you have answered this, carry on with your task from where you left it, without stopping, until you write its outcome.'
 # Every task this starts asks its session for progress lines with this prefix,
 # and --results reads them back by the same prefix: one constant for both.
 PROGRESS_PREFIX='PROGRESS:'
@@ -109,13 +117,21 @@ if [ "$task" = "--say" ]; then
   [[ "$tries" =~ ^[1-9][0-9]?$ ]] || tries=3
   [[ "$pause" =~ ^[0-9]+$ ]] || pause=2
   msg=$(printf '%s\n' "$say_text" | base64 | tr -d '\n')
+  # The session's window gives its pane pid, which names its task: ops-start
+  # claimed ~/inbox/task-*-<pane pid>.md and writes its outcome (its verdict, or
+  # its hold) to ~/outbox/task-*-<pane pid>.md. A task with no outcome yet gets
+  # CARRY_ON at the end of the message file; a plain session, or a task that has
+  # reported, gets the message alone.
   got=$(printf '%s\n' \
-    "s='$say_to'; id='$id'; f=\"\$HOME/inbox/say-$id.md\"; w=" \
+    "s='$say_to'; id='$id'; f=\"\$HOME/inbox/say-$id.md\"; w= pp=" \
     'for p in $(tmux list-panes -s -t main -F "#{window_index}:#{pane_pid}" 2>/dev/null); do' \
-    '  ps -o args= -p "${p#*:}" --ppid "${p#*:}" 2>/dev/null | grep -q -- "--name $s " && w=${p%%:*}' \
+    '  ps -o args= -p "${p#*:}" --ppid "${p#*:}" 2>/dev/null | grep -q -- "--name $s " && { w=${p%%:*}; pp=${p#*:}; }' \
     'done' \
     '[ -n "$w" ] || { echo none; exit 0; }' \
     "mkdir -p \"\$HOME/inbox\" && printf %s '$msg' | base64 -d > \"\$f\" && [ -s \"\$f\" ] || { echo nofile; exit 0; }" \
+    'if ls "$HOME"/inbox/task-*-"$pp".md >/dev/null 2>&1 && ! ls "$HOME"/outbox/task-*-"$pp".md >/dev/null 2>&1; then' \
+    "  printf '\\n%s\\n' '$CARRY_ON' >> \"\$f\"" \
+    'fi' \
     'line="[from the laptop, msg $id] Read ~/inbox/say-$id.md and act on it as if typed here."' \
     'tmux send-keys -t "main:$w" -l "$line" || { echo notsent; exit 0; }' \
     'sleep 1; tmux send-keys -t "main:$w" Enter || { echo noenter; exit 0; }' \
