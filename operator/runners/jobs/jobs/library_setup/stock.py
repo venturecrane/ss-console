@@ -18,6 +18,14 @@ codes, never a word of the paper. A paragraph of the paper that kept a possible
 case fact is dropped; the file is refused only when nothing of its front was
 kept (``--allow-partial`` overrides). A frame whose closing came out empty is
 stocked with its front alone (``closing: none``): drafts keep their own closing.
+
+A DEMAND LETTER (``--kind demand_letter.pre_suit`` or ``.litigation``) is
+stocked from the firm's tagged house reference, its own demand with each
+paragraph kind tagged ``PROTO:<kind>`` (``demand_make``): every prototype keeps
+its formatting and only its tag, the letterhead and footer keep the firm's
+fixed wording, and the file must carry every kind the ``--layout`` writer
+needs. Its contract is ``prototypes``; the root writer judges its body to hold
+the tags and nothing else.
 """
 
 from __future__ import annotations
@@ -36,6 +44,30 @@ from ..drafting.firm import ENV_DIR as INPUTS_ENV
 from .make import Unusable
 
 MADE, SIDECAR = "library-file.docx", "library-file.json"
+
+
+DEMAND_KINDS = ("demand_letter.pre_suit", "demand_letter.litigation")
+
+
+def demand_made(blob: bytes, layout: str, identity: list[str]) -> tuple[Any, dict[str, Any]]:
+    """A demand library file (``demand_make``) and its answer, the root
+    writer's own check run on it where the overlay can be imported."""
+    from .demand_make import make_prototypes
+
+    try:
+        made = make_prototypes(blob, layout, identity)
+    except Unusable as exc:
+        return None, {"status": "refused", "code": exc.code, "detail": str(exc)}
+    answer = {"status": "made", "contract": "prototypes", "kinds": len(made.kinds), "counts": made.counts}
+    try:
+        from establish_intake import blank_form
+    except ImportError:
+        return made, {**answer, "check": "root_writer"}
+    tags = [s for s in made.fixed_strings if s.startswith("PROTO:")]
+    checked = blank_form.check(made.data, made.fixed_strings, document_fixed=tags)
+    if not checked.ok:
+        return None, {"status": "refused", "code": "no_client_text_check", "problems": len(checked.problems)}
+    return made, {**answer, "check": "passed"}
 
 
 def made_for(
@@ -72,7 +104,9 @@ def made_for(
     return made, {**answer, "check": "passed"}
 
 
-def write(out: Path, made: Any, kind: str, source_file_id: str, version: str, attorney: str | None) -> None:
+def write(
+    out: Path, made: Any, kind: str, source_file_id: str, version: str, attorney: str | None, contract: str = "styles"
+) -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / MADE).write_bytes(made.data)
     side = {
@@ -80,7 +114,7 @@ def write(out: Path, made: Any, kind: str, source_file_id: str, version: str, at
         "attorney": attorney,
         "source_file_id": source_file_id,
         "source_version": version,
-        "contract": "styles",
+        "contract": contract,
         "fixed_strings": list(made.fixed_strings),
         "set_type": made.set_type,
         "counts": made.counts,
@@ -93,17 +127,26 @@ def cmd(args: argparse.Namespace) -> int:
     with contextlib.redirect_stdout(sys.stderr):
         blocks = accept_mod.attorney_blocks(inputs)
         identity = accept_mod.identity(inputs)
-        made, answer = made_for(args.kind, Path(args.docx).read_bytes(), identity, blocks, args.allow_partial)
+        blob = Path(args.docx).read_bytes()
+        if args.kind in DEMAND_KINDS:
+            made, answer = demand_made(blob, args.layout, identity)
+            contract = "prototypes"
+        else:
+            made, answer = made_for(args.kind, blob, identity, blocks, args.allow_partial)
+            contract = "styles"
         if made is not None:
-            write(Path(args.out), made, args.kind, args.source_file_id, args.source_version, args.attorney)
+            write(Path(args.out), made, args.kind, args.source_file_id, args.source_version, args.attorney, contract)
             answer["wrote"] = str(Path(args.out))
     print(json.dumps(answer, indent=2, sort_keys=True))
     return 0 if made is not None else 1
 
 
 def add_parser(sub: Any) -> None:
-    p = sub.add_parser("library-stock", help="make a firm's discovery library file from one of its filed papers")
-    p.add_argument("--kind", required=True, choices=("discovery_response", "discovery_set"))
+    p = sub.add_parser("library-stock", help="make a firm's discovery or demand library file from its own papers")
+    p.add_argument("--kind", required=True, choices=("discovery_response", "discovery_set", *DEMAND_KINDS))
+    p.add_argument(
+        "--layout", default="house", choices=("house", "numbered", "crabtree"), help="a demand's writer layout"
+    )
     p.add_argument("--docx", required=True, help="the firm's filed paper, a .docx from the matter's file")
     p.add_argument("--source-file-id", required=True, help="the paper's file id in the case system")
     p.add_argument("--source-version", default="filed")
@@ -116,4 +159,4 @@ def add_parser(sub: Any) -> None:
     p.set_defaults(fn=cmd)
 
 
-__all__ = ["MADE", "SIDECAR", "add_parser", "cmd", "made_for", "write"]
+__all__ = ["DEMAND_KINDS", "MADE", "SIDECAR", "add_parser", "cmd", "demand_made", "made_for", "write"]

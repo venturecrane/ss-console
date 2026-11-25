@@ -372,12 +372,25 @@ def _relationship_problems(z: Package, names: set[str]) -> list[str]:
 # ---- the check ------------------------------------------------------------------------
 
 
-def check(blob: bytes, fixed_strings: Iterable[str] = ()) -> BlankCheck:
-    """Every reason ``blob`` is not a blanked form; none when it is one."""
+def check(
+    blob: bytes, fixed_strings: Iterable[str] = (), document_fixed: Iterable[str] | None = None
+) -> BlankCheck:
+    """Every reason ``blob`` is not a blanked form; none when it is one.
+
+    ``document_fixed``: when given, the only fixed strings the document body
+    (``word/document.xml``) may hold; ``fixed_strings`` still serve the headers,
+    footers and other parts. A demand's prototypes file is judged so: its body
+    holds nothing but its ``PROTO:<kind>`` tags, its letterhead and footer the
+    firm's declared fixed wording."""
     z, problems = _open(blob)
     if z is None:
         return BlankCheck(tuple(problems))
     fixed = frozenset(f for f in (_fold(s) for s in fixed_strings) if f)
+    body_fixed = (
+        fixed
+        if document_fixed is None
+        else frozenset(f for f in (_fold(s) for s in document_fixed) if f)
+    )
     names = set(z.namelist())
     problems += _main_type_problems(z)
     problems += _structure_problems(names)
@@ -395,9 +408,10 @@ def check(blob: bytes, fixed_strings: Iterable[str] = ()) -> BlankCheck:
         if root is None:
             continue
         read += 1
-        problems += _element_problems(name, root, fixed)
+        here = body_fixed if name == DOCUMENT else fixed
+        problems += _element_problems(name, root, here)
         problems += _field_problems(name, root)
-        problems += _text_problems(name, root, fixed, used, marks)
+        problems += _text_problems(name, root, here, used, marks)
     return BlankCheck(tuple(problems), tuple(sorted(used)), read, tuple(marks))
 
 

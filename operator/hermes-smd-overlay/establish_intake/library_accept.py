@@ -19,11 +19,12 @@ registry (:data:`DOCUMENT_CLASSES` and :data:`KIND_VARIANTS`, pinned to
 ``operator/contracts/document-kinds.yaml`` by ``tests/document-kinds-registry.test.ts``;
 a kind with variants is accepted only as ``<kind>.<variant>``, checked by the
 shared ``library_ledger.slot_problems``); the contract is not one the ledger
-holds; the contract is ``prototypes`` (a demand reference file: the
-no-client-text check reads a blanked form, and cannot yet judge a file that keeps
-one sample paragraph of each kind, so accepting one is a later piece and is
-refused, never passed unchecked); the bytes are not a Word package; the bytes fail the no-client-text
-check (``establish_intake/blank_form.py``); the slot's accepted file is not the
+holds; the bytes are not a Word package; the bytes fail the no-client-text
+check (``establish_intake/blank_form.py``), which judges a ``prototypes`` file
+(a demand reference) strictly: its body may hold its declared ``PROTO:<kind>``
+tags and nothing else, because the demand writer replaces every word of a
+prototype, so a sample paragraph is refused (2026-11-25; until then every
+prototypes file was refused); the slot's accepted file is not the
 one the acceptance says it replaces; or the ledger cannot hold the entry.
 
 HOW IT IS REACHED (design 2026-11-06, piece 3b). A firm administrator chooses one
@@ -43,6 +44,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -81,10 +83,12 @@ KIND_VARIANTS: dict[str, tuple[str, ...]] = {
 }
 #: Every kind to its variants, the shape ``library_ledger.slot_problems`` reads.
 REGISTRY: dict[str, tuple[str, ...]] = {k: KIND_VARIANTS.get(k, ()) for k in DOCUMENT_CLASSES}
-#: Why a prototypes file is refused, in plain words (see the module docstring).
-PROTOTYPES_REFUSED = (
-    "a prototypes file (a demand reference) cannot be accepted yet: the no-client-text "
-    "check cannot judge a file that keeps a sample paragraph of each kind"
+#: A demand prototype's tag, the only words its body may hold (``demand/house.py``).
+PROTO_TAG = re.compile(r"\APROTO:\w+\Z")
+#: Why a prototypes file with no declared tag is refused.
+PROTOTYPES_UNTAGGED = (
+    "a prototypes file (a demand reference) must declare its PROTO:<kind> tags; "
+    "its body is judged to hold those and nothing else"
 )
 
 MAX_FIXED_STRINGS = 200
@@ -101,7 +105,7 @@ SUBMISSION_FIELDS: dict[str, str] = {
     "acceptance.attorney": "the attorney key, or null for the firm's own file",
     "acceptance.file_id": "the file in the library",
     "acceptance.version": "the accepted saved version",
-    "acceptance.contract": '"styles" or "marked" ("prototypes" is refused for now)',
+    "acceptance.contract": '"styles", "marked" or "prototypes" (a demand reference: its body holds its tags only)',
     "acceptance.accepted_by": "who said yes",
     "acceptance.accepted_at": "when, ISO 8601 UTC",
     "acceptance.sha256": "the broker's sha256 of file.docx",
@@ -245,8 +249,6 @@ def refusals(acc: Acceptance) -> tuple[list[str], tuple[str, ...]]:
     out += L.slot_problems(acc.kind, REGISTRY)
     if acc.contract not in L.CONTRACTS:
         out.append(f"contract {acc.contract!r} is not one of {list(L.CONTRACTS)}")
-    elif acc.contract == L.PROTOTYPES:
-        out.append(PROTOTYPES_REFUSED)
     if len(acc.fixed_strings) > MAX_FIXED_STRINGS or any(
         len(s) > MAX_FIXED_CHARS for s in acc.fixed_strings
     ):
@@ -255,7 +257,15 @@ def refusals(acc: Acceptance) -> tuple[list[str], tuple[str, ...]]:
         )
     if not blank_form.is_word_package(acc.data):
         return [*out, "the file is not a Word document package (.docx)"], ()
-    checked = blank_form.check(acc.data, acc.fixed_strings)
+    document_fixed = None
+    if acc.contract == L.PROTOTYPES:
+        # A prototypes file is judged strictly: its body may hold its PROTO:<kind>
+        # tags and nothing else, since the demand writer never uses a
+        # prototype's words; a sample paragraph is refused, never passed.
+        document_fixed = [s for s in acc.fixed_strings if PROTO_TAG.match(s.strip())]
+        if not document_fixed:
+            out.append(PROTOTYPES_UNTAGGED)
+    checked = blank_form.check(acc.data, acc.fixed_strings, document_fixed=document_fixed)
     out += [f"no-client-text check: {p}" for p in checked.problems]
     return out, checked.fixed_used
 
