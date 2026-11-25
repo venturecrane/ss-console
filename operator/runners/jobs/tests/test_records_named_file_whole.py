@@ -102,26 +102,26 @@ def test_names_whole_is_code_and_never_a_part() -> None:
     ("asked", "folder"),
     [
         # The live phrasing that was cut to 4 pages (2026-11-24), names invented.
-        ("the file named Parent Statements Roe.pdf on matter 201094", ""),
-        ("the document called Parent Statements Roe", ""),
-        ("file Parent Statements Roe.pdf from the Discovery folder", "Discovery"),
-        ("the file titled Parent Statements Roe in matter no. 2026-PI-101", ""),
-        ("the document entitled Parent Statements Roe in the Discovery folder", "Discovery"),
+        ("the file named Dana Roe Statement.pdf on matter 900417", ""),
+        ("the document called Dana Roe Statement", ""),
+        ("file Dana Roe Statement.pdf from the Discovery folder", "Discovery"),
+        ("the file titled Dana Roe Statement in matter no. 2026-PI-101", ""),
+        ("the document entitled Dana Roe Statement in the Discovery folder", "Discovery"),
     ],
 )
 def test_framing_around_a_file_name_still_names_the_whole_file(asked: str, folder: str) -> None:
     """FALSIFIER: "named", "called", the matter number and the folder's own
     words read as extra words, so each of these went to the page finder."""
-    assert rank.names_whole(_item(asked), "Parent Statements Roe.pdf", folder=folder)
+    assert rank.names_whole(_item(asked), "Dana Roe Statement.pdf", folder=folder)
 
 
 def test_framing_never_hides_a_part() -> None:
-    name = "Parent Statements Roe.pdf"
-    assert not rank.names_whole(_item("pages 2-5 of the file named Parent Statements Roe.pdf on matter 201094"), name)
-    assert not rank.names_whole(_item("the file named Parent Statements Roe.pdf", dates=["3/2/2024"]), name)
+    name = "Dana Roe Statement.pdf"
+    assert not rank.names_whole(_item("pages 2-5 of the file named Dana Roe Statement.pdf on matter 900417"), name)
+    assert not rank.names_whole(_item("the file named Dana Roe Statement.pdf", dates=["3/2/2024"]), name)
     # A folder word that is not the file's own folder still narrows.
     assert not rank.names_whole(
-        _item("file Parent Statements Roe.pdf from the Medical folder"), name, folder="Discovery"
+        _item("file Dana Roe Statement.pdf from the Medical folder"), name, folder="Discovery"
     )
 
 
@@ -176,9 +176,9 @@ def test_words_naming_a_folder_of_several_pdfs_send_no_file_whole(
 def test_the_live_phrasing_goes_whole_end_to_end(tmp_path: Path, env: dict[str, Path], model: FakeFinderModel) -> None:
     stored = pdf(17)
     sb = FakeSmokeball()
-    f = sb.add(1, "Parent Statements Roe.pdf", stored)
+    f = sb.add(1, "Dana Roe Statement.pdf", stored)
     sb.add(2, "Northside Clinic records.pdf", pdf(10))
-    asked = "the file named Parent Statements Roe.pdf on matter 201094"
+    asked = "the file named Dana Roe Statement.pdf on matter 900417"
     r, v = _run(tmp_path, env, sb, [_item(asked)], f"Please send me {asked}.")
     assert v["verdict"] == "delivered", v
     (cut,) = json.loads((r.data / "cuts.json").read_text())

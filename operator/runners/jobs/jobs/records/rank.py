@@ -87,10 +87,10 @@ def is_pdf(row: dict[str, Any]) -> bool:
 
 _PAGE_RANGE = re.compile(r"\bpages?\s+\d", re.I)
 #: Words that frame a file's name without narrowing it (2026-11-24, live: "the
-#: file named <name>.pdf on matter 201094" was cut to 4 pages because "named"
+#: file named <name>.pdf on matter 900417" was cut to 4 pages because "named"
 #: and the matter number read as extra words).
 _FRAMING = frozenset("file named called titled entitled document folder pdf msg matter".split())
-#: "on matter 201094", "in matter no. 2026-PI-101", "matter #201094": the matter
+#: "on matter 900417", "in matter no. 2026-PI-101", "matter #900417": the matter
 #: the request is about, never a part of the file.
 _MATTER_REF = re.compile(r"\bmatter\s+(?:no\.?\s*|number\s+|#\s*)?[\w./-]*\d[\w./-]*", re.I)
 _PAGE_COUNT = re.compile(r"\b(\d+)[\s-]pages?\b", re.I)
@@ -117,7 +117,7 @@ def names_whole(rec: dict[str, Any], label: Any, folder: Any = "") -> bool:
     like, and a page count ("the 17-page declaration"). "the ER visit of 3/2
     from the hospital records" names a part of a file, never the file.
     Framing around the name is not narrowing: "the file named X.pdf on matter
-    201094", "the document called X", "file X.pdf from the Y folder" (the
+    900417", "the document called X", "file X.pdf from the Y folder" (the
     file's own ``folder``)."""
     hints = rec.get("hints") or {}
     if hints.get("dates") or hints.get("date") or hints.get("pages"):
