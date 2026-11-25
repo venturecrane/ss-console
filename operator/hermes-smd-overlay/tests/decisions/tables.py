@@ -207,6 +207,18 @@ RELAY = Decision(
             "recorded _held",
         ),
         (
+            "act_reply.code_reply",
+            "step 5c (2026-11-24): on a law-firm seat, a turn whose tool calls included an act "
+            "gets code's words as its body (shared.turn_facts); returns the args unchanged and "
+            "decides nothing in every case the corpus records (no act is noted in any), and a "
+            "hold it makes is the recorded _held",
+        ),
+        (
+            "act_reply.model_words_only",
+            "drops the output checklist's finding on a reply step 5c wrote (code's words, no "
+            "model prose); the recorded _checklist_violations result unchanged in every other case",
+        ),
+        (
             "reply_sent.notify",
             "after a reply is on the wire, binds the read-back it carried and marks the "
             "help line offered (2026-11-20); never raises and returns nothing, so it "

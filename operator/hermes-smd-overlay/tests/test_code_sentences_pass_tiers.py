@@ -62,6 +62,9 @@ MODULES = (
     OVERLAY / "shared/champion.py",
     OVERLAY / "shared/material_check.py",
     OVERLAY / "shared/rules_by_hand.py",
+    # The reply code writes for a request for work (2026-11-24).
+    OVERLAY / "shared/turn_facts.py",
+    OVERLAY / "plugins/hermes-smd-reply/act_reply.py",
     BROKER / "establishment_rules.py",
     BROKER / "act_records_order.py",
     BROKER / "act_event_set.py",

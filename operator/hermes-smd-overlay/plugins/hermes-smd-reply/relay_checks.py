@@ -46,7 +46,7 @@ from shared import (
     turn_says,
 )
 
-from . import binding, held_notice, job_reply, notice, relay, working_drafts
+from . import act_reply, binding, held_notice, job_reply, notice, relay, working_drafts
 
 _PACKAGE = __name__.rpartition(".")[0]
 #: The plugin module this copy of the steps serves. The plugin drops any earlier
@@ -353,13 +353,18 @@ def body_and_facts(
     ``text`` the ``(scan_text, send_text, send_html)`` of ``relay.draft_body``, or
     None once the floor held the reply."""
     facts, facts_hold, model_words, args = _facts(session_id, origin, args)
+    say = _TURN_SAYS.get(session_id, origin.message_id)
+    # 5c. A turn that did work: code writes the reply from what happened (act_reply).
+    args, coded = act_reply.code_reply(cfg, session_id, origin, bound, reply_to, args, facts, say)
+    if args is None:
+        return None
 
     scan_text, send_text, send_html = relay.draft_body(args)
     # 5a. A tool wrote a fixed sentence this turn: the body must carry it, as a block.
-    say = _TURN_SAYS.get(session_id, origin.message_id)
-    if say is not None and say_held(say, origin, send_text, send_html, reply_to):
+    # Code's own reply carries every block by construction, so it is not re-read.
+    if not coded and say is not None and say_held(say, origin, send_text, send_html, reply_to):
         return None
-    if mechanics_held(origin, reply_to, send_text, send_html):
+    if not coded and mechanics_held(origin, reply_to, send_text, send_html):
         return None
     if facts is not None and not facts_hold:
         # The invariant, checked on the body that would go: no marker, and
@@ -416,11 +421,6 @@ MECHANICS_HOLD_REASON = "mechanics_named"
 _SAY_MAX = 1024
 
 
-#: The broker's comparison and its HTML reading, kept where the register is.
-_norm = turn_says.norm
-_from_html = turn_says.from_html
-
-
 #: The register (``shared.turn_says``), one per load of this module, which is
 #: one per load of the plugin.
 TurnSays = turn_says.TurnSays
@@ -441,6 +441,7 @@ def note_turn(kwargs: dict[str, Any]) -> None:
     fires for the say tool before the model drafts. Never raises."""
     _plugin._note_turn_send(kwargs.get("tool_name"), kwargs.get("session_id"))
     note_say(kwargs)
+    act_reply.note(kwargs)
 
 
 def note_say(kwargs: dict[str, Any]) -> None:
@@ -793,6 +794,8 @@ def _checklist(
         # it, so the reply waits for SMD instead of bouncing to the model.
         facts_hold = facts_hold or f"the facts block tripped the checklist ({checklist_hold[0]})"
         checklist_hold = None
+    # Step 5c: the checklist judges the model's prose, and a reply code wrote has none.
+    checklist_hold = act_reply.model_words_only(session_id, origin, checklist_hold)
     if checklist_hold is not None:
         _plugin._held(
             spec_gate.REASON_OUTPUT_CHECKLIST,

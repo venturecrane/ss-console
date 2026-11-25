@@ -74,6 +74,10 @@ _WHAT = {
     "rule_install_failed": (
         "A rule a firm person was told is recorded did not install at {at} ({detail}). Request email {ref}."
     ),
+    "look_into": (
+        "Work a firm person asked for did not finish at {at} ({detail}); the reply code wrote him said "
+        '"Let me look into that. I\'ll reply in this thread." Request email {ref}.'
+    ),
     "rule_needs_person": (
         "A rule a firm person stated was read back twice with no plain yes at {at} ({detail}); they were told it "
         "will be confirmed in the thread once in place. Request email {ref}."
@@ -101,6 +105,10 @@ _TODO = {
         "Fix the cause, or draft and file it by hand: open it as a job (workspace_broker.smd_owed open-job {owed}, "
         "runbook drafting-deliver-by-smd), then record it with jobs.drafting.deliver_by_smd {owed}. Close it in "
         "work-health-closed.yaml (job: {owed}) if it is answered another way."
+    ),
+    "look_into": (
+        "Read that email and what the turn did, finish the work, and answer in that thread through the SMD note "
+        "lane. Then close it in work-health-closed.yaml (job: {owed})."
     ),
     "help_question": (
         "Answer in that thread through the SMD note lane (it sends from the Operator's mailbox), then close it in "

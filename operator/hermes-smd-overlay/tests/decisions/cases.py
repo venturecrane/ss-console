@@ -181,6 +181,22 @@ RELAY: tuple[Case, ...] = (
             }
         },
     ),
+    # Step 5c (2026-11-24): a turn that filed a document gets code's words as its
+    # body; a reply that says a listed document is not filed is held.
+    case("act_filed", "guard", exits=False, knobs={"act": "filed"}),
+    case(
+        "status_contradicted",
+        "guard",
+        knobs={
+            "act": "listed",
+            "args": {
+                "to": ["greg@whitfield.example"],
+                "subject": "Re: New matter",
+                "text": "The intake memo was not filed.",
+                "html": "",
+            },
+        },
+    ),
     case("checklist_hold", "guard", _checklist_violations=("staff_ids", "name the matter")),
     case("advertising_hold", "guard", _advertising_violations=("rule_7_1", "remove the guarantee")),
     case("empty_body", "guard", relay__draft_body=("Re: x\n", "", "")),
@@ -321,6 +337,12 @@ RELAY: tuple[Case, ...] = (
         _checklist_violations=Seq((("staff_ids", "x"), None)),
         _review_unsupported="",
         _hold_for_review=None,
+    ),
+    case(
+        "checklist_code_words",
+        "condition",
+        knobs={"act": "filed"},
+        _checklist_violations=("staff_ids", "x"),
     ),
     case(
         "checklist_model_words",

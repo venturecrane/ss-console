@@ -29,6 +29,9 @@ KIND_HELP = "help_question"
 KIND_RULE = "rule_stated"  # rules_by_hand, the stopgap of 2026-11-20
 #: A confirmed own rule the seat could not record (rule confirmation by reply).
 KIND_NOT_RECORDED = "rule_not_recorded"
+#: An act a firm person asked for that failed (``shared.turn_facts``): the reply
+#: code wrote him carries the look-into sentence, and SMD finishes the work.
+KIND_LOOK_INTO = "look_into"
 
 
 def _request(payload: dict[str, Any]) -> dict[str, Any]:
@@ -81,4 +84,12 @@ def open_page(send: Any = None) -> dict[str, Any]:
     }
 
 
-__all__ = ["KIND_HELP", "KIND_NOT_RECORDED", "KIND_RULE", "VERB", "open_page", "record"]
+__all__ = [
+    "KIND_HELP",
+    "KIND_LOOK_INTO",
+    "KIND_NOT_RECORDED",
+    "KIND_RULE",
+    "VERB",
+    "open_page",
+    "record",
+]

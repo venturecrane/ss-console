@@ -96,6 +96,7 @@ def test_a_help_question_is_listed_in_its_own_words() -> None:
         ("help_question", "help guide does not answer"),
         ("rule_not_recorded", "not recorded"),
         ("rule_install_failed", "did not install"),
+        ("look_into", "did not finish"),
     ):
         (it,) = owed_wh.smd_owed_items(SEAT, [_owed(NOW - timedelta(hours=1), kind)], CFG, NOW)
         assert words in it.what and "note lane" in it.todo

@@ -131,6 +131,17 @@ def test_a_rule_not_recorded_is_the_agents_and_an_install_failure_is_the_brokers
     assert sorted(r["kind"] for r in _open(db)) == ["rule_install_failed", "rule_not_recorded"]
 
 
+def test_a_failed_act_is_the_agents_to_record_as_look_into(owed_seat) -> None:
+    """2026-11-24: a reply code wrote an attorney carries "Let me look into
+    that." when an act he asked for failed; this row is how SMD learns of it."""
+    broker, db, _yaml, _q = owed_seat
+    out = call(broker, "smd_owed_record", pid=1, uid=AGENT_UID, kind="look_into", request_ref=ASKING)
+    assert out["ok"] and out["smd_told"] is True
+    (alert,) = _alerts(db)
+    assert (alert["kind"], alert["lane"]) == ("look_into", "operator")
+    assert [r["kind"] for r in _open(db)] == ["look_into"]
+
+
 def test_the_open_read_has_no_lookback_and_lists_owed_served_sets(owed_seat) -> None:
     """Review 2026-11-19: owed work fell off the triage after the 192-hour
     ledger window. FALSIFIER: read the audit window instead of the table."""

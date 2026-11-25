@@ -72,10 +72,12 @@ def _fresh_turn_provenance() -> None:
     no job wakes. ``bound_this_turn`` (the participant fence's anchor and the
     reply relay's origin) refuses a session that was handed two emails, and a
     previous test's ``s1`` is not this test's."""
-    from shared import inbound, turn_sources
+    from shared import inbound, turn_facts, turn_sources
 
     inbound.SESSION_INBOUND_ORIGIN._reset_for_tests()
     turn_sources.TURN_SOURCES._reset_for_tests()
+    # What a previous test's tool calls did is not this test's (``s1``, ``m1``).
+    turn_facts.TURN_FACTS.clear()
 
 
 @pytest.fixture(autouse=True)

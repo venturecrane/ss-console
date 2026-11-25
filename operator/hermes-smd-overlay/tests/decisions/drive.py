@@ -154,6 +154,44 @@ def _isolate(mp: pytest.MonkeyPatch, tmp: Path) -> None:
     mp.setenv("SMD_SENDER_ENROLLMENT_ENROLLED", str(tmp / "enrolled.json"))
 
 
+#: Step 5c's knob (2026-11-24): what the turn's tool calls did, noted before the draft.
+#: "filed" is one document filed; "listed" is a file list naming a document.
+_ACT_CALLS = {
+    "filed": (
+        "mcp_smokeball_add_file",
+        {"matter_id": "matter-1", "file_name": "Intake Memo.docx"},
+        {
+            "matterId": "matter-1",
+            "fileName": "Intake Memo.docx",
+            "fileId": "f-1",
+            "readback": "confirmed",
+        },
+    ),
+    "listed": (
+        "mcp_smokeball_get_files_on_matter",
+        {"matter_id": "matter-1"},
+        {"value": [{"id": "f-1", "name": "Intake Memo", "fileExtension": ".docx"}]},
+    ),
+}
+
+
+def _act_knob(mod: Any, act: Any) -> None:
+    """Step 5c's record, fresh per case: no case but an act knob has a tool call
+    noted. (A tree from before step 5c has no record: the knob does nothing there.)"""
+    try:
+        from shared import turn_facts
+    except ImportError:
+        return
+    turn_facts.TURN_FACTS.clear()
+    act_reply = getattr(mod.relay_checks, "act_reply", None)
+    if act_reply is not None:
+        act_reply.LOOK_INTOS.clear()
+    if act in _ACT_CALLS:
+        tool, args, result = _ACT_CALLS[act]
+        kwargs = {"tool_name": tool, "args": args, "result": json.dumps(result)}
+        turn_facts.note_call("s1", "msg-in-1", kwargs)
+
+
 def run_relay(case: C.Case, raise_at: tuple[int, ...] = ()) -> recorder.Scope:
     from shared import inbound
 
@@ -190,6 +228,7 @@ def run_relay(case: C.Case, raise_at: tuple[int, ...] = ()) -> recorder.Scope:
                 if knobs["say"] == "none_and_match":
                     # A "none" beside a real say: the real say decides (review 2026-11-19).
                     mod.relay_checks._TURN_SAYS.note("s1", "msg-in-1", "none")
+        _act_knob(mod, knobs.get("act"))
         recorder.reset_registers()
         session = knobs.get("session_id", "s1")
         if knobs.get("origin", "turn") == "turn":

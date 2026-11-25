@@ -67,8 +67,12 @@ KIND_NOT_RECORDED = "rule_not_recorded"
 KIND_INSTALL = "rule_install_failed"
 #: A rule read back twice with no plain yes, handed to SMD (the broker's own).
 KIND_NEEDS_PERSON = "rule_needs_person"
+#: An act a firm person asked for that failed this turn (2026-11-24): the reply
+#: code wrote him says "Let me look into that. I'll reply in this thread." and
+#: SMD finishes the work (the overlay's ``shared.turn_facts``).
+KIND_LOOK_INTO = "look_into"
 #: The kinds the agent may record (the others are the broker's own).
-AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE, KIND_NOT_RECORDED})
+AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE, KIND_NOT_RECORDED, KIND_LOOK_INTO})
 _LANE = {
     KIND_DRAFTING: "drafting",
     KIND_ADDITION: "drafting",
@@ -77,6 +81,7 @@ _LANE = {
     KIND_INSTALL: "operator",
     KIND_NEEDS_PERSON: "operator",
     KIND_NOT_RECORDED: "operator",
+    KIND_LOOK_INTO: "operator",
 }
 DETAIL_MAX = 300
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")

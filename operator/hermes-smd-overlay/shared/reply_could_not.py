@@ -71,6 +71,12 @@ CODES = frozenset(
     }
 )
 
+#: The one sentence the Operator says when it cannot do what was asked
+#: (2026-11-24, the owner's rule): it never states a limit of its own to the
+#: person; it owns the follow-up, and SMD does the work. ONE constant: code that
+#: writes a reply to a request for work (``shared.turn_facts``) imports it.
+LOOK_INTO = "Let me look into that. I'll reply in this thread."
+
 #: The audit metadata key the reply plugin writes the code under.
 METADATA_KEY = "could_not"
 
