@@ -236,14 +236,18 @@ def _settle(run: Any, k: int, doc: rs.Document, bodies: dict[str, list[str]], pl
     bk, st = book(run), run._ujson(k, "base.json")["set_type"]
     ins = _read(run).instructions.get(f"{k:02d}", ())
     standing = _standing_grounds(run, bk, st)
+    adopt_own = markers.adopts(run._rules_in_force() or [])
     for r in doc.responses:
         cur = bodies.get(r.number) or [doc.blocks[i] for i in r.editable]
         if not any(markers.spans(b) for b in cur):
             continue
-        new, done = markers.settle(r.number, cur, bk, st, _allowed_keys(run, bk, ins, r.number, standing))
+        allowed = _allowed_keys(run, bk, ins, r.number, standing)
+        new, done = markers.settle(r.number, cur, bk, st, allowed, adopt_own)
         for s in done:
             if s.left:
                 plan["left"].append([s.number, s.left, s.ground[:80]])
+            elif s.among or s.how == markers.OWN:  # which entry a ground matching several took, or the own words
+                plan.setdefault("marker_choices", []).append([s.number, s.key, s.how, list(s.among)])
         if new != cur:
             bodies[r.number] = new
             plan["why_changed"].setdefault(r.number, []).append(MARKER_SOURCE)

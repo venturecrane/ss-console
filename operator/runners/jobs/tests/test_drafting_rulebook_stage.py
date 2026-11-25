@@ -157,7 +157,7 @@ def test_a_refused_grid_or_rule_read_holds_unchecked(tmp_path):
 
 
 def test_a_made_sentence_the_recheck_cannot_find_holds_unmet(tmp_path, monkeypatch):
-    monkeypatch.setattr(makers, "add", lambda blocks, own, sentence, book: (list(blocks), ""))
+    monkeypatch.setattr(makers, "add", lambda blocks, own, sentence, book, names=(): (list(blocks), ""))
     with pytest.raises(DraftingFailed, match="^rule_unmet: document 00: response 1: missing"):
         stage.run(_job(tmp_path, Model()), _doc())
 

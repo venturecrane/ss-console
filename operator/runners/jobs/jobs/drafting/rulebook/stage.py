@@ -247,7 +247,7 @@ class _Make:
             if c.act == "use_phrase":
                 got = makers.put(d.blocks, d.own(cell.item), sentence, cell.sentences)
             else:
-                got = makers.add(d.blocks, d.own(cell.item), sentence, book)
+                got = makers.add(d.blocks, d.own(cell.item), sentence, book, book.entries[key].names)
             self._land(c, cell, key, got, sentence, c.act)
         for g in cell.grounds:
             sentence = self.wrote.get((cell.item, g), "")

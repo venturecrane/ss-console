@@ -19,6 +19,7 @@ is ``already``: nothing changes.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 from ..revise import responses as rs
 from . import parts as parts_mod
@@ -64,12 +65,47 @@ def _drop(blocks: list[str], p: Part) -> None:
     blocks[p.block] = _join(b[: p.at], b[p.at + len(p.text) :])
 
 
-def add(blocks: list[str], own: tuple[Part, ...], sentence: str, book: Book) -> tuple[list[str], str]:
+def short_clause(sentence: str, names: tuple[str, ...]) -> str:
+    """``sentence`` without a short-form clause stating one of ``names`` as one
+    of several grounds (", and that it is overbroad", ", and overbroad"); as
+    given when it has none, or when that ground is its only one."""
+    for name in sorted(names, key=len, reverse=True):
+        pat = rf"(?:\s*,\s*and|\s*,|\s+and)\s+(?:that\s+)?(?:it\s+is\s+)?(?:\w+\s+){{0,2}}?{re.escape(name)}\b"
+        m = re.search(pat, sentence, re.I)
+        if m:
+            return (sentence[: m.start()] + sentence[m.end() :]).replace(" ,", ",")
+    return sentence
+
+
+def _drop_short_forms(out: list[str], own: tuple[Part, ...], names: tuple[str, ...]) -> tuple[Part, ...]:
+    """The existing objection sentences without the short-form clause of the
+    ground the long form just added states (2026-11-25: adding the long-form
+    overbroad objection left ", and that it is overbroad" in the old sentence,
+    so the response said it twice). Returns the parts where they now stand."""
+    for p in own:
+        trimmed = short_clause(p.text, names) if p.role == "objection" else p.text
+        if trimmed != p.text and p.text in out[p.block]:
+            out[p.block] = out[p.block].replace(p.text, trimmed, 1)
+    moved = []
+    for p in own:
+        text = short_clause(p.text, names) if p.role == "objection" else p.text
+        at = out[p.block].find(text) if 0 <= p.block < len(out) else -1
+        moved.append(replace(p, text=text, at=at if at >= 0 else p.at))
+    return tuple(moved)
+
+
+def add(
+    blocks: list[str], own: tuple[Part, ...], sentence: str, book: Book, names: tuple[str, ...] = ()
+) -> tuple[list[str], str]:
+    """``names``: the short names of the ground ``sentence`` states, whose
+    short-form clause leaves the response's other objections."""
     if parts_mod.holds(own, sentence):
         return blocks, ALREADY
     if not own:
         return blocks, NO_PARAGRAPH
     out = list(blocks)
+    if names:
+        own = _drop_short_forms(out, own, names)
     trans = [p for p in own if p.role == "transition"]
     objs = [p for p in own if p.role == "objection"]
     if trans:

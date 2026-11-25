@@ -39,6 +39,36 @@ _FOLD = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"', " ": " "
 _LETTERS = r"[a-z]{1,2}(?:(?:,\s*(?:and\s+)?|\s+and\s+)[a-z]{1,2})*"
 _CAPS = re.compile(r"\b[A-Z][a-z]+(?: [A-Z][a-z]+)*\b")
 _SLOT = re.compile(r"(\{item\}|\{exhibit\})")
+_ARTICLES = frozenset({"the", "this", "these", "that", "those", "a", "an", "each", "any", "all", "such"})
+
+#: The one table of an objection ground's names, compared as folded words: a
+#: rule, a marker or a book entry that names any of a group's words names that
+#: ground (2026-11-25: a rule saying "Privilege" allowed no entry, because the
+#: firm's attorney-client entries are named "attorney-client").
+GROUNDS: dict[str, tuple[str, ...]] = {
+    "attorney_client": ("privilege", "privileged", "attorney client", "attorney-client", "attorney client privilege"),
+    "work_product": ("work product", "work-product", "attorney work product", "work product doctrine"),
+}
+
+
+def _bare_words(text: str) -> str:
+    return " ".join(re.findall(r"\w+", fold(text)))
+
+
+def ground_groups(text: str) -> set[str]:
+    """The grounds of :data:`GROUNDS` that ``text`` names by any of their words."""
+    hay = f" {_bare_words(text)} "
+    return {g for g, names in GROUNDS.items() if any(f" {_bare_words(n)} " in hay for n in names)}
+
+
+def entry_groups(entry: Entry) -> set[str]:
+    """The grounds of :data:`GROUNDS` an entry is, by its short names. A work
+    product entry named "work product privilege" is not an attorney-client one."""
+    groups: set[str] = set().union(*(ground_groups(n) for n in entry.names)) if entry.names else set()
+    explicit = any(" attorney client " in f" {_bare_words(n).replace('_', ' ')} " for n in entry.names)
+    if "work_product" in groups and not explicit:
+        groups.discard("attorney_client")
+    return groups
 
 
 def norm(text: str) -> str:
@@ -157,14 +187,31 @@ class Book:
             lead.append(words[0])
         return " ".join(lead) if len(lead) >= LEAD_WORDS and "{item}" in lead else ""
 
+    def runs(self) -> list[str]:
+        """The names the book writes capitalised: each run of two or more
+        capitalised words ("Responding Party"), a sentence's own first word and
+        a leading article left out. A single capitalised word is never one: a
+        sentence's first word is capitalised because it starts the sentence
+        ("The request ..."), not because the firm writes it that way."""
+        found: set[str] = set()
+        for e in self.entries.values():
+            for m in _CAPS.finditer(e.text):
+                words = m.group(0).split()
+                if words and words[0].casefold() in _ARTICLES:
+                    words = words[1:]
+                if len(words) >= 2:
+                    found.add(" ".join(words))
+        return sorted(found, key=len, reverse=True)
+
     def cased(self, words: str) -> str:
-        """``words`` with each run of capitalised words the book writes
-        ("Responding Party", "Request") in the book's casing, a capital first
-        letter and a full stop: a rule's stated words made the firm's sentence
-        without adding or changing a word."""
-        runs = sorted({m.group(0) for e in self.entries.values() for m in _CAPS.finditer(e.text)}, key=len)
+        """``words`` made the firm's sentence without adding or changing a word:
+        the book's names in the book's casing ("Responding Party"), every other
+        word as written, a capital first letter and a full stop. 2026-11-25: it
+        capitalised every run of the book's words, so the lane wrote "The
+        Responding Party ... The Request" where the firm writes "Responding
+        Party ... the request"."""
         out = norm(words).strip(" \"'")
-        for run in reversed(runs):
+        for run in self.runs():
             out = re.sub(rf"\b{re.escape(run)}\b", run, out, flags=re.I)
         return (out[:1].upper() + out[1:]).rstrip(" .;,:") + "."
 
