@@ -102,7 +102,9 @@ def add_parser(sub: Any) -> None:
     p.add_argument("--source-version", default="filed")
     p.add_argument("--attorney", default=None, help="an attorney key for that attorney's own slot; none for the firm")
     p.add_argument("--out", required=True, help="the directory to write the made file into")
-    p.add_argument("--inputs", default=None, help="the drafting firm-inputs dir (default: the drafting lane's inputs env var)")
+    p.add_argument(
+        "--inputs", default=None, help="the drafting firm-inputs dir (default: the drafting lane's inputs env var)"
+    )
     p.add_argument("--allow-partial", action="store_true", help="stock even when one block kept a case fact")
     p.set_defaults(fn=cmd)
 
