@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from .. import firm_wording
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, converge, format_check, gate, nestquote, page_limits, pincheck, quote_end
-from . import base_lay, counts, library_pick, pleading, prerender, render
+from . import base_lay, counts, firm_frame, library_pick, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, parties as parties_mod, settle as settle_mod
 from . import amended, exhibit_index, exhibit_plan, repair_budget, repair_guard, served as served_mod
@@ -404,6 +404,7 @@ class Finish(FinishReview):
                 + "; ".join(g["refusals"])[:400]
             )
         staged = rule_hook.at_gate(self, u, md)  # the firm's rules stage: a no-op unless phrase_book switches it on
+        staged = firm_frame.at_gate(self, u, staged)  # the firm's own opening and closing words (firm_frame.py)
         if exhibit_index.applies(self.data, u.variant):
             # The Index of Exhibits, by code from the firm's exhibit plan (exhibit_index.py).
             body, end = render.split_notes(staged)

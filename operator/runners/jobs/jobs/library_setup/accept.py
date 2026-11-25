@@ -66,11 +66,10 @@ def _client() -> Any:
     return build_client_from_env()
 
 
-def identity(inputs_dir: str | None) -> list[str]:
-    """The allow list: ``firm_identity`` and the authored attorney blocks (the
-    firm's attorney roster's when one is installed, ``drafting/attorneys.entries``)."""
+def attorney_blocks(inputs_dir: str | None) -> list[list[str]]:
+    """The authored attorney blocks: the firm's attorney roster's when one is
+    installed (``drafting/attorneys.entries``)."""
     from operator_connector_sdk.library import roster as roster_mod
-    from smokeball_connector.letterhead import load_firm_identity
 
     from ..drafting.attorneys import entries
     from .job import _inputs
@@ -80,8 +79,14 @@ def identity(inputs_dir: str | None) -> list[str]:
         raise RosterUnusable(ROSTER_UNREADABLE)
     inputs = _inputs(inputs_dir)
     authored = inputs.attorneys if inputs is not None else []
-    blocks = [a.get("block") or [] for a in entries(authored, read)]
-    return make_mod.identity_pieces(load_firm_identity(), blocks)
+    return [list(a.get("block") or []) for a in entries(authored, read)]
+
+
+def identity(inputs_dir: str | None) -> list[str]:
+    """The allow list: ``firm_identity`` and the authored attorney blocks."""
+    from smokeball_connector.letterhead import load_firm_identity
+
+    return make_mod.identity_pieces(load_firm_identity(), attorney_blocks(inputs_dir))
 
 
 def replaces(kind: str, attorney: str | None, spec_dir: str | Path | None) -> dict[str, str] | None | str:
@@ -218,4 +223,14 @@ def run(
     }
 
 
-__all__ = ["CHANGED", "MADE_NAME", "NOT_A_FORM", "UNUSABLE", "contract_of", "identity", "replaces", "run"]
+__all__ = [
+    "CHANGED",
+    "MADE_NAME",
+    "NOT_A_FORM",
+    "UNUSABLE",
+    "attorney_blocks",
+    "contract_of",
+    "identity",
+    "replaces",
+    "run",
+]

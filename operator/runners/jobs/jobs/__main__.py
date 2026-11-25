@@ -600,11 +600,13 @@ def main(argv: list[str] | None = None) -> int:
     from .casefile.cli import add_parser as _casefile_parser
     from .firmbase.cli import add_parser as _firmbase_parser
     from .library_setup.cli import add_parser as _library_setup_parser
+    from .library_setup.stock import add_parser as _library_stock_parser
     from .records.cli import add_parser as _records_parser
 
     _casefile_parser(sub)
     _firmbase_parser(sub)
     _library_setup_parser(sub)
+    _library_stock_parser(sub)
     _records_parser(sub)
     ng = sub.add_parser("negotiate", help="run one negotiation-watch job: new offer documents to Negotiation Details")
     ng.add_argument("job_dir")
