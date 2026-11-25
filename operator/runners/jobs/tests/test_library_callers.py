@@ -141,6 +141,10 @@ WORD_WRITERS = {
         "makes a firm's discovery library file from one of its filed papers (`jobs library-stock`): its "
         "styles base with its standard wording blanked; it is the file later drafts are made in"
     ),
+    f"{JOBS}/library_setup/demand_make.py": (
+        "makes a firm's demand library file from its tagged house reference (`jobs library-stock`): "
+        "each prototype keeps its formatting and only its tag; it is the file later demands are made in"
+    ),
     f"{JOBS}/firmbase/base.py": "repackages a firm base's document part",
     f"{JOBS}/stages/render.py": "a record product (the chronology), which reads no library file",
     f"{JOBS}/stages/billing_docx.py": "a record product (the billing summary)",

@@ -79,6 +79,7 @@ VOCAB = frozenset(
     undersigned united upon us usc vague ambiguous harass harassing verification verified was we were what when
     where whether which who whom will with within without witness witnesses work writing writings you your am behalf
     apc inc civ gov bus prof ins veh pen rptr supp ten eight eighth tenth dates sbn bar venue jurisdiction
+    settlement mediation negotiation negotiations compromise offer offers
     although during finally hence here moreover nevertheless otherwise rather since still then therefore thus
     unless until whereas while yet please note such accordingly additionally only should would could must also
     """.split()

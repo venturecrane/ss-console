@@ -126,7 +126,15 @@ def test_accepting_the_same_file_again_writes_nothing(tmp_path: Path) -> None:
         (_acc(kind="demand_letter.settlement"), "not one the registry lists"),
         (_acc(kind="demand_letter"), "a slot names one"),
         (_acc(kind="memo.pre_suit"), "not one the registry lists"),
-        (_acc(contract=L.PROTOTYPES), "cannot be accepted yet"),
+        (_acc(contract=L.PROTOTYPES), "must declare its PROTO:<kind> tags"),
+        (
+            _acc(
+                docx(p("PROTO:body") + p("Example Firm demands payment.")),
+                contract=L.PROTOTYPES,
+                fixed_strings=("PROTO:body", "Example Firm demands payment."),
+            ),
+            "no-client-text check",
+        ),
         (_acc(b"PK not really a docx"), "not a Word document package"),
         (_acc(docx(p("Jordan Placeholder fell at Example Mart"))), "no-client-text check"),
         (_acc(docx(creator="Pat Example")), "no-client-text check"),
@@ -258,3 +266,16 @@ def test_a_variant_slot_the_registry_lists_is_accepted(tmp_path: Path) -> None:
 def test_the_writers_registry_is_every_kind_with_its_variants() -> None:
     assert tuple(LA.REGISTRY) == LA.DOCUMENT_CLASSES
     assert set(LA.KIND_VARIANTS) <= set(LA.DOCUMENT_CLASSES)
+
+
+def test_a_prototypes_file_whose_body_holds_only_its_tags_is_accepted(tmp_path: Path) -> None:
+    """A demand reference: the writer replaces every word of a prototype, so
+    its body may hold its tags alone, its footer the firm's declared words."""
+    vault, target = _vault_and_seat(tmp_path)
+    data = docx(p("PROTO:body") + p("PROTO:sign"))
+    fixed = ("PROTO:body", "PROTO:sign", *FIXED)
+    result = LA.accept_file(
+        _acc(data, kind="demand_letter.pre_suit", contract=L.PROTOTYPES, fixed_strings=fixed),
+        target,
+    )
+    assert result.status == "installed", result.reasons
