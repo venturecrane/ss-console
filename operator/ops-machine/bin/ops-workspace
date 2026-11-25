@@ -1,5 +1,5 @@
 #!/bin/bash
-# ops-workspace create|update|accounts|status|destroy <slug>: a client's ops workspace,
+# ops-workspace create|update|resize|accounts|status|destroy <slug>: a client's ops workspace,
 # the Fly app ops-<slug> that holds that client's documents (matter files,
 # medical records, chronologies, anything made from them) so they are never on
 # a laptop. Run from a laptop with the Captain's Fly, Infisical and gh logins
@@ -23,33 +23,42 @@
 #          by the daily sweep and pages 30 days before it expires).
 # accounts put the Claude account tokens on the RUNNING workspace, no restart:
 #          staged for the next restart and written to the live ~/.claude-oauth.
-# status   machine state, image, secret names, selftest.
+# resize   put the Machine at the size authored in workspaces.json, no rebuild
+#          (a restart, only when the size differs). update ends with this too.
+# status   machine state, image, secret names, size against workspaces.json, selftest.
 # destroy  delete the app and its volume (every document on it), the check and
 #          the sweep secrets. Asks for the slug typed back. Decommission
 #          (operator/bin/decommission-customer.sh step 06b) calls this.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
-reg="$here/workspaces.json"
+reg="${OPS_WORKSPACES_JSON:-$here/workspaces.json}"
 repo="venturecrane/ss-console"
 cmd="${1:-}"; slug="${2:-}"
-[ -n "$cmd" ] && [ -n "$slug" ] || { sed -n 2,30p "$0"; exit 2; }
+[ -n "$cmd" ] && [ -n "$slug" ] || { sed -n 2,32p "$0"; exit 2; }
 
 app=$(jq -r --arg s "$slug" '.workspaces[$s].app // empty' "$reg")
 seat=$(jq -r --arg s "$slug" '.workspaces[$s].seat_app // empty' "$reg")
 region=$(jq -r --arg s "$slug" '.workspaces[$s].region // "sjc"' "$reg")
 gb=$(jq -r --arg s "$slug" '.workspaces[$s].volume_gb // 50' "$reg")
-# A workspace's memory lives here, not only on the Machine: a deploy sizes the
-# Machine from fly.toml (4 GB), so a hand `fly scale memory` was undone by the
-# next update (2026-11-09, A&P went 8 GB -> 4 GB with four sessions running).
-# Fly caps a shared CPU at 2 GB, so 8 GB needs shared-cpu-4x: size and memory
-# are authored together.
-# A shared CPU is held to 1/16 of a core once its burst balance is spent, so a
-# workspace under hours of sustained work ran at about 8 percent of its cores
-# (A&P, 2026-11-20: 78 percent steal). Sustained work needs a performance size;
-# ops-idle-stop keeps that from billing while nobody is working.
-mem=$(jq -r --arg s "$slug" '.workspaces[$s].memory_mb // 4096' "$reg")
-vm=$(jq -r --arg s "$slug" '.workspaces[$s].vm_size // "shared-cpu-2x"' "$reg")
 [ -n "$app" ] && [ -n "$seat" ] || { echo "$slug is not in $reg; add it there first (a reviewed change)"; exit 2; }
+# A workspace's size lives in workspaces.json (vm_size and memory_mb, authored
+# together: Fly caps a shared CPU at 2 GB) and is read only through
+# bin/ops-workspace-size, which refuses a workspace without one. There is no
+# default. History: a hand `fly scale memory` was undone by the next update
+# (2026-11-09); a shared CPU under hours of sustained work ran at about 8
+# percent of its cores (2026-11-20, so A&P is performance-8x; ops-idle-stop
+# keeps that from billing while nobody works); and on 2026-11-24 an update that
+# passed the authored size to `fly deploy` still left A&P at fly.toml's 2 shared
+# CPUs and 4 GB all afternoon, because flyctl gives --vm-size to a NEW Machine
+# only. So fly.toml carries no size, and every deploy ends with `fix`, which
+# reads the Machine back and resizes it when it differs.
+size="$here/bin/ops-workspace-size"
+vm=""; mem=""
+authored_size() {
+  local w
+  w=$(OPS_WORKSPACES_JSON="$reg" "$size" want "$slug") || exit 2
+  read -r vm mem _ <<<"$w"
+}
 suffix=$(printf '%s' "$slug" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')
 log() { printf '[ops-workspace %s] %s\n' "$slug" "$*"; }
 
@@ -147,14 +156,20 @@ healthcheck() {
 }
 
 deploy() {
-  # One shared image for smd-ops and every workspace; -a picks the app.
+  # One shared image for smd-ops and every workspace; -a picks the app. The size
+  # flags size a Machine this deploy creates (create); an existing Machine keeps
+  # its guest (fly.toml has no [[vm]]) and `fix` puts it at the authored size.
+  [ -n "$vm" ] && [ -n "$mem" ] || { echo "no authored size for $slug; refusing to deploy"; exit 2; }
   (cd "$here" && fly deploy -a "$app" -c fly.toml --remote-only --ha=false --vm-size "$vm" --vm-memory "$mem" --yes)
-  log "deployed; selftest:"
+  OPS_WORKSPACES_JSON="$reg" "$size" fix "$slug" \
+    || { echo "FAIL $app is not at its authored size $vm/$mem MB after the deploy"; exit 1; }
+  log "deployed at $vm/$mem MB; selftest:"
   fly ssh console -a "$app" -u ops -C "/opt/ops/bin/ops-selftest" 2>/dev/null || true
 }
 
 case "$cmd" in
   create)
+    authored_size
     need_vault "$@"
     if fly status -a "$app" >/dev/null 2>&1; then log "app exists"; else
       fly apps create "$app" --org personal >/dev/null && log "app created"; fi
@@ -169,9 +184,14 @@ case "$cmd" in
     log "next: ops ${slug} on a laptop (first time: claude /login, gh auth login, then ops-bootstrap)"
     ;;
   update)
+    authored_size
     need_vault "$@"
     mint_and_stage
     deploy
+    ;;
+  resize)
+    authored_size
+    OPS_WORKSPACES_JSON="$reg" "$size" fix "$slug"
     ;;
   accounts)
     need_vault "$@"
@@ -180,6 +200,7 @@ case "$cmd" in
   status)
     fly status -a "$app"
     fly secrets list -a "$app" --json | jq -r '.[].name' | sort | tr '\n' ' '; echo
+    OPS_WORKSPACES_JSON="$reg" "$size" check "$slug" || true
     fly ssh console -a "$app" -u ops -C "/opt/ops/bin/ops-selftest" 2>/dev/null || true
     ;;
   destroy)

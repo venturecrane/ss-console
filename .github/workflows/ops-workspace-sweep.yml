@@ -56,6 +56,8 @@ jobs:
       HC_URL: ${{ secrets[format('OPS_HC_URL__{0}', matrix.ws.suffix)] }}
       TOKEN_EXPIRES: ${{ vars[format('OPS_SWEEP_TOKEN_EXPIRES__{0}', matrix.ws.suffix)] }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
       - name: Install flyctl
         run: |
           set -euo pipefail
@@ -83,6 +85,9 @@ jobs:
             echo "sweep token: ${left}d left"
             [ "$left" -ge 30 ] || { echo "FAIL sweep token expires in ${left}d: bin/ops-workspace update ${{ matrix.ws.slug }}"; rc=1; }
           fi
+          # The Machine's size against workspaces.json (read-only; the hourly
+          # triage on smd-ops checks it too). A wrong size fails the run.
+          bash operator/ops-machine/bin/ops-workspace-size check "${{ matrix.ws.slug }}" || rc=1
           id=$(fly machine list -a "$APP" --json | jq -r '.[0].id')
           was=$(fly machine list -a "$APP" --json | jq -r '.[0].state')
           echo "machine $id was $was"

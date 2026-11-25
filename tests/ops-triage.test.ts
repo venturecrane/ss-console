@@ -49,23 +49,45 @@ afterEach(() => {
 
 /** Run ops-triage once against a fake HOME. `agentOut`/`agentErr` are what the
  *  fake `claude` prints. Returns the fake HOME, whether or not anything was sent. */
-function runTriageSilently(agentOut: string, agentErr = ''): string {
-  const home = mkdtempSync(join(tmpdir(), 'ops-triage-'))
-  homes.push(home)
+/** What the fake workspace size check prints and its exit status. */
+interface SizeCheck {
+  out: string
+  rc: number
+}
+const SIZE_OK: SizeCheck = {
+  out: 'PASS size ops-x m1 (started): performance-8x, 16384 MB as authored',
+  rc: 0,
+}
+
+function runTriageSilently(
+  agentOut: string,
+  agentErr = '',
+  opts: { size?: SizeCheck; home?: string } = {}
+): string {
+  const home = opts.home ?? mkdtempSync(join(tmpdir(), 'ops-triage-'))
+  if (!opts.home) homes.push(home)
   for (const d of ['bin', 'fakebin', 'dev/ss-console/operator'])
     mkdirSync(join(home, d), { recursive: true })
   writeFileSync(join(home, 'wh-body.txt'), WORK_HEALTH_BODY)
   writeFileSync(join(home, 'agent-out.txt'), agentOut)
   writeFileSync(join(home, 'agent-err.txt'), agentErr)
+  const size = opts.size ?? SIZE_OK
+  writeFileSync(join(home, 'size-out.txt'), size.out)
+  writeFileSync(join(home, 'size-rc.txt'), String(size.rc))
 
   // ss-env: infisical's stderr line first, then the wrapped command, faked.
+  // Every send appends its subject to sent-all; sent-subject is the last one.
   const ssEnv = `#!/bin/bash
 printf '%s\\n' "$(cat "$HOME/infisical-line")" >&2
 if [ "$1" = python3 ] && [ "$2" = bin/work-health.py ]; then cat "$HOME/wh-body.txt"; exit 0; fi
+if [ "$1" = bash ] && [ "\${2##*/}" = ops-workspace-size ] && [ "$3" = check ]; then
+  cat "$HOME/size-out.txt"; exit "$(cat "$HOME/size-rc.txt")"
+fi
 if [ "$1" = claude ]; then cat "$HOME/agent-out.txt"; cat "$HOME/agent-err.txt" >&2; exit 0; fi
 if [ "$1" = python3 ] && [ "$2" = - ]; then
   cat >/dev/null
-  printf '%s' "$3" > "$HOME/sent-subject"; cp "$4" "$HOME/sent-body"; echo "resend 200"; exit 0
+  printf '%s' "$3" > "$HOME/sent-subject"; cp "$4" "$HOME/sent-body"; printf '%s\\n' "$3" >> "$HOME/sent-all"
+  echo "resend 200"; exit 0
 fi
 echo "fake ss-env: unexpected $*" >&2; exit 99
 `
@@ -200,5 +222,56 @@ describe('ops-triage report subject', () => {
     expect(noisy.subject).toBe('[SMD Ops] Triage: 1 handled, 2 need you')
     expect(noisy.body).not.toContain('tool budget exceeded')
     expect(noisy.body).toMatch(/agent stderr: 1 line\(s\) in .*triage-report-.*\.err/)
+  })
+})
+
+// 2026-11-24: the A&P workspace ran at 2 shared CPUs and 4 GB all afternoon,
+// authored 8 performance CPUs and 16 GB, and nothing said so. The triage runs
+// bin/ops-workspace-size every hour and emails a wrong or unreadable size once.
+describe('ops-triage workspace size', () => {
+  const QUIET = 'Subject: [SMD Ops] Triage: 1 handled, 0 need you\n\nHANDLED (1)\n- one.\n'
+  const WRONG: SizeCheck = {
+    out:
+      'FAIL size ops-x m1 (started): runs shared/2 CPU/4096 MB, authored performance-8x/16384 MB ' +
+      '(performance/8 CPU); fix: operator/ops-machine/bin/ops-workspace resize x',
+    rc: 1,
+  }
+  const sentAll = (home: string) =>
+    existsSync(join(home, 'sent-all'))
+      ? readFileSync(join(home, 'sent-all'), 'utf8').trim().split('\n')
+      : []
+
+  it('sends nothing when every workspace is at its authored size', () => {
+    expect(sentAll(runTriageSilently(QUIET))).toEqual([])
+  })
+
+  it('emails a wrong size once, with the fix line, and not again while it stays the same', () => {
+    const home = runTriageSilently(QUIET, '', { size: WRONG })
+    expect(sentAll(home)).toEqual(['[SMD Ops] Workspace size: 1 wrong or unread'])
+    expect(readFileSync(join(home, 'sent-body'), 'utf8')).toContain('ops-workspace resize x')
+    runTriageSilently(QUIET, '', { size: WRONG, home })
+    expect(sentAll(home)).toHaveLength(1)
+  })
+
+  it('emails again after the size was fixed and went wrong again', () => {
+    const home = runTriageSilently(QUIET, '', { size: WRONG })
+    runTriageSilently(QUIET, '', { home })
+    expect(existsSync(join(home, 'state', 'workspace-size-reported'))).toBe(false)
+    runTriageSilently(QUIET, '', { size: WRONG, home })
+    expect(sentAll(home)).toHaveLength(2)
+  })
+
+  it('treats a check that fails without a FAIL line as unread, never as all clear', () => {
+    const home = runTriageSilently(QUIET, '', { size: { out: '', rc: 2 } })
+    expect(sentAll(home)).toEqual(['[SMD Ops] Workspace size: 1 wrong or unread'])
+    expect(readFileSync(join(home, 'sent-body'), 'utf8')).toContain('exited 2 and said nothing')
+  })
+
+  it('still runs and emails the work-health triage beside a size email', () => {
+    const home = runTriageSilently(REPORT, '', { size: WRONG })
+    expect(sentAll(home)).toEqual([
+      '[SMD Ops] Workspace size: 1 wrong or unread',
+      '[SMD Ops] Triage: 1 handled, 2 need you',
+    ])
   })
 })

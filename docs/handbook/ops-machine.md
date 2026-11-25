@@ -9,8 +9,10 @@ summary: Where client documents live (one Fly workspace per client, never a lapt
 sources:
   - label: operator/ops-machine/workspaces.json - the list of client workspaces
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/workspaces.json
-  - label: operator/ops-machine/bin/ops-workspace - create, update, status, destroy
+  - label: operator/ops-machine/bin/ops-workspace - create, update, resize, status, destroy
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-workspace
+  - label: operator/ops-machine/bin/ops-workspace-size - a workspace's authored size, its check and fix
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-workspace-size
   - label: operator/ops-machine/laptop/client-data-guard.mjs - the laptop tripwire
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/laptop/client-data-guard.mjs
   - label: operator/ops-machine/bin/ops-sweep - retention and health, run daily
@@ -60,7 +62,7 @@ Each client with document work has its own Fly app, `ops-<slug>` (A&P: `ops-asht
 - stops itself after an hour idle, and costs nothing while stopped. Idle means no keystroke in an attached terminal, no output in any window and nothing running for that hour. A terminal left open on a laptop does not count: until 2026-11-20 it did, and the A&P workspace billed around the clock for four weeks because a laptop stayed attached. A window that printed in the last hour does count, so a Claude session that is working is never stopped; one waiting at its prompt is idle, and its conversation resumes on the next `ops`. When tmux is running but does not answer, the Machine stays up. Each run's reason is one line in `~/logs/idle-stop.log`.
 - closes a handed-off task's session once it has written its outbox file and its window has been quiet for 12 hours (30 minutes when memory runs low), attached or not, so finished sessions do not pile up. A task that has not reported is never closed.
 
-An agent runs `bin/ops-workspace create <slug>` from a laptop signed in to the Captain's Fly, Infisical and GitHub accounts (the slug must first be added to `workspaces.json` in a reviewed change): app, volume, secrets, image, health check. `update` rebuilds the image and re-mints its tokens, sizing the Machine from the workspace's `vm_size` and `memory_mb` in `workspaces.json` (A&P: 4 shared CPUs and 8 GB, since Fly allows at most 4 GB on 2 shared CPUs; a size set only by hand with `fly scale memory` is undone by the next update, as it was on 2026-11-09); `status` shows its state and selftest; `destroy` deletes it and everything on it. Decommissioning a client destroys its workspace with its seat.
+An agent runs `bin/ops-workspace create <slug>` from a laptop signed in to the Captain's Fly, Infisical and GitHub accounts (the slug must first be added to `workspaces.json` in a reviewed change): app, volume, secrets, image, health check. `update` rebuilds the image and re-mints its tokens, then puts the Machine at the size authored for it in `workspaces.json` (`vm_size` and `memory_mb`; A&P: 8 performance CPUs and 16 GB) and reads it back; `resize` does only that, with no rebuild. The size lives nowhere else: `fly.toml` carries none, so a deploy keeps the Machine's size, and both commands refuse a workspace with no size rather than guess one. Until 2026-11-24 `fly.toml` carried smd-ops's size (2 shared CPUs, 4 GB), and because Fly applies a deploy's size to a new Machine only, an update that afternoon put A&P back at that size for hours of hand drafting. Every hour the triage on `smd-ops` compares each workspace Machine's size with `workspaces.json` (`bin/ops-workspace-size check`, read-only) and emails team@ once when one differs or cannot be read; the daily sweep runs the same check and fails its healthchecks.io check on a wrong size. `status` shows its state, size and selftest; `destroy` deletes it and everything on it. Decommissioning a client destroys its workspace with its seat.
 
 ## Opening one, and handing work over
 
