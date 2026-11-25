@@ -1,5 +1,5 @@
 {
-  "_comment": "Client ops workspaces: one Fly app per client that holds that client's documents (matter files, medical records, chronologies, anything made from them) and nothing else. Created, updated and destroyed only by bin/ops-workspace; read by the laptop launcher (laptop/ops), the daily sweep (.github/workflows/ops-workspace-sweep.yml) and decommission. smd-ops is SMD's own machine, not a client workspace, and is not listed. Handbook: docs/handbook/ops-machine.md.",
+  "_comment": "Client ops workspaces: one Fly app per client that holds that client's documents (matter files, medical records, chronologies, anything made from them) and nothing else. Created, updated and destroyed only by bin/ops-workspace; read by the laptop launcher (laptop/ops), the daily sweep (.github/workflows/ops-workspace-sweep.yml) and decommission. vm_size and memory_mb are the workspace's only size: bin/ops-workspace-size reads them, refuses a workspace without them, and checks the running Machine against them hourly (bin/ops-triage). smd-ops is SMD's own machine, not a client workspace, and is not listed. Handbook: docs/handbook/ops-machine.md.",
   "workspaces": {
     "ashton-price": {
       "app": "ops-ashton-price",

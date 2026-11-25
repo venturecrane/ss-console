@@ -11,6 +11,13 @@ primary_region = "sjc"
   source = "ops_home"
   destination = "/home/ops"
 
-[[vm]]
-  size = "shared-cpu-2x"
-  memory = "4gb"
+# NO [[vm]] SECTION, on purpose. This file deploys smd-ops and every client
+# workspace (ops-<slug>, -a picks the app). With a [[vm]] here, every deploy of
+# an existing Machine resets it to that size, whatever --vm-size says: flyctl
+# gives --vm-size to a new Machine only (internal/appconfig/machines.go,
+# updateMachineConfig). On 2026-11-24 that put the A&P workspace, authored
+# performance-8x/16 GB, at 2 shared CPUs and 4 GB all afternoon. Without [[vm]]
+# a deploy keeps each Machine's size (docs.fly.io/reference/configuration,
+# "The vm section"). A workspace's size is authored in workspaces.json and set
+# by bin/ops-workspace (bin/ops-workspace-size). smd-ops runs shared-cpu-2x,
+# 4 GB, kept by its Machine.

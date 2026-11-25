@@ -1,0 +1,137 @@
+#!/bin/bash
+# ops-workspace-size want|check|fix: a client ops workspace's Machine size, read
+# from operator/ops-machine/workspaces.json and nowhere else.
+#
+#   want <slug>        print "<vm_size> <memory_mb> <cpu_kind> <cpus>"; exit 2 when
+#                      the workspace has no size, or one Fly cannot run. Every path
+#                      that sizes a workspace reads it here and stops without it.
+#   check [<slug>...]  read-only: compare each Machine's guest (cpu_kind, cpus,
+#                      memory_mb, from `fly machine list --json`) with the size
+#                      authored for it. One PASS or FAIL line per Machine, and a
+#                      FAIL for an app that cannot be read. Exit 1 on any FAIL.
+#                      No slug: every workspace in the list.
+#   fix <slug>         put every Machine whose guest differs at the authored size
+#                      (`fly machine update`, a restart), then check again.
+#
+# WHY (2026-11-24): the A&P workspace ran at 2 shared CPUs and 4 GB all
+# afternoon, its authored size 8 performance CPUs and 16 GB, under hand drafting
+# with a load average of 38. `ops-workspace update` had deployed it with
+# --vm-size and --vm-memory, but flyctl applies those to a NEW Machine only; an
+# existing Machine takes its guest from fly.toml's [[vm]] when there is one
+# (flyctl internal/appconfig/machines.go updateMachineConfig), and fly.toml said
+# shared-cpu-2x/4gb, smd-ops's own size. fly.toml now has no [[vm]], so a deploy
+# keeps the Machine's size, `ops-workspace` sets the authored size after every
+# deploy with `fix`, and the hourly triage on smd-ops runs `check`.
+#
+# Credentials: `fly` as the caller has it, except that OPS_FLY_TOKEN__<SUFFIX>
+# (the daily sweep's workspace-scoped token, minted by ops-workspace), when set,
+# is used for that workspace's app. Never printed.
+set -uo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+reg="${OPS_WORKSPACES_JSON:-$here/workspaces.json}"
+cmd="${1:-}"; shift || true
+
+die() { echo "$*" >&2; exit 2; }
+[ -f "$reg" ] || die "no workspace list at $reg"
+
+# "<vm_size> <memory_mb> <cpu_kind> <cpus>" for a slug, or why not (exit 2).
+# Only the preset CPU sizes are accepted (shared-cpu-Nx, performance-Nx): the
+# kind and count are read from the name, so the check compares all three.
+want() {
+  local slug="$1" vm mem kind cpus
+  jq -e --arg s "$slug" '.workspaces[$s]' "$reg" >/dev/null 2>&1 || die "$slug is not in $reg"
+  vm=$(jq -r --arg s "$slug" '.workspaces[$s].vm_size // empty' "$reg")
+  mem=$(jq -r --arg s "$slug" '.workspaces[$s].memory_mb // empty' "$reg")
+  [ -n "$vm" ] && [ -n "$mem" ] \
+    || die "$slug has no vm_size and memory_mb in $reg; a workspace is never sized by default (add both in a reviewed change)"
+  case "$vm" in
+    shared-cpu-*x) kind=shared; cpus="${vm#shared-cpu-}" ;;
+    performance-*x) kind=performance; cpus="${vm#performance-}" ;;
+    *) die "$slug: vm_size $vm is not shared-cpu-<n>x or performance-<n>x" ;;
+  esac
+  cpus="${cpus%x}"
+  [[ "$cpus" =~ ^[1-9][0-9]*$ ]] || die "$slug: vm_size $vm names no CPU count"
+  [[ "$mem" =~ ^[1-9][0-9]*$ ]] && [ $((mem % 256)) -eq 0 ] \
+    || die "$slug: memory_mb $mem is not a whole number of 256 MB"
+  printf '%s %s %s %s\n' "$vm" "$mem" "$kind" "$cpus"
+}
+
+app_of() { jq -r --arg s "$1" '.workspaces[$s].app // empty' "$reg"; }
+
+# fly, with the workspace's own sweep token when this run holds one.
+fly_for() {
+  local slug="$1"; shift
+  local suffix tv
+  suffix=$(printf '%s' "$slug" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')
+  tv="OPS_FLY_TOKEN__${suffix}"
+  if [ -n "${!tv:-}" ]; then FLY_API_TOKEN="${!tv}" fly "$@" </dev/null; else fly "$@" </dev/null; fi
+}
+
+# One line per Machine of <slug>: "<id> <state> <cpu_kind> <cpus> <memory_mb>",
+# or the reason it could not be read and status 1.
+machines() {
+  local slug="$1" app out
+  app=$(app_of "$slug")
+  if ! out=$(fly_for "$slug" machine list -a "$app" --json 2>&1); then
+    echo "could not read the Machines of $app: $(printf '%s' "$out" | grep -v '^[[:space:]]*$' | tail -1 | cut -c1-160)"
+    return 1
+  fi
+  printf '%s' "$out" | jq -r '.[] | [.id, (.state // "?"), (.config.guest.cpu_kind // "?"),
+      (.config.guest.cpus // "?" | tostring), (.config.guest.memory_mb // "?" | tostring)] | join(" ")' 2>/dev/null \
+    || { echo "fly machine list -a $app did not print a Machine list"; return 1; }
+}
+
+# PASS/FAIL lines for one workspace; returns 1 on any FAIL.
+check_one() {
+  local slug="$1" w vm mem kind cpus app rows rc=0 id state gk gc gm
+  if ! w=$(want "$slug" 2>&1); then echo "FAIL size $slug: $w"; return 1; fi
+  read -r vm mem kind cpus <<<"$w"
+  app=$(app_of "$slug")
+  rows=$(machines "$slug") || { echo "FAIL size $app: $rows"; return 1; }
+  [ -n "$rows" ] || { echo "FAIL size $app: no Machine"; return 1; }
+  while read -r id state gk gc gm; do
+    if [ "$gk" = "$kind" ] && [ "$gc" = "$cpus" ] && [ "$gm" = "$mem" ]; then
+      echo "PASS size $app $id ($state): $vm, $mem MB as authored"
+    else
+      echo "FAIL size $app $id ($state): runs $gk/$gc CPU/$gm MB, authored $vm/$mem MB ($kind/$cpus CPU); fix: operator/ops-machine/bin/ops-workspace resize $slug"
+      rc=1
+    fi
+  done <<<"$rows"
+  return "$rc"
+}
+
+case "$cmd" in
+  want)
+    [ -n "${1:-}" ] || die "usage: ops-workspace-size want <slug>"
+    want "$1"
+    ;;
+  check)
+    slugs=("$@")
+    [ "${#slugs[@]}" -gt 0 ] || while IFS= read -r s; do slugs+=("$s"); done < <(jq -r '.workspaces | keys[]' "$reg")
+    rc=0
+    for s in ${slugs[@]+"${slugs[@]}"}; do check_one "$s" || rc=1; done
+    exit "$rc"
+    ;;
+  fix)
+    slug="${1:-}"; [ -n "$slug" ] || die "usage: ops-workspace-size fix <slug>"
+    w=$(want "$slug") || exit 2
+    read -r vm mem kind cpus <<<"$w"
+    app=$(app_of "$slug")
+    rows=$(machines "$slug") || { echo "FAIL size $app: $rows"; exit 1; }
+    ids=(); states=()
+    while read -r id state gk gc gm; do
+      [ -n "$id" ] || continue
+      if [ "$gk" != "$kind" ] || [ "$gc" != "$cpus" ] || [ "$gm" != "$mem" ]; then ids+=("$id"); states+=("$state"); fi
+    done <<<"$rows"
+    for i in ${ids[@]+"${!ids[@]}"}; do
+      args=(--vm-size "$vm" --vm-memory "$mem" --yes)
+      # A stopped Machine stays stopped; it starts at the new size.
+      [ "${states[$i]}" = started ] || args+=(--skip-start)
+      echo "resizing $app ${ids[$i]} to $vm/$mem MB"
+      fly_for "$slug" machine update "${ids[$i]}" -a "$app" "${args[@]}" >/dev/null 2>&1 \
+        || echo "fly machine update ${ids[$i]} failed"
+    done
+    check_one "$slug"
+    ;;
+  *) sed -n 2,15p "$0"; exit 2 ;;
+esac
