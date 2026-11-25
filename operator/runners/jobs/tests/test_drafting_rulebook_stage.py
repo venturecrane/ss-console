@@ -43,8 +43,8 @@ GRID = {
                                                      "sentences": ["Responding Party will produce the bills he has."]}}},
     ]
 }  # fmt: skip
-PRIV = "Responding Party objects to this Request on the ground that it invades the privacy of Responding Party."
-LEAD = "Responding Party objects to this Request on the ground that it"
+PRIV = "Responding Party objects to this request on the ground that it invades the privacy of Responding Party."
+LEAD = "Responding Party objects to this request on the ground that it"
 
 
 def _firm(stages=("revise",)) -> SimpleNamespace:

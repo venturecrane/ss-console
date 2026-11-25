@@ -147,7 +147,7 @@ def test_a_named_candidate_objection_becomes_the_firms_words_and_nothing_else_mo
         "{{CANDIDATE OBJECTION: compound | two questions}}",
     ]
     new, done = markers.settle("4", body, BOOK, "requests_for_production", {"privacy"})
-    assert new[0] == PRIVACY.replace("{item}", "Request") + " Responding party will comply."
+    assert new[0] == PRIVACY.replace("{item}", "request") + " Responding party will comply."
     assert new[1] == "{{ATTORNEY: confirm the date}}"  # never touched
     assert new[2:] == body[2:]  # not named by a rule: left
     assert [(s.key, s.left) for s in done] == [

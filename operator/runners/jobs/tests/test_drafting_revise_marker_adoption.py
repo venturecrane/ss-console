@@ -62,7 +62,7 @@ RFP = "requests_for_production"
 
 
 def _fill(text: str) -> str:
-    return text.replace("{item}", "Request")
+    return text.replace("{item}", "request")
 
 
 def _marker(ground: str, words: str = "the documents are privileged") -> str:
@@ -201,3 +201,15 @@ def test_a_marker_with_no_pipe_and_no_objection_sentence_is_left_and_recorded():
     marker = "{{ATTORNEY: CANDIDATE OBJECTION: privacy of third parties may apply here}}"
     out, done = M.settle("9", [marker], BOOK, "special_interrogatories", set(), adopt_own=True)
     assert out == [marker] and done[0].left == M.NO_SENTENCE
+
+
+def test_the_item_word_is_lower_case_mid_sentence_and_capitalised_only_at_a_sentence_start():
+    assert book_mod.fill_item("Responding Party objects to this {item} as vague.", "Interrogatory") == (
+        "Responding Party objects to this interrogatory as vague."
+    )
+    assert book_mod.fill_item("{item} No. 4 is compound. {item} No. 5: this {item} too.", "Request") == (
+        "Request No. 4 is compound. Request No. 5: this request too."
+    )
+    assert BOOK.text("obj_031", item="Interrogatory").startswith("Responding Party objects to this interrogatory on")
+    out, _done = M.settle("1", [_marker("overbroad")], BOOK, "special_interrogatories", {"obj_031"})
+    assert out == [OVERBROAD.replace("{item}", "interrogatory")]

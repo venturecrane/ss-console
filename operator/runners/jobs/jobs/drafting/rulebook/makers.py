@@ -23,7 +23,7 @@ from dataclasses import replace
 
 from ..revise import responses as rs
 from . import parts as parts_mod
-from .book import Book
+from .book import Book, fill_item
 from .types import Part
 
 _SLOT = re.compile(r"\b(?:Exhibits?\s*)?\{exhibit\}")
@@ -37,7 +37,7 @@ EXHIBIT = rs.EXHIBIT_UNRESOLVED
 
 def words(book: Book, key: str, item_word: str, doc: rs.Document, titles: tuple[str, ...]) -> tuple[str, str]:
     """(the entry's sentence with its slots filled, "") or ("", ``EXHIBIT``)."""
-    text = book.entries[key].text.replace("{item}", item_word)
+    text = fill_item(book.entries[key].text, item_word)
     m = _SLOT.search(text)
     if not m:
         return text, ""

@@ -49,6 +49,24 @@ GROUNDS: dict[str, tuple[str, ...]] = {
 }
 
 
+_SLOT_START = re.compile(r"(?:^|[.!?:]\s+)$")
+
+
+def fill_item(text: str, word: str) -> str:
+    """``text`` with its ``{item}`` slots filled by the response's own word for
+    what it answers, in lower case mid-sentence ("objects to this
+    interrogatory", "this request") and capitalised only where it starts a
+    sentence. The firm's finals write it so (2026-11-25: the lane wrote "this
+    Interrogatory")."""
+    out, at = [], 0
+    for m in re.finditer(r"\{item\}", text):
+        out.append(text[at : m.start()])
+        starts = bool(_SLOT_START.search("".join(out)))
+        out.append(word[:1].upper() + word[1:].lower() if starts else word.lower())
+        at = m.end()
+    return "".join(out) + text[at:]
+
+
 def _bare_words(text: str) -> str:
     return " ".join(re.findall(r"\w+", fold(text)))
 
@@ -149,7 +167,7 @@ class Book:
 
     def text(self, key: str, item: str = "", exhibits: str = "") -> str:
         """An entry's words with its ``{item}`` and ``{exhibit}`` slots filled."""
-        return self.entries[key].text.replace("{item}", item).replace("{exhibit}", exhibits)
+        return fill_item(self.entries[key].text, item).replace("{exhibit}", exhibits)
 
     def find(self, sentence: str) -> str | None:
         """The key of the entry whose words are this sentence (quotes, spacing,
