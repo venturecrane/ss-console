@@ -37,9 +37,9 @@ def request_text(matter: S.Matter) -> str:
     return str(job.get("request_text") or "") if isinstance(job, dict) else ""
 
 
-def find(matter: S.Matter, work: Path, doorway: Any) -> None:
+def find(matter: S.Matter, work: Path, doorway: Any, firm_data: dict[str, Any] | None = None) -> None:
     """``served_find.find`` on the saved matter: ``work/served.json`` and ``work/found-report.json``."""
-    from .. import served as served_mod, served_find as sf
+    from .. import provenance, served as served_mod, served_find as sf
 
     fn = S.entry("find")
     replies: dict[str, str] = {}
@@ -53,11 +53,13 @@ def find(matter: S.Matter, work: Path, doorway: Any) -> None:
         return replies[text]
 
     request, clients = request_text(matter), served_mod.clients_of(matter.data)
+    # The firm's authored attorney blocks, as the seat reads them (no seat roster on a replay).
+    firm = provenance.our_firm((firm_data or {}).get("attorneys") or [])
     # The code half first, every read it would make asked of the recordings:
     # each one without a recording is listed, not just the first, and a stage
     # with any missing stops before the finder runs (``--no-model``).
     missing: list[recorded.NeedsModelCall] = []
-    for text in sf.planned_reads(matter.data, request, clients):
+    for text in sf.planned_reads(matter.data, request, clients, firm, matter.job_dir):
         try:
             ask(text)
         except recorded.NeedsModelCall as need:
@@ -71,6 +73,8 @@ def find(matter: S.Matter, work: Path, doorway: Any) -> None:
         sf.Reader(ask, lambda: 0.0, lambda _chars: 0.0),
         clients=clients,
         other_side=sf.other_side(matter.data),
+        firm=firm,
+        ledger_dir=matter.job_dir,
     )
 
 

@@ -119,7 +119,7 @@ class Run:
     # ---- the stages --------------------------------------------------------
     def find(self) -> list[Section]:
         (self.work / "served.json").unlink(missing_ok=True)  # the finder leaves a served.json alone
-        real.find(self.matter, self.work, self.doorway)
+        real.find(self.matter, self.work, self.doorway, self.firm)
         served = S.read_json(self.work / "served.json")
         if served is None:
             raise RuntimeError("find wrote no served.json")

@@ -96,7 +96,17 @@ def _served(text: str = SPECIAL_TEXT, count: int = 2) -> dict[str, Any]:
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, served: dict[str, Any], checked: list[str], ask: bool = False) -> None:
-    def find(data: Path, job_dir: Path, request: str, reader: Any, *, clients: list[str], other_side: Any) -> None:
+    def find(
+        data: Path,
+        job_dir: Path,
+        request: str,
+        reader: Any,
+        *,
+        clients: list[str],
+        other_side: Any,
+        firm: Any = None,
+        ledger_dir: Any = None,
+    ) -> None:
         assert (data / "manifest.json").is_file() and clients == [CLIENT]
         if ask:
             reader.ask("read page 1")

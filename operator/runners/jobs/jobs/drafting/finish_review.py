@@ -10,7 +10,17 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import grounding, notes as notes_mod, pleading, render, review as review_mod, set_package, wording
+from . import (
+    grounding,
+    notes as notes_mod,
+    pleading,
+    render,
+    review as review_mod,
+    served_earlier,
+    set_package,
+    wording,
+)
+from .served_find import REPORT as FOUND_REPORT
 from .forms import lane_hook as form_hook
 from .outcome import DraftingFailed
 
@@ -119,7 +129,9 @@ class FinishReview:
             render_notes += [(f"{u.label}: " if u.key else "") + n for n in self._rendered(u)["notes"]]
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
         basis = set_package.note(self._state().get(set_package.BASIS_KEY), [str(u.variant) for u in self.units()])
-        render_notes = [self._block_note(), *([basis] if basis else []), *render_notes]
+        # The finder's own lines: files left out of the served sets, earlier papers of ours (served_earlier.py).
+        found = served_earlier.attorney_lines(Path(self.job.job_dir) / FOUND_REPORT)
+        render_notes = [self._block_note(), *([basis] if basis else []), *found, *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
         md = form_hook.with_cite_tables(self, md)  # each form set's cite table, by code
         # SMD's hand-written sections of the notes this replaces, carried by
