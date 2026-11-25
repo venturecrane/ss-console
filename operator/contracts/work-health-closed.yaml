@@ -102,3 +102,18 @@ closed:
     reason: >-
       The attorney's yes to a revise offer, no rule of its own; the revised
       file was filed and reported in the thread by the Operator.
+  - seat: ashton-price
+    job: 01M87SD2H56D9ZDWXBDQP36DF7
+    closed: '2026-11-25'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      A rule the attorney stated by email, recorded by hand (rule bab0105d,
+      probed installed in the wording store) and confirmed to him in the
+      thread by an SMD note.
+  - seat: ashton-price
+    job: 01M87SDVP3R485CR7G5QJKEM5M
+    closed: '2026-11-25'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      The same email and rule as the row above (bab0105d); one rule, recorded
+      once and confirmed in the thread by an SMD note.
