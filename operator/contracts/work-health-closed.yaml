@@ -79,3 +79,26 @@ closed:
       A rule the attorney stated by email, recorded by hand in the firm's
       drafting instructions (engagements #352, published 3e15b06c) and confirmed to him in the thread by an
       SMD note.
+  - seat: ashton-price
+    job: 01M87P3AQMA23ZMEB2CBKB6S8E
+    closed: '2026-11-25'
+    closed_by: SMD request session, on the Captain's handoff
+    reason: >-
+      A rule the attorney stated by email, recorded by hand (rule ff787c5f,
+      probed installed in the wording store) and confirmed to him in the
+      thread by the Operator on 2026-11-24.
+  - seat: ashton-price
+    job: 01M85FP8KZ5WZCH7PCWKN9F3R1
+    closed: '2026-11-25'
+    closed_by: SMD request session, on the Captain's handoff
+    reason: >-
+      A rule the attorney stated by email, recorded by hand (rule 47940a6c,
+      probed installed in the wording store) and confirmed to him in the
+      thread by an SMD note.
+  - seat: ashton-price
+    job: 01M87SMVX5TQCNWPH44VF2QZB0
+    closed: '2026-11-25'
+    closed_by: SMD request session, on the Captain's handoff
+    reason: >-
+      The attorney's yes to a revise offer, no rule of its own; the revised
+      file was filed and reported in the thread by the Operator.
