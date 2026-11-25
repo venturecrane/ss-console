@@ -326,7 +326,7 @@ class Sorted:
     drafts: list[earlier.Earlier] = field(default_factory=list)
 
 
-def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> None:
+def _response(f: Found, d: Doc, kind: str | None, clients: list[str], out: Sorted) -> None:
     head = d.first
     responding, asking, nums = _value(_RESPONDING, head), _value(_ASKING, head), set_numbers(head)
     if responding and not ours(responding, clients):

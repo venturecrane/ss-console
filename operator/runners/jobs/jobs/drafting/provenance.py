@@ -155,8 +155,12 @@ def our_firm(authored: list[dict[str, Any]] | None, roster: Any = None) -> OurFi
         first = str((e.get("block") or [""])[0]) if isinstance(e, dict) else ""
         bars += _SBN.findall(first)
         names.append(re.split(r",|\(", first)[0].strip())
-    keep = lambda xs: tuple(dict.fromkeys(x for x in xs if len(x.strip()) >= 4))  # noqa: E731
-    return OurFirm(keep(names), keep(bars))
+    return OurFirm(_distinct(names), _distinct(bars))
+
+
+def _distinct(xs: list[str]) -> tuple[str, ...]:
+    """Each value once, in order; a fragment under four characters is no name or bar number."""
+    return tuple(dict.fromkeys(x for x in xs if len(x.strip()) >= 4))
 
 
 def our_attorney(head: str, ext: str, firm: OurFirm | None) -> str:
