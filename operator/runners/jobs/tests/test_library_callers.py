@@ -137,6 +137,10 @@ WORD_WRITERS = {
         "makes a firm's styles base from one of its filed documents (`jobs firmbase make`), the body "
         "cleared; it is the file later drafts are made in, never a document made from one"
     ),
+    f"{JOBS}/library_setup/frame_make.py": (
+        "makes a firm's discovery library file from one of its filed papers (`jobs library-stock`): its "
+        "styles base with its standard wording blanked; it is the file later drafts are made in"
+    ),
     f"{JOBS}/firmbase/base.py": "repackages a firm base's document part",
     f"{JOBS}/stages/render.py": "a record product (the chronology), which reads no library file",
     f"{JOBS}/stages/billing_docx.py": "a record product (the billing summary)",

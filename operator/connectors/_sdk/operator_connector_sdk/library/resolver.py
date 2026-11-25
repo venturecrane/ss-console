@@ -172,6 +172,12 @@ def _used(entry: Entry, scope: str) -> UsedFile:
     )
 
 
+#: ``accepted_by`` of a file SMD stocked from one of the firm's own filed papers
+#: (``jobs/library_setup/stock.py``), followed by ``:<source file id>``. The same
+#: words are in ``establish_intake/library_stock.py``, which writes them.
+SMD_STOCKED = "smd:from-firm-filing"
+
+
 def _from_copy(base: Resolution, entry: Entry, copies_dir: str | Path) -> Resolution:
     """The accepted bytes from the seat's own copy, checked against the ledger."""
     read = copies.read_copy(copies_dir, entry.sha256)
@@ -194,8 +200,15 @@ def _check(
     scope: str,
     copies_dir: str | Path | None = None,
 ) -> Resolution:
-    """The accepted entry, verified against the library as it stands now."""
+    """The accepted entry, verified against the library as it stands now. An
+    entry SMD stocked from a firm's filed paper (:data:`SMD_STOCKED`) is in no
+    library: its bytes are the seat's kept copy, checked against the ledger's
+    sha256 like every copy, and no newer version can exist."""
     base = Resolution(status=RESOLVED, kind=kind, signer=signer, file=_used(entry, scope))
+    if entry.accepted_by.startswith(SMD_STOCKED):
+        if copies_dir is None:
+            return replace_status(base, COPY_MISSING, "a file SMD stocked is held only in the seat's kept copies")
+        return _from_copy(base, entry, copies_dir)
     try:
         listing = store.list_versions(entry.file_id)
     except LibraryUnavailable as exc:
@@ -275,6 +288,7 @@ __all__ = [
     "REFUSED",
     "RESOLVED",
     "SCHEMA_VERSION",
+    "SMD_STOCKED",
     "VERSION_UNAVAILABLE",
     "Attorney",
     "NewerVersion",
