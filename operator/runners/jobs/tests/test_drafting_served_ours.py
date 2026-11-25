@@ -16,7 +16,7 @@ import json
 
 import pytest
 from test_drafting_served_find import CAPTION, CLIENT, DEF, END, THREE, Fake, _delivered, matter, run, stop_of
-from test_drafting_served_find import srog, three_docs, values
+from test_drafting_served_find import bare, response, srog, three_docs, values
 
 from jobs.drafting import provenance, served, served_earlier, served_find, served_page, served_papers
 from jobs.drafting.served_docs import Doc
@@ -496,3 +496,95 @@ def test_the_replay_and_the_seat_classify_the_same_paper_the_same_way(tmp_path):
     blind.mkdir()
     with pytest.raises(served_find.Stop):
         served_find.find(data, blind, "Draft responses.", Fake(reads).reader(), clients=[CLIENT])
+
+
+# ---- the final review (5ea80cd1c): narrowing, near names, and the deliberate costs ------------------
+
+
+RESP_SROG = {"id": "r1", "name": "Resp SROGs.pdf", "pages": response("SPECIAL INTERROGATORIES"),
+             "created": "2026-10-30T09:00:00"}  # fmt: skip
+RFP_ONLY = "Please draft responses to the request for production on matter 100001."
+
+
+def _outcome(data, jd, request="Please draft responses to the discovery on matter 100001.") -> str:
+    try:
+        run(data, jd, Fake(THREE), request=request)
+        return "ok"
+    except served_find.Stop as exc:
+        return exc.code
+
+
+def test_our_served_response_to_a_kind_the_request_does_not_name_never_holds_the_job(tmp_path):
+    """The regression: their SROG, RFP and form sets, our served SROG response, a request for the RFP only."""
+    data, jd = matter(tmp_path, [*three_docs(), RESP_SROG])
+    assert _outcome(data, jd, RFP_ONLY) == "ok"
+    assert [(s.set_type, s.source) for s in served.read(jd, [CLIENT])] == [("requests_for_production", "p1")]
+
+
+def test_our_served_response_to_a_set_read_here_answers_it(tmp_path):
+    data, jd = matter(tmp_path, [*three_docs(), RESP_SROG])
+    assert _outcome(data, jd) == "ok"
+    assert [s.set_type for s in served.read(jd, [CLIENT])] == ["requests_for_production", "form_interrogatories"]
+
+
+@pytest.mark.parametrize("sub", ["set not in the file", "same day as its set"])
+def test_our_served_response_that_answers_no_set_read_here_holds(tmp_path, sub):
+    """Deliberate: a served response of ours that answers nothing this finder read is held, never dropped."""
+    if sub == "set not in the file":
+        docs = [d for d in three_docs() if d["id"] not in ("s1", "s1b")] + [RESP_SROG]
+    else:
+        docs = [*three_docs(), dict(RESP_SROG, created="2026-10-01T00:00:00")]
+    data, jd = matter(tmp_path, docs)
+    assert _outcome(data, jd) == "served_other_set"
+    _held(jd, "Resp SROGs.pdf")
+
+
+def test_known_cost_a_served_response_to_an_earlier_set_that_is_a_no_text_scan_holds_the_job(tmp_path):
+    """KNOWN COST, deliberate: the earlier SROG set is a no-text scan, so code reads no set for our served
+    SROG response to answer, and the job holds rather than guess. SMD names the set by hand (served.json)."""
+    scan = {"id": "s9", "name": "Def SROGs Set One scan.pdf", "pages": [""]}
+    docs = [d for d in three_docs() if d["id"] not in ("s1", "s1b")] + [scan, RESP_SROG]
+    data, jd = matter(tmp_path, docs)
+    assert _outcome(data, jd) == "served_other_set"
+    _held(jd, "Resp SROGs.pdf")
+    assert next(r for r in _report(jd)["candidates"] if r.get("id") == "s9")["kind"] == "scan"
+
+
+GARBLED = [CAPTION + "DEFENDANT'S REQUESTS F0R PR0DUCTI0N, SET ONE\n" + PARTY_LINES, bare("X", 5), END]
+
+
+@pytest.mark.parametrize("name", ["Def discovery.pdf", "Def RFA and RFP Set One.pdf"], ids=["no kind", "name kind"])
+def test_a_garbled_set_beside_other_sets_is_never_narrowed_away(tmp_path, name):
+    """Narrowing settles only a set whose kind its title gives; a garbled one, or one typed by its name, holds."""
+    data, jd = matter(tmp_path, [*three_docs(), {"id": "g1", "name": name, "pages": GARBLED}])
+    assert _outcome(data, jd, RFP_ONLY) == "served_other_set"
+    assert name in _report(jd)["reason"]
+
+
+def test_a_set_titled_in_capitals_of_a_kind_not_asked_for_is_narrowed_out(tmp_path):
+    data, jd = matter(tmp_path, three_docs())
+    assert _outcome(data, jd, RFP_ONLY) == "ok"
+    assert [s.source for s in served.read(jd, [CLIENT])] == ["p1"]
+
+
+@pytest.mark.parametrize(
+    "asking, ours",
+    [
+        ("Plaintiff GAMMA EXAMPLE", True),
+        ("Plaintiff and Cross-Complainant Gamma Example", True),
+        ("Defendant GAMMA EXAMPLE TRUST", False),
+        ("GAMMA EXAMPLE JR.", False),
+        ("GAMMA EXAMPLE, INC.", False),
+    ],
+)
+def test_one_client_is_an_exact_name_once_normalised(asking, ours):
+    assert provenance.one_client(asking, [CLIENT]) is ours
+    assert provenance.one_client("Gamma Example", [CLIENT, "GAMMA EXAMPLE"]) is False  # twice: not one client
+
+
+def test_a_set_asked_by_a_near_name_of_our_client_holds(tmp_path):
+    pages = [p.replace("REQUESTING PARTY: Defendant " + DEF, "REQUESTING PARTY: Defendant GAMMA EXAMPLE TRUST")
+             .replace("DELTA EXAMPLE CORPORATION'S SPECIAL", "GAMMA EXAMPLE TRUST'S SPECIAL") for p in srog(5)]  # fmt: skip
+    data, jd = matter(tmp_path, [*three_docs(), {"id": "t1", "name": "Trust SROGs Set One.pdf", "pages": pages}])
+    assert _outcome(data, jd) == "served_other_set"
+    _held(jd, "Trust SROGs Set One.pdf")

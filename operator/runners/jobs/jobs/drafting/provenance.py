@@ -42,7 +42,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from . import parties, served_papers as papers, sets
 from .served_slice import ASKING, RESPONDING, TITLES
@@ -175,6 +175,25 @@ def our_attorney(head: str, ext: str, firm: OurFirm | None) -> str:
         if re.search(r"(?i)(?<!\w)" + r"\s+".join(map(re.escape, n.split())) + r"(?!\w)", block):
             return n
     return ""
+
+
+#: A party line's role words ("Defendant", "Plaintiff and Cross-Complainant"), before the name.
+_ROLE = re.compile(
+    r"(?i)^(?:(?:plaintiffs?|defendants?|cross[-\s]?(?:complainants?|defendants?)|petitioners?|respondents?"
+    r"|and)[\s,]+)+"
+)
+
+
+def one_client(value: str, clients: Iterable[str]) -> bool:
+    """The party line names exactly one of our client's names, once normalised
+    (role words, case and punctuation aside): "Defendant GAMMA EXAMPLE TRUST",
+    "GAMMA EXAMPLE JR." or "GAMMA EXAMPLE, INC." is not "Gamma Example"."""
+
+    def norm(x: str) -> str:
+        return " ".join(re.findall(r"[a-z0-9]+", _ROLE.sub("", str(x).strip()).lower()))
+
+    v = norm(value)
+    return bool(v) and sum(norm(c) == v for c in clients) == 1
 
 
 def _stem(name: str) -> str:

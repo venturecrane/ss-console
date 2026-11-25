@@ -369,7 +369,10 @@ def sort_docs(f: Found, all_docs: list[Doc], clients: list[str]) -> Sorted:
             asking = _value(_ASKING, d.first)
             if asking and ours(asking, clients):
                 f.note(d, "served", False, "propounded by our client: not served on us", set_type=kind)
-                ours_folders.add(d.folder)
+                if provenance.one_client(asking, clients):  # else a near name ("... TRUST"): held (``_account``)
+                    ours_folders.add(d.folder)
+                else:
+                    f.settled.discard(d.id)
             else:
                 out.served.append((d, kind))
         elif what == "other_set":
@@ -467,10 +470,11 @@ def _narrow(f: Found, got: Sorted, kinds: list[str]) -> None:
         return
     for d, k in [x for x in got.served if x[1] not in kinds]:
         f.note(d, "served", False, f"the request names {', '.join(kinds)}, not this kind", set_type=k)
+        if title_type(d.first) != k:  # a kind guessed from its name or a garbled title: held (``_account``)
+            f.settled.discard(d.id)
     got.served = [x for x in got.served if x[1] in kinds]
-    for d in got.others:
-        f.note(d, "other_set", False, "a set of another kind; the request names " + ", ".join(kinds))
-    got.others = []
+    # Our served responses to a kind the request does not name answer nothing here, by the request.
+    f.settled.update(r[0].id for r in got.responses if r[1] not in kinds)
 
 
 def _before_spend(f: Found, got: Sorted, kinds: list[str]) -> None:
