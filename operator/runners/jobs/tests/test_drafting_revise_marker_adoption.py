@@ -154,8 +154,50 @@ def test_adding_the_long_form_overbroad_objection_removes_the_short_clause():
 # ---- 6. a rule's stated words keep the firm's casing ----
 
 
-def test_stated_words_keep_their_own_casing_but_the_books_names():
-    assert BOOK.cased("responding party objects to the request as stated") == (
-        "Responding Party objects to the request as stated."
+def test_stated_words_keep_their_own_casing_and_only_the_first_letter_is_capitalised():
+    assert BOOK.cased("Responding Party objects to this interrogatory and the request as stated") == (
+        "Responding Party objects to this interrogatory and the request as stated."
     )
-    assert "Request" not in BOOK.runs() and "The" not in " ".join(BOOK.runs())
+    assert BOOK.cased("each response is verified") == "Each response is verified."
+
+
+# ---- the second rehearsal, 2026-11-25: the firm's own rule wording, and markers with no "|" ----
+
+INCLUDE_RULE = {
+    "rule_id": "r-include",
+    "wording": ["Include all legally applicable California objections for each response."],
+}
+NO_PIPE = (
+    "Responding Party objects to this interrogatory on the ground that it seeks information protected by the "
+    "right of privacy of third parties under Article I, section 1 of the California Constitution."
+)
+
+
+def test_a_rule_that_tells_the_draft_to_include_objections_is_an_adopt_rule():
+    assert M.adopts([INCLUDE_RULE])
+    assert M.adopts([{"rule_id": "r", "wording": ["Assert any applicable objection to each request."]}])
+    assert not M.adopts([{"rule_id": "r", "wording": ["Add a privacy objection where it applies."]}])
+    assert not M.adopts([{"rule_id": "r", "wording": ["Do not include boilerplate objections."]}])
+
+
+def test_a_marker_with_no_pipe_adopts_its_objection_sentence():
+    marker = f"{{{{ATTORNEY: CANDIDATE OBJECTION: {NO_PIPE}}}}}"
+    out, done = M.settle("1", [f"{marker} Answer one."], BOOK, "special_interrogatories", set(), adopt_own=True)
+    assert out == [f"{NO_PIPE} Answer one."] and done[0].how == M.OWN
+
+
+def test_a_marker_with_no_pipe_drops_its_trailing_note_to_the_attorney():
+    for note in (
+        "Note: confirm with the client whether the third parties consented.",
+        "Consider whether the tax returns are relevant. [Attorney: decide]",
+        "[ATTORNEY: confirm the date range]",
+    ):
+        marker = f"{{{{ATTORNEY: CANDIDATE OBJECTION: {NO_PIPE} {note}}}}}"
+        out, _done = M.settle("17", [marker], BOOK, "special_interrogatories", set(), adopt_own=True)
+        assert out == [NO_PIPE], note
+
+
+def test_a_marker_with_no_pipe_and_no_objection_sentence_is_left_and_recorded():
+    marker = "{{ATTORNEY: CANDIDATE OBJECTION: privacy of third parties may apply here}}"
+    out, done = M.settle("9", [marker], BOOK, "special_interrogatories", set(), adopt_own=True)
+    assert out == [marker] and done[0].left == M.NO_SENTENCE

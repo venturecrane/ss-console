@@ -50,11 +50,29 @@ _OPEN = re.compile(r"\{\{\s*(?:ATTORNEY\s*:\s*)?CANDIDATE\s+OBJECTION\b\s*[:\-�
 ITEM = {kind: ITEM_WORD[doc] for kind, doc in SET_DOC.items()}
 PHRASE_MISSING = "phrase_missing"
 NOT_NAMED = "ground_not_named"
+#: A marker with no ``|`` whose run holds no objection sentence to adopt.
+NO_SENTENCE = "no_objection_sentence"
 #: How a marker was settled when it was converted.
 ONLY, HELD, LONG_FORM, BOOK_ORDER, OWN, ALREADY = "only", "held", "long_form", "book_order", "own_words", "already"
 
-#: A firm rule that adopts the draft's candidate objections as proposed.
-ADOPTS = re.compile(r"(?i)\badopt(?:s|ing)?\b[^.]{0,40}\bcandidate\s+objections?\b")
+#: A firm rule that tells a draft to include objections generally, so the
+#: draft's candidate objections are taken (the one place this is decided). By
+#: meaning, not by one word: the firm's own rule says "include all legally
+#: applicable California objections for each response" (2026-11-25), and never
+#: "adopt" or "candidate". A verb of including, then objections in the plural or
+#: with a word of generality ("all", "any", "applicable", "candidate"). A rule
+#: asking for one ground ("add a privacy objection") is not one.
+_INCLUDE = (
+    r"\b(?:include|includes|including|add|adds|use|uses|assert|asserts|raise|raises|adopt|adopts|interpose|state)\b"
+)
+ADOPTS = re.compile(
+    rf"(?i){_INCLUDE}[^.]{{0,60}}?(?:\bobjections\b|\b(?:all|any|every|each|applicable|appropriate|candidate)\b"
+    rf"[^.]{{0,40}}?\bobjections?\b)"
+)
+#: The start of an objection sentence in a marker's run ("Responding Party objects", "Plaintiff further objects").
+_OBJECTS = re.compile(r"^(?:[A-Z][\w'’-]*\s+){0,4}(?:further\s+|also\s+)?objects?\b")
+#: A trailing note to the attorney: never adopted.
+_NOTE = re.compile(r"(?i)^(?:\[|note\b|attorney\b|confirm\b|consider\b|verify\b|check\b|todo\b|n\.?b\.?\b)")
 
 
 @dataclass(frozen=True)
@@ -121,9 +139,18 @@ def named_by(texts: Iterable[str], book: Any) -> set[str]:
     return set(_matches(" ".join(texts), book))
 
 
+_NEGATED = re.compile(r"(?i)\b(?:do\s+not|don't|never|no|without|avoid)\s+(?:\w+\s+){0,2}$")
+
+
 def adopts(rules: Iterable[dict[str, Any]]) -> bool:
-    """A rule in force says to adopt the draft's candidate objections."""
-    return any(ADOPTS.search(" ".join(str(w) for w in r.get("wording") or [])) for r in rules)
+    """A rule in force tells the draft to include objections generally
+    (:data:`ADOPTS`), so its candidate objections are taken. "Do not include
+    boilerplate objections" is the opposite and never counts."""
+    for r in rules:
+        text = " ".join(str(w) for w in r.get("wording") or [])
+        if any(not _NEGATED.search(text[: m.start()]) for m in ADOPTS.finditer(text)):
+            return True
+    return False
 
 
 def _long_form(text: str, lead: str) -> bool:
@@ -165,13 +192,34 @@ def _held(entry_text: str, said: str) -> bool:
 
 def own_sentence(body: str) -> str:
     """The marker's own candidate wording, its marker syntax stripped: the text
-    after its first ``|``, as a sentence."""
-    text = " ".join(body.split("|", 1)[1].split()) if "|" in body else ""
-    text = text.strip(" ;,")
+    after its first ``|``, as a sentence; or, in a marker with no ``|`` (one
+    run of text), its objection sentences (:func:`objection_sentences`)."""
+    if "|" not in body:
+        return objection_sentences(body)
+    text = " ".join(body.split("|", 1)[1].split()).strip(" ;,")
     if not text:
         return ""
     text = text[:1].upper() + text[1:]
     return text if text.endswith((".", "!", "?")) else text + "."
+
+
+def objection_sentences(run: str) -> str:
+    """The full sentences of ``run`` that state an objection ("Responding Party
+    objects ...", "Responding Party further objects ..."), from the first, while
+    they last: a trailing note to the attorney ("Note: ...", "Confirm ...",
+    "[...]"), or anything else, ends them. "" when the run holds none.
+    2026-11-25: 7 markers had no ``|``, 3 a lone objection sentence of about 38
+    words, 4 one followed by a note to the attorney."""
+    text = " ".join(run.split())
+    start = re.search(r"(?:[A-Z][\w'’-]*\s+){0,4}(?:further\s+|also\s+)?objects?\b", text)
+    if not start:
+        return ""
+    kept = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text[start.start() :]):
+        if _NOTE.match(sentence) or not _OBJECTS.match(sentence) or not sentence.endswith((".", "!", "?")):
+            break
+        kept.append(sentence)
+    return " ".join(kept)
 
 
 def _unmarked(block: str) -> str:
@@ -189,8 +237,15 @@ def _tidy(block: str) -> str:
 def _one(
     body: str, ground: str, book: Any, item: str, allowed: set[str], adopt_own: bool, whole: str
 ) -> tuple[str, Settled]:
-    """(the words that take the marker's place, how it settled) for one marker."""
+    """(the words that take the marker's place, how it settled) for one marker.
+    A marker with no ``|`` is one run of the draft's own objection wording, its
+    ground not set apart: under a rule that includes objections its objection
+    sentences are taken as written; otherwise it is settled only when its words
+    name exactly one book entry."""
+    piped = "|" in body
     keys = ground_keys(ground, book)
+    if not piped and (adopt_own or len(keys) != 1):
+        keys = []
     texts = {k: book.text(k, item=item) for k in keys}
     own = own_sentence(body) if adopt_own and not keys else ""
     stated = [k for k, t in texts.items() if f" {_words(t)} " in whole]
@@ -199,13 +254,14 @@ def _one(
     if not keys:
         if own:
             return own, Settled("", "", "", ground, OWN)
-        return body, Settled("", "", PHRASE_MISSING, ground)
+        why = NO_SENTENCE if adopt_own and not piped else PHRASE_MISSING
+        return body, Settled("", "", why, ground)
     among = tuple(keys) if len(keys) > 1 else ()
     # A rule adopting the candidates allows every entry the ground names; else only the named ones.
     candidates = keys if adopt_own else [k for k in keys if k in allowed]
     if not candidates:
         return body, Settled("", keys[0], NOT_NAMED, ground, "", among)
-    key, how = choose(candidates, body.split("|", 1)[1] if "|" in body else "", book)
+    key, how = choose(candidates, body.split("|", 1)[1] if piped else body, book)
     return texts[key], Settled("", key, "", ground, how, among)
 
 
@@ -246,12 +302,14 @@ __all__ = [
     "GROUNDS",
     "ITEM",
     "NOT_NAMED",
+    "NO_SENTENCE",
     "PHRASE_MISSING",
     "Settled",
     "adopts",
     "choose",
     "ground_keys",
     "named_by",
+    "objection_sentences",
     "own_sentence",
     "settle",
     "spans",

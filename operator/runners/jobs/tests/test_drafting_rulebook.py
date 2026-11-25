@@ -85,9 +85,9 @@ def test_the_objection_lead_is_what_every_objection_entry_starts_with():
     assert one.objection_lead() == ""
 
 
-def test_stated_words_take_the_books_casing_and_a_full_stop():
+def test_stated_words_keep_their_casing_with_a_capital_first_letter_and_a_full_stop():
     assert BOOK.cased("the responding party will not respond further") == (
-        "The Responding Party will not respond further."
+        "The responding party will not respond further."
     )
 
 
@@ -156,7 +156,7 @@ def test_a_good_read_is_kept_with_the_rules_own_words_as_an_entry():
     assert c1.standing and c1.keys == ("privacy",) and c1.grounds == ("privacy",)
     entry = got["r2"]["entries"][0]
     assert entry.key == "r2#1" and c2.keys == ("r2#1",)
-    assert entry.text == "The Responding Party will not respond further." and entry.source == "rule:r2"
+    assert entry.text == "The responding party will not respond further." and entry.source == "rule:r2"
     assert not c3.standing and c3.numbers == ("10",)  # a part labelled for one response is one matter's
 
 

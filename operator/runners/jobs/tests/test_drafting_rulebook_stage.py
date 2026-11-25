@@ -88,7 +88,7 @@ def test_code_writes_the_firms_words_where_the_grid_says_and_names_each_in_the_n
     assert model.stages() == [reading.STAGE, grid.STAGE]
     assert "[3]" not in model.calls[1][1]  # the one-matter clause is never judged
     assert f"overbroad. {PRIV} Without waiving said objections" in res.md
-    assert "The Responding Party will not respond further." in res.md
+    assert "The responding party will not respond further." in res.md
     assert "the bills he has" not in res.md
     assert [(a.source, a.item) for a in res.applied] == [("rule:r1", "1"), ("rule:r2", "2")]
     assert res.notes == (

@@ -37,9 +37,7 @@ LEAD_WORDS = 4
 _FOLD = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"', " ": " "})
 #: Exhibit letters as they read once folded: "a", "a and b", "a, b and c".
 _LETTERS = r"[a-z]{1,2}(?:(?:,\s*(?:and\s+)?|\s+and\s+)[a-z]{1,2})*"
-_CAPS = re.compile(r"\b[A-Z][a-z]+(?: [A-Z][a-z]+)*\b")
 _SLOT = re.compile(r"(\{item\}|\{exhibit\})")
-_ARTICLES = frozenset({"the", "this", "these", "that", "those", "a", "an", "each", "any", "all", "such"})
 
 #: The one table of an objection ground's names, compared as folded words: a
 #: rule, a marker or a book entry that names any of a group's words names that
@@ -187,32 +185,15 @@ class Book:
             lead.append(words[0])
         return " ".join(lead) if len(lead) >= LEAD_WORDS and "{item}" in lead else ""
 
-    def runs(self) -> list[str]:
-        """The names the book writes capitalised: each run of two or more
-        capitalised words ("Responding Party"), a sentence's own first word and
-        a leading article left out. A single capitalised word is never one: a
-        sentence's first word is capitalised because it starts the sentence
-        ("The request ..."), not because the firm writes it that way."""
-        found: set[str] = set()
-        for e in self.entries.values():
-            for m in _CAPS.finditer(e.text):
-                words = m.group(0).split()
-                if words and words[0].casefold() in _ARTICLES:
-                    words = words[1:]
-                if len(words) >= 2:
-                    found.add(" ".join(words))
-        return sorted(found, key=len, reverse=True)
-
     def cased(self, words: str) -> str:
         """``words`` made the firm's sentence without adding or changing a word:
-        the book's names in the book's casing ("Responding Party"), every other
-        word as written, a capital first letter and a full stop. 2026-11-25: it
-        capitalised every run of the book's words, so the lane wrote "The
+        every word in the casing it is written in, a capital first letter and a
+        full stop. 2026-11-25: recasing the book's capitalised words wrote "The
         Responding Party ... The Request" where the firm writes "Responding
-        Party ... the request"."""
+        Party ... the request", and "Interrogatory" where it writes
+        "interrogatory"; the stated words are the firm's own, so their casing
+        is kept."""
         out = norm(words).strip(" \"'")
-        for run in self.runs():
-            out = re.sub(rf"\b{re.escape(run)}\b", run, out, flags=re.I)
         return (out[:1].upper() + out[1:]).rstrip(" .;,:") + "."
 
 
