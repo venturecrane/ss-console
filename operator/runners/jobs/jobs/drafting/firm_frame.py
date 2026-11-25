@@ -69,8 +69,14 @@ ID_LINE = re.compile(
 )
 #: Where a paper's closing starts (``revise/responses.py`` ``_CLOSING`` without service).
 CLOSING_START = re.compile(r"^(DATED|DATE:|RESPECTFULLY|VERIFICATION)\b", re.I)
-#: Where it ends: the proof of service is the job's own attachment.
-SERVICE = re.compile(r"^(PROOF OF SERVICE|DECLARATION OF SERVICE)\b", re.I)
+#: Where it ends: the proof of service and a set's declaration for additional
+#: discovery are the job's own attachments (``render._declare`` fills the firm's
+#: authored declaration form with this set's count), so neither is frame: the
+#: firm's filed declaration tells its own case (2026-11-25, real papers).
+SERVICE = re.compile(
+    r"^(PROOF OF SERVICE|DECLARATION OF SERVICE|DECLARATION FOR ADDITIONAL DISCOVERY|DECLARATION\b.{0,80}?20(?:30|33)\.050)",
+    re.I,
+)
 _ROLE = re.compile(
     r"(?i)^(?:\s*(?:plaintiffs?|defendants?|cross[- ](?:complainants?|defendants?)|petitioners?|respondents?)"
     r"\s*(?:and|,)?\s*)+"
@@ -124,7 +130,8 @@ def regions(lines: list[str]) -> Regions | None:
         return None
     first, last = heads[0][0], heads[-1][0]
     start = next((i for i in range(last + 1, len(lines)) if CLOSING_START.match(plain(lines[i]))), len(lines))
-    end = next((i for i in range(start, len(lines)) if SERVICE.match(plain(lines[i]))), len(lines))
+    end = next((i for i in range(last + 1, len(lines)) if SERVICE.match(plain(lines[i]))), len(lines))
+    start = min(start, end)  # a Dated line inside an attachment is not the paper's closing
     return Regions(id_end, (id_end + 1, first), (start, end), heads[0][1][1])
 
 
