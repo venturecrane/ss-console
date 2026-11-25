@@ -14,6 +14,7 @@ import json
 import os
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -185,11 +186,48 @@ def _wakes(lane) -> list[str]:
     return lane._wakes_pending()
 
 
+#: The clock every --notify test reads: 2026-03-04 at 5 PM in the seat's zone
+#: (America/Phoenix, UTC-7 all year).
+NOW = datetime(2026, 3, 5, 0, 0, tzinfo=timezone.utc)
+TODAY = "2026-03-04T23:10:00Z"  # 4:10 PM Phoenix, the same day
+YESTERDAY = "2026-03-03T18:00:00Z"
+
+
+class _MatterSeat:
+    """The seat's Smokeball listing, read only: rows as ``seat.normalize_file`` returns them."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.read: list[str] = []
+
+    def list_files(self, matter_id: str) -> list[dict]:
+        self.read.append(matter_id)
+        return list(self.rows)
+
+
+def _filed(when: str = TODAY, record: dict = RECORD) -> list[dict]:
+    return [
+        {"id": f["file_id"], "name": f["name"], "size": f["bytes"], "modified": when, "deleted": False}
+        for f in record["files"]
+    ]
+
+
+@pytest.fixture(autouse=True)
+def _seat_zone(monkeypatch, tmp_path):
+    monkeypatch.setenv("HERMES_TIMEZONE", "America/Phoenix")
+    monkeypatch.setenv("SMD_REQUEST_INDEX_DB_PATH", str(tmp_path / "no-requests.db"))
+
+
+def _notify(rows: list[dict] | None = None) -> dict:
+    seat = _MatterSeat(_filed() if rows is None else rows)
+    return {"notify": True, "seat_factory": lambda: seat, "now": NOW}
+
+
 @pytest.mark.parametrize("how", ["failed", "stopped"])
 def test_an_ended_job_with_two_hand_filed_files_becomes_delivered(seat, how):
     broker, client, lane, _db, _q = seat
     jid = _ended(seat, how)
-    dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))
+    dbs.apply(lane, dbs.plan(lane, jid, _rec(), **_notify()))
     row = _row(broker, jid)
     assert row["state"] == "delivered" and row["folder_id"] == "folder-0101"
     assert row["reason"] is None  # the hold's or the stop's reason never reaches the DELIVER turn
@@ -236,9 +274,9 @@ def test_the_proof_is_written_before_the_row_is_delivered(seat):
     jid = _ended(seat, "stopped")
     client.fail_once.add("delivery_proof_record")
     with pytest.raises(BrokerError):
-        dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))
+        dbs.apply(lane, dbs.plan(lane, jid, _rec(), **_notify()))
     assert _row(broker, jid)["state"] == "failed" and _wakes(lane) == []
-    dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))  # a re-run finishes it
+    dbs.apply(lane, dbs.plan(lane, jid, _rec(), **_notify()))  # a re-run finishes it
     assert _row(broker, jid)["state"] == "delivered" and broker.drafting.ledger.proven_files(jid)
     assert _wakes(lane) == [jid]
 
@@ -255,10 +293,10 @@ def test_a_run_cut_short_after_the_row_moved_is_finished_by_a_re_run(seat, monke
 
     monkeypatch.setattr(lane, "_write_state", lost)
     with pytest.raises(OSError):
-        dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))
+        dbs.apply(lane, dbs.plan(lane, jid, _rec(), **_notify()))
     monkeypatch.setattr(lane, "_write_state", real)
     assert _row(broker, jid)["state"] == "delivered" and lane._daemon_state(jid)["state"] == "stopped_by_smd"
-    p = dbs.plan(lane, jid, _rec(), quiet=False)
+    p = dbs.plan(lane, jid, _rec(), **_notify())
     assert p["records"] == []  # the ledger is not moved again
     dbs.apply(lane, p)
     assert lane._daemon_state(jid)["state"] == "delivered" and _wakes(lane) == [jid]
@@ -355,7 +393,7 @@ def test_quiet_queues_no_reply(seat):
 def test_a_second_run_is_refused_and_writes_nothing_twice(seat):
     broker, client, lane, db, _q = seat
     jid = _ended(seat, "stopped")
-    dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))
+    dbs.apply(lane, dbs.plan(lane, jid, _rec(), **_notify()))
     before = len(client.requests)
     with pytest.raises(dbs.Refused, match="only a failed or withdrawn job"):
         dbs.plan(lane, jid, _rec(), quiet=False)
@@ -457,5 +495,157 @@ def test_dry_run_prints_the_digest_and_the_live_run_must_repeat_it(seat, monkeyp
     assert dbs.main([jid, str(rec), "--confirm", "0" * 16]) == 2  # the wrong one
     assert _row(broker, jid)["state"] == "failed"
     assert dbs.main([jid, str(rec), "--confirm", plan["digest"]]) == 0
-    assert _row(broker, jid)["state"] == "delivered" and _wakes(lane) == [jid]
+    # Recorded, and by default nobody is emailed (2026-11-24).
+    assert _row(broker, jid)["state"] == "delivered" and _wakes(lane) == []
     assert "REFUSED" in capsys.readouterr().err
+
+
+# -- recording never emails unless asked, and asking is checked (2026-11-24) ---------
+
+
+def _task(lane, jid) -> str:
+    return lane._daemon_state(jid)["wake"]["task"]
+
+
+def test_the_default_records_the_delivery_with_no_wake(seat):
+    """FALSIFIER: the default armed the DELIVER wake, and at 6:02 PM the Operator
+    told an attorney his responses were filed; they were filed at 8:40 PM."""
+    broker, client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    p = dbs.plan(lane, jid, _rec())
+    assert p["email"].startswith("no email will be sent")
+    dbs.apply(lane, p)
+    assert _row(broker, jid)["state"] == "delivered" and _wakes(lane) == []
+    wake = lane._daemon_state(jid)["wake"]
+    assert wake["pending"] is False and wake["quiet"] == dbs.QUIET
+
+
+def test_quiet_is_still_accepted_and_still_no_wake(seat, monkeypatch, capsys, tmp_path):
+    broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    rec = tmp_path / "record.json"
+    rec.write_text(json.dumps(RECORD))
+    monkeypatch.setattr(daemon_mod, "build", lambda: None)
+    monkeypatch.setattr(drafting_lane, "build_lane", lambda _d: lane)
+    monkeypatch.setattr(dbs.hand_delivery, "daemon_env", lambda _names: {})
+    assert dbs.main([jid, str(rec), "--quiet", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "EMAIL: no email will be sent" in out
+    digest = json.loads(out[: out.rindex("}") + 1])["digest"]
+    assert dbs.main([jid, str(rec), "--quiet", "--confirm", digest]) == 0
+    assert _row(broker, jid)["state"] == "delivered" and _wakes(lane) == []
+
+
+def test_todays_case_no_notify_and_files_not_yet_filed_arms_no_wake(seat):
+    """The replay: recorded before the hand draft reached the matter, without
+    --notify. The matter is never read, and nothing wakes."""
+    broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    empty = _MatterSeat([])
+    dbs.apply(lane, dbs.plan(lane, jid, _rec(), seat_factory=lambda: empty, now=NOW))
+    assert empty.read == [] and _wakes(lane) == []
+
+
+@pytest.mark.parametrize(
+    ("rows", "match"),
+    [
+        (lambda: _filed()[:1], "file-set-two .* is not on matter"),
+        (lambda: [], "file-set-one .* is not on matter"),
+        (lambda: [{**r, "deleted": True} for r in _filed()], "is not on matter"),
+        (lambda: [{**r, "size": 7} for r in _filed()], "7 bytes on the matter"),
+        (lambda: _filed(YESTERDAY), "not today in the seat's timezone"),
+    ],
+)
+def test_notify_refuses_a_missing_or_old_file_and_writes_nothing(seat, rows, match):
+    broker, client, lane, db, _q = seat
+    jid = _ended(seat, "stopped")
+    before = len(client.requests)
+    with pytest.raises(dbs.Refused, match=match):
+        dbs.plan(lane, jid, _rec(), **_notify(rows()))
+    assert _row(broker, jid)["state"] == "failed" and _wakes(lane) == []
+    assert _audits(db, "DELIVERY_PROVEN") == 0
+    assert all(r["action"] in ("drafting_job_status", "delivery_reply_status") for r in client.requests[before:])
+
+
+def test_notify_takes_an_old_file_only_with_a_recent_filed_at(seat):
+    broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    old = {**_rec(), "filed_at": "2026-03-04T03:00:00Z"}  # 21 hours before NOW
+    dbs.apply(lane, dbs.plan(lane, jid, old, **_notify(_filed(YESTERDAY))))
+    assert _wakes(lane) == [jid]
+
+
+def test_notify_refuses_an_old_file_whose_filed_at_is_older_than_a_day(seat):
+    _broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    with pytest.raises(dbs.Refused, match="no filed_at within the last 24 hours"):
+        dbs.plan(lane, jid, {**_rec(), "filed_at": "2026-03-03T23:00:00Z"}, **_notify(_filed(YESTERDAY)))
+    assert _wakes(lane) == []
+
+
+def test_notify_with_no_smokeball_read_is_refused_never_faked(seat):
+    broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+
+    def unavailable():
+        raise KeyError("SMOKEBALL_CLIENT_ID")
+
+    with pytest.raises(dbs.Refused, match="none is available here"):
+        dbs.plan(lane, jid, _rec(), notify=True, seat_factory=unavailable, now=NOW)
+    assert _row(broker, jid)["state"] == "failed" and _wakes(lane) == []
+
+
+def test_notify_with_a_valid_record_arms_the_wake_and_names_the_email(seat):
+    broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    kw = _notify()
+    p = dbs.plan(lane, jid, _rec(), **kw)
+    assert p["email"].startswith("the Operator WILL email the attorney: ")
+    assert [c["file_id"] for c in p["checked"]] == ["file-set-one", "file-set-two"]
+    assert kw["seat_factory"]().read == [MATTER]  # read by id on the job's own matter
+    dbs.apply(lane, p)
+    assert _wakes(lane) == [jid] and lane._daemon_state(jid)["wake"]["pending"] is True
+
+
+def test_the_dry_run_names_the_subject_the_operator_will_send(seat, tmp_path, monkeypatch):
+    _broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    db = tmp_path / "requests.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE requests (vendor_message_id TEXT PRIMARY KEY, internet_message_id TEXT, received_at REAL, "
+        "sender TEXT, subject TEXT)"
+    )
+    conn.execute("INSERT INTO requests VALUES ('v-1', ?, 1.0, ?, 'Discovery responses')", (FIRST, ADMIN))
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("SMD_REQUEST_INDEX_DB_PATH", str(db))
+    p = dbs.plan(lane, jid, _rec(), **_notify())
+    assert p["email"] == "the Operator WILL email the attorney: Re: Discovery responses"
+
+
+def test_a_hand_delivery_wake_never_licenses_a_firm_rules_claim(seat):
+    """FALSIFIER: the delivery reply said the responses were "checked against
+    all of your firm rules"; no check ran on a hand-filed draft."""
+    _broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    dbs.apply(lane, dbs.plan(lane, jid, _rec(), **_notify()))
+    task = _task(lane, jid)
+    assert "Delivered by: SMD, by hand." in task and "Firm rules check: not run." in task
+    assert "checked against all of your firm rules" not in task.lower()
+
+
+def test_the_wake_says_a_rules_check_ran_only_when_the_record_says_so(seat):
+    _broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    with pytest.raises(dbs.Refused, match="firm_rules_checked must be true or false"):
+        dbs.plan(lane, jid, {**_rec(), "firm_rules_checked": "yes"})
+    dbs.apply(lane, dbs.plan(lane, jid, {**_rec(), "firm_rules_checked": True}))
+    assert "Firm rules check: run." in _task(lane, jid)
+
+
+def test_a_lane_delivery_wake_carries_no_hand_lines(seat):
+    _broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    task = lane._compose_wake(jid, "delivered", {"cents": 1, "folder_id": "f", "files": []})
+    assert "Delivered by" not in task and "Firm rules check" not in task

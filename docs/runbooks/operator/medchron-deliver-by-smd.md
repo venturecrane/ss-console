@@ -37,8 +37,8 @@ page allowance exactly as a seat run would.
 **Run it as root on the seat, dry run first:**
 
 ```bash
-/opt/jobs/.venv/bin/python -m jobs.medchron.deliver_by_smd <job_id> record.json --update --dry-run
-/opt/jobs/.venv/bin/python -m jobs.medchron.deliver_by_smd <job_id> record.json --update
+/opt/jobs/.venv/bin/python -m jobs.medchron.deliver_by_smd <job_id> record.json --update --notify --dry-run
+/opt/jobs/.venv/bin/python -m jobs.medchron.deliver_by_smd <job_id> record.json --update --notify
 ```
 
 `--update` adds the wake's `Request: update into the delivered chronology.`
@@ -49,6 +49,17 @@ wake text, and writes nothing. The live run moves the row to `running` and then
 with a pending wake. The daemon dispatches the wake on its next tick and arms the
 reply watch, which pages SMD (`reply_unproven`) if the reply is not in Sent Items
 within 20 minutes.
+
+**Only `--notify` sends anything.** Without it (the default since 2026-11-24,
+when a drafting record told an attorney his documents were filed more than two
+hours before they were) the delivery is recorded with no wake and nobody is
+emailed; the dry run says `EMAIL: no email will be sent ...`. With it the dry
+run prints `EMAIL: the Operator WILL email the attorney: <subject>`, after
+reading each file by id from the matter in Smokeball: it refuses, writing
+nothing, unless every file is on the matter now at the record's size and was
+filed or updated today in the seat's timezone, or the record carries
+`"filed_at": "<ISO 8601 time>"` within the last 24 hours, and it refuses outright
+where no Smokeball read is available.
 
 **It refuses** a row already delivered, a job still queued, a job with no
 envelope (no requester or request email to answer), a hold reply still to go,

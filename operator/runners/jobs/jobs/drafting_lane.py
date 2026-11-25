@@ -396,6 +396,12 @@ class DraftingLane(Daemon):
         if isinstance(env.get("revise"), dict):
             # Code-authored: the broker decided this job revises a filed draft.
             lines.append("Mode: revision (new versions of the filed files, in place).")
+        if fields.get("delivered_by") == "smd":
+            # A hand delivery (deliver_by_smd): no lane check ran on these files, so
+            # the reply claims a firm-rules check only when the record says one ran
+            # (2026-11-24: "checked against all of your firm rules", untrue).
+            ran = fields.get("firm_rules_checked") is True
+            lines += ["Delivered by: SMD, by hand.", f"Firm rules check: {'run' if ran else 'not run'}."]
         if state != "delivered":
             lines.append(f"Reason: stopped at {stage or 'the runner (no verdict)'}.")
         return "\n".join(lines)

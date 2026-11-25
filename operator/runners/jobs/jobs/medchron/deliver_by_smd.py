@@ -1,6 +1,14 @@
-"""Record a chronology SMD filed by hand as the job's delivery, and wake DELIVER.
+"""Record a chronology SMD filed by hand as the job's delivery; with --notify, wake DELIVER.
 
-    python -m jobs.medchron.deliver_by_smd <job_id> <record.json> [--update] [--dry-run]
+    python -m jobs.medchron.deliver_by_smd <job_id> <record.json> [--update] [--notify] [--dry-run]
+
+RECORDING SENDS NO EMAIL (2026-11-24). By default this records the delivery
+with NO wake, so the requester is not emailed. ``--notify`` arms the DELIVER
+wake described below, and it is refused unless every file is on the matter in
+Smokeball now and was filed today (or the record carries ``filed_at`` within
+24 hours): ``jobs/hand_notify.py``. A drafting job told an attorney his
+documents were filed more than two hours before they were, because its
+recorder armed the wake by default. ``--quiet`` is accepted and changes nothing.
 
 Root only, on the seat, with the jobs venv's python: the same uid and
 environment as the runner daemon (`SMD_WORKSPACE_BROKER_SOCKET`,
@@ -21,10 +29,10 @@ verdict, with the delivery's facts supplied by the person who filed it:
      the counts, the folder, the files and the covered set (the set the NEXT
      update reads its delta from, so it is required);
   2. one `DELIVERY_PROVEN` row records the files as read back from the matter;
-  3. the job's daemon state goes terminal (`delivered`) with a pending wake
-     composed by the daemon's own `_compose_wake`. The daemon's own loop then
-     dispatches it and arms the reply watch, which pages SMD if the reply never
-     reaches Sent Items.
+  3. the job's daemon state goes terminal (`delivered`); with `--notify`, with a
+     pending wake composed by the daemon's own `_compose_wake`. The daemon's own
+     loop then dispatches it and arms the reply watch, which pages SMD if the
+     reply never reaches Sent Items. Without it, the wake is written consumed.
 
 What it refuses, each because the alternative is a second send or a paid run:
   * a row already `delivered` (one delivery per job; a re-run of this is a no-op
@@ -56,10 +64,11 @@ flow) is ``jobs/hand_delivery.py``, shared with the drafting lane's
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from typing import Any
 
-from .. import hand_delivery, run_record
+from .. import hand_delivery, hand_notify, run_record
 from ..hand_delivery import Refused
 
 #: The lane's own wording (medchron/lane.py `_compose_wake`); the DELIVER skill reads
@@ -112,8 +121,17 @@ def parse_record(rec: Any) -> dict[str, Any]:
     }
 
 
-def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str, Any]:
-    """Every check, and what would be written. Raises Refused."""
+def plan(
+    d: Any,
+    job_id: str,
+    rec: dict[str, Any],
+    *,
+    update: bool,
+    notify: bool = False,
+    seat_factory: Any = None,
+    now: Any = None,
+) -> dict[str, Any]:
+    """Every check, and what would be written. Raises Refused. No wake unless ``notify``."""
     fields = parse_record(rec)
     row, _st, _env = hand_delivery.check_job(
         d,
@@ -125,6 +143,15 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
         requester_keys=("requested_by", "request_ref"),
         reply_kind=REPLY_KIND,
     )
+    email = hand_notify.gate(
+        d.job_dir(job_id),
+        rec,
+        fields["delivery"]["files"],
+        notify=notify,
+        ref_key="request_ref",
+        now=now,
+        **({"seat_factory": seat_factory} if seat_factory else {}),
+    )
     task = d._compose_wake(job_id, "delivered", fields)
     if update and UPDATE_LINE not in task:
         lines = task.split("\n")
@@ -134,6 +161,7 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
     return {
         "job_id": job_id,
         "from_state": row.get("state"),
+        **email,
         # The delivered record says SMD delivered it (run_record.py): a run
         # SMD finished by hand is never counted as one that needed nobody.
         "records": [
@@ -145,7 +173,7 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
             "state": "delivered",
             "delivered_by": "smd",
             "reason": None,
-            "wake": {"pending": True, "attempts": 0, "task": task},
+            "wake": hand_notify.wake(task, notify),
         },
     }
 
@@ -158,16 +186,33 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("job_id")
     ap.add_argument("record", help="JSON: documents, pages, cents, folder_id, files, covered[, replaced, exhibits]")
     ap.add_argument("--update", action="store_true", help="the delivery is an update into the delivered chronology")
+    ap.add_argument(
+        "--notify",
+        action="store_true",
+        help="arm the DELIVER wake so the Operator emails the requester (refused unless every file is on the "
+        "matter and filed today)",
+    )
+    ap.add_argument("--quiet", action="store_true", help="accepted for older commands; recording sends no email anyway")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written; write nothing")
     a = ap.parse_args(argv)
+    if a.notify and a.quiet:
+        ap.error("--notify and --quiet contradict each other")
+    if a.notify:
+        for k, v in hand_delivery.daemon_env([n for n in hand_notify.ENV_NAMES if not os.environ.get(n)]).items():
+            os.environ[k] = v
     from . import lane as lane_mod
 
     d = lane_mod.build()
+    after = (
+        "the daemon dispatches its DELIVER wake on its next tick and the Operator emails the requester"
+        if a.notify
+        else "no wake and no email (tell the requester by hand, or record with --notify)"
+    )
     return hand_delivery.run_cli(
         d,
-        lambda lane: plan(lane, a.job_id, hand_delivery.read_record(a.record), update=a.update),
+        lambda lane: plan(lane, a.job_id, hand_delivery.read_record(a.record), update=a.update, notify=a.notify),
         dry_run=a.dry_run,
-        done=f"recorded {a.job_id} delivered; the daemon dispatches its DELIVER wake on its next tick",
+        done=f"recorded {a.job_id} delivered; {after}",
     )
 
 

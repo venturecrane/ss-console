@@ -50,6 +50,7 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -379,9 +380,16 @@ def _hand(life: Life, jid: str) -> None:
 
     rec = {"documents": 4, "pages": 30, "cents": 100, "folder_id": "folder-9",
            "files": [{"name": "A.docx", "file_id": "f1", "bytes": 10, "sha256": "a" * 64}],
-           "covered": {"covered": [], "uncovered": [], "pulled": 0}}  # fmt: skip
+           "covered": {"covered": [], "uncovered": [], "pulled": 0},
+           "filed_at": datetime.now(timezone.utc).isoformat()}  # fmt: skip
+
+    class _Filed:  # the matter in Smokeball, holding the file: --notify reads it
+        def list_files(self, matter_id: str) -> list[dict[str, Any]]:
+            return [{"id": "f1", "name": "A.docx", "size": 10}]
+
     try:
-        p = deliver_by_smd.plan(life.lane, jid, rec, update=False)
+        # The runbook's path: the requester is told (--notify), files proven on the matter.
+        p = deliver_by_smd.plan(life.lane, jid, rec, update=False, notify=True, seat_factory=_Filed)
     except deliver_by_smd.Refused:
         life.acts.append(("deliver_by_smd", "refused"))
         return

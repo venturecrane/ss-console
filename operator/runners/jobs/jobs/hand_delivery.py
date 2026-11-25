@@ -18,6 +18,9 @@ every lane and lives here:
 
 Nothing here verifies against the matter itself: the filing step already read
 each file back by id, and the person running the tool supplies what it read.
+Telling the attorney is a separate act, never the default: a recorder arms its
+DELIVER wake only with ``--notify``, after ``hand_notify.py`` has read every
+file on the matter (2026-11-24).
 
 No dollar figure is written anywhere a person reads.
 """
@@ -213,6 +216,9 @@ def run_cli(
     if use_digest:
         out["digest"] = digest(p)
     print(json.dumps(out, indent=1, default=str))
+    if p.get("email"):
+        # One plain line, outside the JSON: whether the attorney gets an email.
+        print(f"EMAIL: {p['email']}")
     if dry_run:
         if use_digest:
             print(f"Nothing was written. To record it, rerun without --dry-run and with --confirm {out['digest']}.")

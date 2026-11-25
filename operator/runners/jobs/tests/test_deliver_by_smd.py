@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -80,8 +81,33 @@ def _seat(tmp_path: Path, *, row_state: str = "failed", state: dict | None = Non
     return d, broker
 
 
+#: The --notify clock: 2026-03-04, 5 PM in the seat's zone (America/Phoenix).
+NOW = datetime(2026, 3, 5, 0, 0, tzinfo=timezone.utc)
+FILED_TODAY = [{"id": "file-new", "name": "Chronology.docx", "size": 737000, "modified": "2026-03-04T22:00:00Z"}]
+
+
+class _MatterSeat:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows, self.read = rows, []
+
+    def list_files(self, matter_id: str) -> list[dict]:
+        self.read.append(matter_id)
+        return list(self.rows)
+
+
+@pytest.fixture(autouse=True)
+def _seat_zone(monkeypatch, tmp_path):
+    monkeypatch.setenv("HERMES_TIMEZONE", "America/Phoenix")
+    monkeypatch.setenv("SMD_REQUEST_INDEX_DB_PATH", str(tmp_path / "no-requests.db"))
+
+
+def _notify(rows: list[dict] = FILED_TODAY) -> dict:
+    seat = _MatterSeat(rows)
+    return {"notify": True, "seat_factory": lambda: seat, "now": NOW}
+
+
 def _deliver(d, *, update: bool = True) -> dict:
-    p = dbs.plan(d, JOB, json.loads(json.dumps(RECORD)), update=update)
+    p = dbs.plan(d, JOB, json.loads(json.dumps(RECORD)), update=update, **_notify())
     dbs.apply(d, p)
     return p
 
@@ -280,7 +306,9 @@ def test_dry_run_prints_everything_and_writes_nothing(tmp_path, monkeypatch, cap
     rec.write_text(json.dumps(RECORD))
     monkeypatch.setattr(lane_mod, "build", lambda: d)
     assert dbs.main([JOB, str(rec), "--update", "--dry-run"]) == 0
-    out = json.loads(capsys.readouterr().out)
+    printed = capsys.readouterr().out
+    assert "EMAIL: no email will be sent" in printed
+    out = json.loads(printed[: printed.rindex("}") + 1])
     assert out["dry_run"] is True and out["records"][1][0] == "delivered"
     assert out["proof"]["action"] == "delivery_proof_record"
     assert dbs.UPDATE_LINE in out["state"]["wake"]["task"]
@@ -294,8 +322,31 @@ def test_main_applies_and_a_refusal_exits_nonzero(tmp_path, monkeypatch, capsys)
     rec = tmp_path / "record.json"
     rec.write_text(json.dumps(RECORD))
     monkeypatch.setattr(lane_mod, "build", lambda: d)
-    assert dbs.main([JOB, str(rec), "--update"]) == 0
-    assert d._daemon_state(JOB)["wake"]["pending"] is True
+    assert dbs.main([JOB, str(rec), "--update", "--quiet"]) == 0
+    assert d._daemon_state(JOB)["wake"]["pending"] is False  # recorded; nobody emailed
+    assert JOB not in d._wakes_pending()
     assert dbs.main([JOB, str(rec), "--update"]) == 2
     assert "REFUSED" in capsys.readouterr().err
     assert len(broker.records) == 2
+
+
+def test_the_default_records_with_no_wake_and_never_reads_the_matter(tmp_path):
+    """FALSIFIER (2026-11-24, drafting): a recorder that wakes DELIVER by default
+    tells the firm a document is filed before it is."""
+    d, broker = _seat(tmp_path)
+    empty = _MatterSeat([])
+    p = dbs.plan(d, JOB, json.loads(json.dumps(RECORD)), update=True, seat_factory=lambda: empty, now=NOW)
+    dbs.apply(d, p)
+    assert p["email"].startswith("no email will be sent") and empty.read == []
+    assert broker.records[-1][1] == "delivered" and JOB not in d._wakes_pending()
+
+
+@pytest.mark.parametrize(
+    ("rows", "match"),
+    [([], "is not on matter m-1"), ([{**FILED_TODAY[0], "modified": "2026-03-01T22:00:00Z"}], "not today")],
+)
+def test_notify_refuses_a_file_not_on_the_matter_today_and_writes_nothing(tmp_path, rows, match):
+    d, broker = _seat(tmp_path)
+    with pytest.raises(dbs.Refused, match=match):
+        dbs.plan(d, JOB, json.loads(json.dumps(RECORD)), update=True, **_notify(rows))
+    assert broker.records == [] and JOB not in d._wakes_pending()
