@@ -16,7 +16,7 @@ import docx
 import pytest
 
 from jobs.drafting import firm_frame as F
-from jobs.library_setup import frame_make as FM, stock as ST
+from jobs.library_setup import frame_lines as L, frame_make as FM, stock as ST
 from jobs.library_setup.make import Unusable
 
 FIRM = "Example & Example, LLP"
@@ -41,6 +41,9 @@ VERIFY = (
     "the laws of the State of California that the foregoing is true and correct. Executed on November 4, 2026, "
     "at Exampletown, California."
 )
+#: What the frame keeps of them: the words that name the kind of set are marked places.
+PRELIM_END = "section [[v.code_chapter]].310."
+MARKED_OBJECTION = OBJECTION.replace("each interrogatory", "each [[v.item]]")
 CASE_WORDS = (CLIENT, "WIDGETCO", "March 3", "Sam Server", "EX-0000-123", "Exampleville", "November 3")
 
 
@@ -56,6 +59,7 @@ def _paper(
     one_paragraph_closing: bool = False,
     tail: tuple[str, ...] = (),
     executed: str = "November 4, 2026",
+    other: str = OTHER_SIDE,
 ) -> bytes:
     d = docx.Document()
     d.core_properties.author = author
@@ -71,10 +75,10 @@ def _paper(
         FIRM,
         f"Attorneys for Plaintiff {CLIENT}",
         "SUPERIOR COURT OF THE STATE OF CALIFORNIA",
-        f"{CLIENT}, Plaintiff, v. {OTHER_SIDE}, Defendant.",
+        f"{CLIENT}, Plaintiff, v. {other}, Defendant.",
         "Case No. EX-0000-123",
         "PLAINTIFF'S RESPONSES TO SPECIAL INTERROGATORIES, SET ONE",
-        f"PROPOUNDING PARTY:\tDefendant {OTHER_SIDE}",
+        f"PROPOUNDING PARTY:\tDefendant {other}",
         f"RESPONDING PARTY:\t{responding}",
         "SET NO.:\tONE",
         "PRELIMINARY STATEMENT",
@@ -146,12 +150,19 @@ def test_the_frame_reads_back_as_the_firms_words_with_its_marked_places():
     front = [t for t, _h in frame.blocks[F.FRONT]]
     assert front[0] == "PRELIMINARY STATEMENT" and frame.blocks[F.FRONT][0][1] is True
     assert front[1].startswith('[[v.responding_party]] ("Responding Party") hereby responds')
-    assert "Set [[v.set_number]], propounded by [[v.propounding_party]]" in front[1]
-    assert front[1].endswith("section 2030.310.") and front[3] == OBJECTION
+    assert "the [[v.set_name]], Set [[v.set_number]], propounded by [[v.propounding_party]]" in front[1]
+    assert front[1].endswith(PRELIM_END) and front[3] == MARKED_OBJECTION
     closing = [t for t, _h in frame.blocks[F.CLOSING]]
     assert closing[0] == "DATED: [[v.date]]" and "[[v.signer]]" in closing
     assert any(t.startswith("I, [[v.responding_name]], declare") and "Executed on [[v.date]]" in t for t in closing)
-    assert frame.marks(F.FRONT) == {"responding_party", "propounding_party", "set_number"}
+    assert frame.marks(F.FRONT) == {
+        "responding_party",
+        "propounding_party",
+        "set_number",
+        "set_name",
+        "item",
+        "code_chapter",
+    }
 
 
 def test_a_paragraph_that_names_someone_else_is_dropped_alone_and_its_block_kept():
@@ -160,7 +171,7 @@ def test_a_paragraph_that_names_someone_else_is_dropped_alone_and_its_block_kept
     assert made.counts["front_refused"] == 1 and made.counts["kept_front"] == 3
     assert "Quillon" not in _all_text(made.data)
     frame = F.read(made.data)
-    assert frame.blocks[F.FRONT][1] == (F.HOLE, False) and frame.blocks[F.FRONT][3][0] == OBJECTION
+    assert frame.blocks[F.FRONT][1] == (F.HOLE, False) and frame.blocks[F.FRONT][3][0] == MARKED_OBJECTION
     made2, answer = ST.made_for("discovery_response", _paper(named), IDENTITY, BLOCKS)
     assert made2 is not None and answer["status"] == "made"
 
@@ -345,10 +356,26 @@ def test_a_block_whose_place_the_draft_cannot_fill_stays_the_drafts():
     assert any("no signer" in n for n in notes)
 
 
-def test_the_wording_of_one_kind_of_set_is_not_put_in_another():
+def test_a_frame_from_one_kind_of_response_serves_another_worded_for_it():
     values = F.draft_values(DRAFT, "November 24, 2026", "Attorney 1, Esq.")
     out, notes = F.apply(DRAFT, _frame(), values, "requests_for_production")
-    assert out == DRAFT and "requests_for_production" in notes[0]
+    assert "hereby responds to the Requests for Production, Set TWO" in out
+    assert "objects to each request to the extent" in out and "section 2031.310." in out
+    assert "Interrogator" not in out.split("**SPECIAL INTERROGATORY NO. 1:**")[0].split("SET NO.")[1]
+    assert "special_interrogatories paper, worded for this requests_for_production set" in notes[0]
+
+
+def test_a_shared_frame_is_recorded_in_the_library_resolution(tmp_path, monkeypatch):
+    from jobs.drafting.finish import Unit
+
+    run = _real_run(tmp_path, monkeypatch, FM.make_frame("discovery_response", _paper(), IDENTITY, BLOCKS).data)
+    for variant in ("requests_for_production", "requests_for_admission"):
+        F.at_gate(run, Unit("", "", variant, None, run.data), DRAFT)
+    rec = json.loads((run.data / "library-resolution.json").read_text())
+    assert rec["frame_shared"] == {
+        "frame_from": "special_interrogatories",
+        "used_for": ["requests_for_admission", "requests_for_production"],
+    }
 
 
 def test_a_styles_file_with_no_frame_reads_as_none():
@@ -472,9 +499,14 @@ def test_the_signer_printed_otherwise_than_authored_is_a_marked_place_never_a_dr
     assert "[[v.signer]]" in _closing(made) and "QUENTWORTH" not in _all_text(made.data)
     assert made.counts["closing_refused"] == 0
     _clean(made)
-    inline = FM._signer_lines(["By: ______ Alex J. Quentworth"], [])
-    assert inline == ["By: ______ [[v.signer]]"]
-    assert FM._signer_lines(["By: ____", FIRM], [FM.K.spaced(FIRM)]) == ["By: ____", FIRM]
+
+    def never(_line: str) -> bool:  # no line is the firm's identity
+        return False
+
+    assert L.signer_lines(["By: ______ Alex J. Quentworth"], never) == ["By: ______ [[v.signer]]"]
+    assert L.signer_lines(["By: /s/ Alex J. Quentworth"], never) == ["By: /s/ [[v.signer]]"]
+    assert L.signer_lines(["By:", "______", "Alex J. Quentworth"], never) == ["By:", "______", "[[v.signer]]"]
+    assert L.signer_lines(["By: ____", FIRM], lambda t: t == FIRM) == ["By: ____", FIRM]
 
 
 def test_a_declaration_for_additional_discovery_is_never_part_of_the_frame():
@@ -513,7 +545,7 @@ def test_a_hole_never_cuts_a_kept_sentence():
     made = FM.make_frame("discovery_response", _paper(extra_front=(run_on, tail)), IDENTITY, BLOCKS)
     front = [t for t, _h in F.read(made.data).blocks[F.FRONT]]
     assert run_on not in front and front[-1] == F.HOLE and made.counts["front_refused"] == 2
-    assert front[1].endswith("section 2030.310.") and front[3] == OBJECTION
+    assert front[1].endswith(PRELIM_END) and front[3] == MARKED_OBJECTION
 
 
 def test_a_preliminary_statement_with_line_breaks_inside_is_kept_whole():
@@ -528,4 +560,98 @@ def test_a_preliminary_statement_with_line_breaks_inside_is_kept_whole():
     d.save(buf)
     made = FM.make_frame("discovery_response", buf.getvalue(), IDENTITY, BLOCKS)
     front = [t for t, _h in F.read(made.data).blocks[F.FRONT]]
-    assert front[1].endswith("section 2030.310.") and "These responses are made solely" in front[1]
+    assert front[1].endswith(PRELIM_END) and "These responses are made solely" in front[1]
+
+
+# ---- the third rerun on real papers, 2026-11-25: each cause, invented ----
+
+
+def _paper_with(extra_front: tuple[str, ...] = (), closing: tuple[str, ...] | None = None, **kw) -> bytes:
+    """``_paper`` with its signature block replaced by one paragraph of ``closing``
+    lines joined by line breaks (each may hold tabs)."""
+    blob = _paper(extra_front=extra_front, **kw)
+    if closing is None:
+        return blob
+    d = docx.Document(io.BytesIO(blob))
+    paras = d.paragraphs
+    start = next(i for i, p in enumerate(paras) if p.text.startswith("DATED"))
+    end = next(i for i, p in enumerate(paras) if p.text == "VERIFICATION")
+    for p in paras[start + 1 : end]:
+        p._element.getparent().remove(p._element)
+    first = paras[start]
+    for r in list(first.runs):
+        r._element.getparent().remove(r._element)
+    for i, line in enumerate(closing):
+        run = first.add_run(line)
+        if i < len(closing) - 1:
+            run.add_break()
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def test_a_pleading_closing_of_breaks_and_tabs_keeps_the_firm_the_signer_and_attorneys_for():
+    closing = (
+        f"DATED: November 3, 2026\t\t\t{FIRM.upper()}",
+        "\t\t\tBy:\t______________",
+        "\t\t\tALEX J. QUENTWORTH",
+        f"\t\t\tAttorneys for Plaintiff, {CLIENT}",
+    )
+    made = FM.make_frame("discovery_response", _paper_with(closing=closing), IDENTITY, BLOCKS)
+    assert _closing(made)[:6] == [
+        "DATED: [[v.date]]",
+        FIRM.upper(),
+        "By:",
+        "______________",
+        "[[v.signer]]",
+        "Attorneys for Plaintiff, [[v.responding_name]]",
+    ]
+    assert made.counts["closing_refused"] == 0 and "QUENTWORTH" not in _all_text(made.data)
+    _clean(made)
+
+
+def test_a_party_short_form_never_marks_an_ordinary_word_and_a_run_of_marks_is_a_hole():
+    party = "WIDGETCO EXAMPLE COMPANY"
+    plain_word = '25. "YOU" means the company that answers and its agents.'
+    garbled = f"26. Refer to WIDGETCO, {party} and WIDGETCO in each answer."
+    paper = _paper(PRELIM.replace(OTHER_SIDE, party), extra_front=(plain_word, garbled), other=party)
+    made = FM.make_frame("discovery_response", paper, IDENTITY, BLOCKS)
+    assert "COMPANY" not in _all_text(made.data)
+    front = [t for t, _h in F.read(made.data).blocks[F.FRONT]]
+    assert plain_word in front and front[-1] == F.HOLE
+    assert made.counts["front_drop_fragment"] == 1 and "WIDGETCO" not in _all_text(made.data)
+
+
+def test_a_numbered_list_with_a_dropped_item_is_numbered_afresh_with_the_drafts_definition_in_it():
+    defs = (
+        '1. "DOCUMENT" means a writing as defined in Evidence Code section 250.',
+        '2. "INCIDENT" means the collision of March 3, 2025.',
+        '3. "PERSON" means a natural person or an entity.',
+    )
+    made = FM.make_frame("discovery_response", _paper(extra_front=defs), IDENTITY, BLOCKS)
+    frame = F.read(made.data)
+    draft = DRAFT.replace("The model's own opening words.", '7. "INCIDENT" means the fall of June 1, 2025.')
+    out, _n = F.apply(draft, frame, F.draft_values(draft, "November 24, 2026", "Attorney 1, Esq."))
+    assert '1. "DOCUMENT" means' in out and '2. "INCIDENT" means the fall' in out and '3. "PERSON" means' in out
+    assert F.renumber(["4. a", "6. b", "x", "9. c"]) == ["4. a", "5. b", "x", "9. c"]
+
+
+def test_a_served_date_line_is_the_identification_blocks_and_an_attorney_line_is_the_signer():
+    d = docx.Document(io.BytesIO(_paper(extra_front=("Alex J. Quentworth, Esq.",))))
+    set_no = next(p for p in d.paragraphs if p.text.startswith("SET NO."))
+    set_no.insert_paragraph_before("SET NO.:\tONE")
+    set_no.text = "DATE SERVED:\tOctober 1, 2026"
+    buf = io.BytesIO()
+    d.save(buf)
+    made = FM.make_frame("discovery_response", buf.getvalue(), IDENTITY, BLOCKS)
+    front = [t for t, _h in F.read(made.data).blocks[F.FRONT]]
+    assert made.counts["front_refused"] == 0 and front[-1] == "[[v.signer]]"
+    assert "October 1" not in _all_text(made.data)
+
+
+def test_the_template_name_and_the_counts_are_gone_from_the_application_properties():
+    made = FM.make_frame("discovery_response", _paper(), IDENTITY, BLOCKS)
+    with zipfile.ZipFile(io.BytesIO(made.data)) as z:
+        app = z.read("docProps/app.xml").decode()
+    for tag in ("Template", "Pages", "Words", "Characters", "Lines", "Paragraphs"):
+        assert f"<{tag}>" not in app, tag

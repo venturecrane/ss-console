@@ -87,7 +87,11 @@ READER = "reader"
 #: into the library file. Ids, numbers and dates only.
 LAYOUT_PRECEDENCE = "layout_precedence"
 _PRECEDENCE_KEYS = frozenset({"winners", "replaced", "unplaced"})
-_OPTIONAL_KEYS = frozenset({FIRM_EDIT, LAYOUT_PRECEDENCE, READER})
+#: A discovery draft laid in a frame made from another kind of set of the same
+#: paper (``runners/jobs/jobs/drafting/firm_frame``): the frame's kind and the
+#: kinds of set it was worded for. Kind codes only.
+FRAME_SHARED = "frame_shared"
+_OPTIONAL_KEYS = frozenset({FIRM_EDIT, LAYOUT_PRECEDENCE, READER, FRAME_SHARED})
 _RECORD_KEYS = frozenset({"schema_version", "path", "kind", "resolution", "base", "overridden"})
 _EDIT_KEYS = frozenset({"status", "code", "version", "replaces_version", "sha256", "accepted_at", "install"})
 EDIT_USED = "used"
@@ -308,6 +312,7 @@ def record_problems(doc: Any) -> list[str]:
     out = edit_problems(doc[FIRM_EDIT]) if FIRM_EDIT in doc else []
     out += precedence_problems(doc[LAYOUT_PRECEDENCE]) if LAYOUT_PRECEDENCE in doc else []
     out += readers_mod.record_problems(doc[READER]) if READER in doc else []
+    out += _shared_problems(doc[FRAME_SHARED]) if FRAME_SHARED in doc else []
     if doc["schema_version"] != RECORD_SCHEMA_VERSION:
         out.append(f"schema {doc['schema_version']!r}")
     if doc["path"] not in PATHS:
@@ -324,10 +329,21 @@ def record_problems(doc: Any) -> list[str]:
     return out
 
 
+def _shared_problems(block: Any) -> list[str]:
+    ok = (
+        isinstance(block, dict)
+        and set(block) == {"frame_from", "used_for"}
+        and isinstance(block["frame_from"], str)
+        and isinstance(block["used_for"], list)
+        and all(isinstance(x, str) for x in block["used_for"])
+    )
+    return [] if ok else [f"{FRAME_SHARED} is not {{frame_from, used_for: [kinds]}}"]
+
+
 def add_to_record(directory: str | Path, key: str, block: dict[str, Any]) -> Path:
     """The record already beside the document, with one optional key added.
     Raises ``ValueError`` when there is no record, or the result is not one."""
-    if key != LAYOUT_PRECEDENCE:
+    if key not in (LAYOUT_PRECEDENCE, FRAME_SHARED):
         raise ValueError(f"{key!r} is not a key a record gains after it is written")
     try:
         doc = json.loads((Path(directory) / RECORD_NAME).read_text(encoding="utf-8"))
@@ -362,6 +378,7 @@ __all__ = [
     "FALLBACKS",
     "FIRM_EDIT",
     "FIRM_MADE",
+    "FRAME_SHARED",
     "LAYOUT_PRECEDENCE",
     "NOT_STARTED",
     "PATHS",

@@ -52,6 +52,19 @@ LEAD = re.compile(r"^\[\[frame\.(front|closing)\.(\d+)(\.head|\.hole)?\]\]")
 HOLE = ""
 SET_TYPE = re.compile(r"^\[\[frame\.set_type\.([a-z_]+)\]\]\s*$")
 VALUE = re.compile(r"\[\[v\.([a-z_]+)\]\]")
+#: The kind-of-set places (``library_setup/frame_facts.type_values``): filled
+#: with the draft's own kind, so a frame serves every kind of set.
+TYPE_VALUES = (
+    "set_name",
+    "set_name_upper",
+    "item",
+    "item_cap",
+    "item_upper",
+    "items",
+    "items_cap",
+    "items_upper",
+    "code_chapter",
+)
 VALUES = (
     "responding_party",
     "propounding_party",
@@ -60,6 +73,7 @@ VALUES = (
     "set_number",
     "date",
     "signer",
+    *TYPE_VALUES,
 )
 #: The identification block's lines: "PROPOUNDING PARTY: ...", "SET NO.: ONE".
 #: Anchored at the line's start, a party line with its colon: prose that names
@@ -67,6 +81,8 @@ VALUES = (
 ID_LINE = re.compile(
     r"(?i)^[\s|]*(?:(PROPOUNDING|RESPONDING)\s+PARTY\s*:|SET\s+(?:NO\.?|NUMBER)\s*:?)\s*\|?\s*([^|\n]*)"
 )
+#: A line naming when the set was served: part of the identification block.
+SERVED_LINE = re.compile(r"(?i)^\W*(?:date\s+(?:of\s+)?served|served\s+on|date\s+of\s+service)\s*:")
 #: Where a paper's closing starts (``revise/responses.py`` ``_CLOSING`` without service).
 CLOSING_START = re.compile(r"^(DATED|DATE:|RESPECTFULLY|VERIFICATION)\b", re.I)
 #: Where it ends: the proof of service and a set's declaration for additional
@@ -102,6 +118,13 @@ def identification(lines: list[str]) -> tuple[dict[str, str], int]:
         key = f"{m.group(1).lower()}_party" if m.group(1) else "set_number"
         out.setdefault(key, value)
         last = i
+    # A served-date line right after the block is the block's (2026-11-25: a
+    # response's front refused its "Date Served:" line as a case fact).
+    for j in range(last + 1, min(last + 4, len(lines))) if last >= 0 else ():
+        if SERVED_LINE.match(plain(lines[j])):
+            last = j
+        elif plain(lines[j]):
+            break
     for role in ("responding", "propounding"):
         if f"{role}_party" in out:
             out[f"{role}_name"] = name_of(out[f"{role}_party"])
@@ -182,8 +205,29 @@ def read(blob: bytes | None) -> Frame | None:
 
 #: A paragraph that defines a term: ``"INCIDENT" means ...``, ``ACCIDENT shall mean ...``.
 _DEFINES = re.compile(
-    r"^\W*[\"“]?([A-Z][A-Z0-9 '’-]{1,40}?)[\"”]?\W*\s+(?:means|shall\s+mean|refers?\s+to|includes?|is\s+defined)\b"
+    r"^\W*(?:\d{1,3}[.)]\s*)?[\"“]?([A-Z][A-Z0-9 '’-]{1,40}?)[\"”]?\W*\s+"
+    r"(?:means|shall\s+mean|refers?\s+to|includes?|is\s+defined)\b"
 )
+#: A numbered item's number: "25. ", "3) ".
+_NUMBERED = re.compile(r"^(\d{1,3})([.)])(\s+)")
+
+
+def renumber(paras: list[str]) -> list[str]:
+    """Each run of numbered paragraphs numbered afresh from its first number: a
+    dropped item, or a draft's own definition in a hole, never leaves a gap or
+    a repeat (2026-11-25: a set's definitions came through with gaps)."""
+    out: list[str] = []
+    nxt: int | None = None
+    for p in paras:
+        m = _NUMBERED.match(p)
+        if not m:
+            nxt = None
+            out.append(p)
+            continue
+        nxt = int(m.group(1)) if nxt is None else nxt
+        out.append(f"{nxt}{m.group(2)}{m.group(3)}{p[m.end() :]}")
+        nxt += 1
+    return out
 
 
 def _term(text: str) -> str:
@@ -206,26 +250,33 @@ def _md(paras: list[tuple[str, bool]], values: dict[str, str], fill: list[str] |
     pending = list(fill or [])
     for text, head in paras:
         if text == HOLE:
-            out += [x for p in pending for x in (p, "")]
+            out += pending
             pending = []
             continue
         filled = VALUE.sub(lambda m: values[m.group(1)], text)
-        out += [f"**{filled}**" if head else filled, ""]
-    return out + [x for p in pending for x in (p, "")]
+        out.append(f"**{filled}**" if head else filled)
+    return [x for p in renumber(out + pending) for x in (p, "")]
 
 
 def apply(doc: str, frame: Frame, values: dict[str, str], variant: str | None = None) -> tuple[str, list[str]]:
     """``doc`` with its front and closing in the frame's words, each block only
-    when every marked place in it has a value. Returns (doc, notes)."""
-    from .served import SET_TYPES
+    when every marked place in it has a value. Returns (doc, notes).
 
-    if variant in SET_TYPES and frame.set_type in SET_TYPES and variant != frame.set_type:
-        return doc, [f"the firm's standard wording is for {frame.set_type}; this set is {variant}, so it is not used"]
+    A frame made from one kind of set serves another of the same paper (a
+    response's frame any response, a set's any set): the words that named its
+    kind ("Special Interrogatories", "each interrogatory", section 2030.x) are
+    marked places, filled with this draft's own kind."""
+    from ..library_setup.frame_facts import type_values
+
     lines = doc.splitlines()
     where = regions(lines)
     if where is None:
         return doc, ["the firm's standard wording was not used: the draft has no identification block or no items"]
+    kind = variant if type_values(variant or "") else (where.set_type or frame.set_type)
+    values = {**type_values(kind), **values}
     notes: list[str] = []
+    if frame.set_type and kind and kind != frame.set_type:
+        notes.append(f"the firm's standard wording is from its {frame.set_type} paper, worded for this {kind} set")
     out = list(lines)
     named = {
         FRONT: "opening (preliminary statement, objections, definitions)",
@@ -257,6 +308,21 @@ def draft_values(doc: str, date: str, signer: str) -> dict[str, str]:
     return {**found, "date": date, "signer": signer}
 
 
+def _record_shared(data: Any, frame_from: str, used_for: str) -> None:
+    """The library-resolution record says the frame served another kind of set."""
+    import json
+    from pathlib import Path
+
+    from operator_connector_sdk.library.caller import FRAME_SHARED, RECORD_NAME, add_to_record
+
+    try:
+        had = json.loads((Path(data) / RECORD_NAME).read_text(encoding="utf-8")).get(FRAME_SHARED) or {}
+    except (OSError, ValueError, AttributeError):
+        had = {}
+    kinds = sorted({*had.get("used_for", []), used_for})
+    add_to_record(data, FRAME_SHARED, {"frame_from": frame_from, "used_for": kinds})
+
+
 def at_gate(run: Any, unit: Any, md: str) -> str:
     """A discovery unit's markdown with the firm's frame, when the file the
     document is made in carries one; else as given."""
@@ -270,6 +336,8 @@ def at_gate(run: Any, unit: Any, md: str) -> str:
     body, notes = render.split_notes(md)
     lines = run._block_lines()
     body, said = apply(body, frame, draft_values(body, run._long_date(), lines[0] if lines else ""), unit.variant)
+    if unit.variant and frame.set_type and unit.variant != frame.set_type:
+        _record_shared(run.data, frame.set_type, unit.variant)
     notes = "\n".join([notes, *(f"- {n}" for n in said)]).strip()
     return run._join(body, notes)
 

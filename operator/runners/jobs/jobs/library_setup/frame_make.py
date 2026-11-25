@@ -47,7 +47,7 @@ from typing import Iterable
 from lxml import etree
 
 from ..drafting import firm_frame as F
-from . import frame_facts as K
+from . import frame_facts as K, frame_lines as L
 from .make import TITLE_WORDS, Unusable
 from .styles_make import make_styles
 
@@ -60,12 +60,6 @@ _CHUNK = 280
 HOLE = ""
 VOCAB = K.VOCAB
 _FOOTER = re.compile(r"^word/footer\d*\.xml$")
-#: A closing's Dated line, its label kept: "DATED:", "Dated", "Date:".
-_DATED = re.compile(r"(?i)^(\W*(?:dated\s*:?|date\s*:))\s*\S.*$")
-#: "By:" with its blank, alone on its line: the next line is the signer's name.
-_BY_BLANK = re.compile(r"(?i)^by\s*:?\s*_*\s*$")
-#: "By: ______ Attorney Name": the name after the blank is the signer's.
-_BY_NAME = re.compile(r"(?i)^(by\s*:?\s*_*\s*)([A-Za-z][^\d]{2,60})$")
 #: A bare year left in the closing (a date's remnant), not a code section ("2015.5").
 _YEAR = re.compile(r"\b(?:19|20)\d{2}\b(?![.\d])")
 #: Where a kept sentence may end: a full stop, a colon, a closing quote or bracket.
@@ -126,19 +120,28 @@ class Facts:
     signers: list[re.Pattern[str]]
     allowed: frozenset[str]
     identity: list[re.Pattern[str]]
+    set_type: str = ""
+
+    def identity_only(self, text: str) -> bool:
+        for pat in self.identity:
+            text = pat.sub(" ", text)
+        return not text.strip(" ,.;:")
 
     def blank(self, text: str, closing: bool) -> str:
         """One paragraph with its case facts replaced by marked places."""
+        if not closing and L.ATTORNEY_LINE.match(text) and not self.identity_only(text):
+            return "[[v.signer]]"
         text = K.mark_names(text, self.pairs)
         number = self.values.get("set_number")
         if number:
             text = re.sub(rf"(?i)\b(set\s+(?:no\.?\s*)?){re.escape(number)}\b", r"\1[[v.set_number]]", text)
         for pat in self.signers:
             text = pat.sub("[[v.signer]]", text)
+        text = K.mark_set_type(text, self.set_type)
         if not closing:
             return text
-        dated = _DATED.match(text)
-        if dated:  # the whole value is the paper's date, a blank and a bare year included
+        dated = L.DATED.match(text)
+        if dated and L.dated_value(dated.group(2)):  # the whole value is the date, a blank and a year included
             return dated.group(1) + " [[v.date]]"
         return K.DATE.sub("[[v.date]]", K.DATE_BLANK.sub("[[v.date]]", text))
 
@@ -155,7 +158,7 @@ def facts_of(lines: list[str], identity: list[str], blocks: Iterable[Iterable[st
     # identity is never marked: it would cut the firm's name in the signature.
     pairs = [(t, m) for t, m in K.name_marks(values, K.caption_parties(lines[: where.id_end])) if t not in allowed]
     pats = [K.spaced(p) for p in sorted(identity, key=len, reverse=True) if p.strip()]
-    return Facts(values, pairs, _signers(blocks), allowed, pats), where
+    return Facts(values, pairs, _signers(blocks), allowed, pats, where.set_type), where
 
 
 def _is_head(text: str) -> bool:
@@ -173,59 +176,42 @@ def blank_regions(
     out: dict[str, list[tuple[str, bool]]] = {F.FRONT: [], F.CLOSING: []}
     counts: dict[str, int] = {}
     front = [_fold(raw.replace("\t", " ")) for raw in lines[slice(*where.front)]]
-    closing = [_fold(ln.replace("\t", " ")) for raw in lines[slice(*where.closing)] for ln in raw.split("\n")]
-    signed = _signer_lines([t for t in closing if t], facts.identity)
+    signed = L.signer_lines(L.closing_lines(lines[slice(*where.closing)]), facts.identity_only)
     for region, texts in ((F.FRONT, front), (F.CLOSING, signed)):
-        kept, dropped = _judge(facts, [t for t in texts if t], region == F.CLOSING)
+        kept, why = _judge(facts, [t for t in texts if t], region == F.CLOSING)
+        dropped = sum(why.values())
         counts[f"{region}_paragraphs"] = sum(1 for t, _h in kept if t != HOLE) + dropped
         counts[f"{region}_refused"] = dropped
+        counts.update({f"{region}_drop_{k}": v for k, v in why.items()})
         out[region] = kept
     return out, where.set_type, counts
 
 
-def _signer_lines(lines: list[str], identity: list[re.Pattern[str]]) -> list[str]:
-    """The closing's lines with the signing attorney's name a marked place: the
-    line after a bare "By: ____", or the name after its blank. The firm's own
-    signer is the job's attorney, never a dropped line. A line that is the
-    firm's own identity (its name after "By:") is left to the identity check."""
-
-    def identity_only(text: str) -> bool:
-        for pat in identity:
-            text = pat.sub(" ", text)
-        return not text.strip(" ,.;:")
-
-    out: list[str] = []
-    for i, line in enumerate(lines):
-        named = _BY_NAME.match(line)
-        if named and not _BY_BLANK.match(line):
-            line = line if identity_only(named.group(2)) else named.group(1) + "[[v.signer]]"
-        elif i and _BY_BLANK.match(lines[i - 1]) and len(line.split()) <= 6 and not re.search(r"\d", line):
-            line = line if identity_only(line) else "[[v.signer]]"
-        out.append(line)
-    return out
-
-
-def _judge(facts: Facts, texts: list[str], closing: bool) -> tuple[list[tuple[str, bool]], int]:
-    """Each paragraph kept (marked) or dropped alone. In the front a dropped
-    paragraph leaves one hole per run, and a kept paragraph whose sentence runs
-    on into a dropped one goes with it: a hole never cuts a sentence."""
+def _judge(facts: Facts, texts: list[str], closing: bool) -> tuple[list[tuple[str, bool]], dict[str, int]]:
+    """Each paragraph kept (marked) or dropped alone, with the reason codes of
+    the drops. In the front a dropped paragraph leaves one hole per run, a kept
+    paragraph whose sentence runs on into a dropped one goes with it (a hole
+    never cuts a sentence). A numbered list that loses an item keeps its other
+    items: ``firm_frame`` numbers every list afresh when it lays the frame, the
+    draft's own definitions in the hole included, so a gap never shows."""
     kept: list[tuple[str, bool]] = []
-    dropped = 0
+    why: dict[str, int] = {}
     for text in texts:
         blanked = facts.blank(text, closing)
-        year = closing and _YEAR.search(F.VALUE.sub(" ", blanked))
-        if not year and not K.is_case_fact(blanked, facts.allowed, facts.identity):
+        reason = "year" if closing and _YEAR.search(F.VALUE.sub(" ", blanked)) else ""
+        reason = reason or K.case_fact(blanked, facts.allowed, facts.identity)
+        if not reason:
             kept.append((blanked, _is_head(blanked)))
             continue
-        dropped += 1
+        why[reason] = why.get(reason, 0) + 1
         if closing:
             continue
         if kept and kept[-1][0] != HOLE and not kept[-1][1] and not _ENDS.search(kept[-1][0]):
             kept.pop()
-            dropped += 1
+            why["sentence_runs_on"] = why.get("sentence_runs_on", 0) + 1
         if not kept or kept[-1][0] != HOLE:
             kept.append((HOLE, False))
-    return kept, dropped
+    return kept, why
 
 
 def _title_words(text: str) -> str:
@@ -320,9 +306,25 @@ def _with_body(blob: bytes, paragraphs: list[str]) -> bytes:
 
 
 _CORE, _APP = "docProps/core.xml", "docProps/app.xml"
-#: What dates the firm's paper and counts its editing: created, saved, printed,
-#: revision and editing time. The made file is no copy of that paper's history.
-_DATED_PROPS = frozenset({"created", "modified", "lastPrinted", "revision", "TotalTime"})
+#: What dates the firm's paper, counts it or names where it came from: created,
+#: saved, printed, revision, editing time, its template, and its page, word,
+#: character, line and paragraph counts. The made file is no copy of that paper.
+_DATED_PROPS = frozenset(
+    {
+        "created",
+        "modified",
+        "lastPrinted",
+        "revision",
+        "TotalTime",
+        "Template",
+        "Pages",
+        "Words",
+        "Characters",
+        "CharactersWithSpaces",
+        "Lines",
+        "Paragraphs",
+    }
+)
 
 
 def _without_dates(raw: bytes) -> bytes:

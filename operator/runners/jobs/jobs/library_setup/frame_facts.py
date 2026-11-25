@@ -152,27 +152,109 @@ def name_marks(values: dict[str, str], caption: dict[str, list[str]]) -> list[tu
 
 
 def mark_names(text: str, pairs: list[tuple[str, str]]) -> str:
+    """Each party's name, and its short forms, as its marked place. A one-word
+    short form is matched only as a name is written (capitalised or in
+    capitals), never as an ordinary word: "Company" in a party's name must not
+    mark "the company" in a definition (2026-11-25, a garbled definition 25)."""
     for name, mark in pairs:
-        text = re.sub(rf"(?i)(?<![\w\[]){re.escape(name)}(?![\w\]])", mark, text)
+        if " " in name.strip():
+            text = re.sub(rf"(?i)(?<![\w\[]){re.escape(name)}(?![\w\]])", mark, text)
+            continue
+        forms = {name, name.upper(), name[:1].upper() + name[1:].lower()}
+        for form in sorted(forms, key=len, reverse=True):
+            text = re.sub(rf"(?<![\w\[]){re.escape(form)}(?![\w\]])", mark, text)
     return text
 
 
-def is_case_fact(text: str, allowed: frozenset[str], identity: Iterable[re.Pattern[str]]) -> bool:
-    """True when the marked paragraph still holds what may be a case fact."""
+#: The Code of Civil Procedure chapter of each kind of set: a response to
+#: interrogatories cites 2030.x, to a demand for production 2031.x, to requests
+#: for admission 2033.x.
+CHAPTERS = {
+    "special_interrogatories": "2030",
+    "form_interrogatories": "2030",
+    "requests_for_production": "2031",
+    "requests_for_admission": "2033",
+}
+
+
+def item_word(set_type: str) -> str:
+    return "interrogatory" if set_type.endswith("interrogatories") else "request"
+
+
+def type_values(set_type: str) -> dict[str, str]:
+    """What the set-type marked places say for a set of ``set_type``."""
+    from ..drafting.served import SET_TYPES
+
+    if set_type not in SET_TYPES:
+        return {}
+    name, item = SET_TYPES[set_type][0], item_word(set_type)
+    items = "interrogatories" if item == "interrogatory" else "requests"
+    return {
+        "set_name": name,
+        "set_name_upper": name.upper(),
+        "item": item,
+        "item_cap": item.capitalize(),
+        "item_upper": item.upper(),
+        "items": items,
+        "items_cap": items.capitalize(),
+        "items_upper": items.upper(),
+        "code_chapter": CHAPTERS[set_type],
+    }
+
+
+def mark_set_type(text: str, set_type: str) -> str:
+    """The words that name the source's kind of set as marked places, so a
+    frame from one kind of set serves another (a firm's responses share their
+    preliminary statement and signature across kinds)."""
+    vals = type_values(set_type)
+    if not vals:
+        return text
+    pairs = [(vals["set_name"], "set_name"), (vals["set_name_upper"], "set_name_upper")]
+    for key in ("items", "item"):
+        pairs += [(vals[f"{key}_upper"], f"{key}_upper"), (vals[f"{key}_cap"], f"{key}_cap"), (vals[key], key)]
+    for words, mark in pairs:
+        text = re.sub(rf"(?<![\w\[]){re.escape(words)}(?![\w\]])", f"[[v.{mark}]]", text)
+    return re.sub(rf"\b{vals['code_chapter']}(?=\.\d)", "[[v.code_chapter]]", text)
+
+
+#: Two marks with at most a few characters between: marking left a fragment
+#: ("[[v.a]] [[v.a]]"), never a sentence.
+FRAGMENT = re.compile(r"\]\][\s,&/'’-]{0,3}\[\[v\.")
+
+
+def case_fact(text: str, allowed: frozenset[str], identity: Iterable[re.Pattern[str]]) -> str:
+    """Why the marked paragraph may still hold a case fact (a reason code), or ''."""
+    if FRAGMENT.search(text):
+        return "fragment"
     left = F.VALUE.sub(" ", text)
     for pat in identity:
         left = pat.sub(" ", left)
     for pat in _FIXED_PHRASES:
         left = pat.sub(" ", left)
-    if DATE.search(left) or _MONEY.search(left) or _EMAIL.search(left) or _PHONE.search(left):
-        return True
-    if _CASE_NO.search(left):
-        return True
+    for code, pat in (("date", DATE), ("money", _MONEY), ("email", _EMAIL), ("phone", _PHONE), ("case_no", _CASE_NO)):
+        if pat.search(left):
+            return code
     for w in WORD.findall(left):
         low = re.sub(r"(?:['’]s?|s['’])$", "", w.lower())
         if w != w.lower() and len(w) > 1 and low not in VOCAB and low.rstrip("s") not in VOCAB and low not in allowed:
-            return True
-    return False
+            return "unknown_word"
+    return ""
 
 
-__all__ = ["DATE", "VOCAB", "caption_parties", "is_case_fact", "mark_names", "name_marks", "party_values", "spaced"]
+def is_case_fact(text: str, allowed: frozenset[str], identity: Iterable[re.Pattern[str]]) -> bool:
+    """True when the marked paragraph still holds what may be a case fact."""
+    return bool(case_fact(text, allowed, identity))
+
+
+__all__ = [
+    "DATE",
+    "FRAGMENT",
+    "VOCAB",
+    "caption_parties",
+    "case_fact",
+    "is_case_fact",
+    "mark_names",
+    "name_marks",
+    "party_values",
+    "spaced",
+]
