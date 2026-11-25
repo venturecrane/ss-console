@@ -63,7 +63,7 @@ from ..firmbase.base import DOCUMENT, W
 
 MARKED, STYLES, PROTOTYPES = "marked", "styles", "prototypes"
 _MARK = re.compile(r"\[\[[a-z0-9._]+\]\]|\{\{[a-z][a-z0-9._]*\}\}")
-_PAGE_LINE = re.compile(r"(?i)(\d+|page|of|\s)*")
+_PAGE_LINE = re.compile(r"(?i)(\d+|page|of|[-\u2013\u2014]|\s)*")
 _PUNCT_ONLY = re.compile(r"\A[\s\W_]*\Z")
 _STORY_WITH_PAGES = re.compile(r"\Aword/(header|footer)\d*\.xml\Z")
 _FIELDS_ALLOWED = frozenset({"PAGE", "NUMPAGES", "SECTIONPAGES", "SECTION"})

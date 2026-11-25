@@ -47,7 +47,9 @@ from .revise.responses import _head as item_head
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 KINDS = ("discovery_response", "discovery_set")
 FRONT, CLOSING = "front", "closing"
-LEAD = re.compile(r"^\[\[frame\.(front|closing)\.(\d+)(\.head)?\]\]")
+LEAD = re.compile(r"^\[\[frame\.(front|closing)\.(\d+)(\.head|\.hole)?\]\]")
+#: A paragraph of the firm's paper that held a case fact: dropped, its place kept.
+HOLE = ""
 SET_TYPE = re.compile(r"^\[\[frame\.set_type\.([a-z_]+)\]\]\s*$")
 VALUE = re.compile(r"\[\[v\.([a-z_]+)\]\]")
 VALUES = (
@@ -165,18 +167,44 @@ def read(blob: bytes | None) -> Frame | None:
             continue
         seen = True
         key = (m.group(1), int(m.group(2)))
-        joined.setdefault(key, ([], bool(m.group(3))))[0].append(text[m.end() :])
-    for (region, _n), (parts, head) in sorted(joined.items(), key=lambda kv: (kv[0][0], kv[0][1])):
-        frame.blocks[region].append(("".join(parts).strip(), head))
+        joined.setdefault(key, ([], m.group(3) or ""))[0].append(text[m.end() :])
+    for (region, _n), (parts, how) in sorted(joined.items(), key=lambda kv: (kv[0][0], kv[0][1])):
+        frame.blocks[region].append((HOLE if how == ".hole" else "".join(parts).strip(), how == ".head"))
     return frame if seen and any(frame.blocks.values()) else None
 
 
-def _md(paras: list[tuple[str, bool]], values: dict[str, str]) -> list[str]:
+#: A paragraph that defines a term: ``"INCIDENT" means ...``, ``ACCIDENT shall mean ...``.
+_DEFINES = re.compile(
+    r"^\W*[\"“]?([A-Z][A-Z0-9 '’-]{1,40}?)[\"”]?\W*\s+(?:means|shall\s+mean|refers?\s+to|includes?|is\s+defined)\b"
+)
+
+
+def _term(text: str) -> str:
+    m = _DEFINES.match(plain(text))
+    return " ".join(m.group(1).split()).upper() if m else ""
+
+
+def _draft_definitions(lines: list[str], frame_texts: list[str]) -> list[str]:
+    """The draft's own definitions of terms the frame does not define: the
+    matter's facts, written fresh, which go where the frame has a hole."""
+    have = {_term(t) for t in frame_texts} - {""}
+    paras = [p.strip() for p in "\n".join(lines).split("\n\n") if p.strip()]
+    return [p for p in paras if _term(p) and _term(p) not in have]
+
+
+def _md(paras: list[tuple[str, bool]], values: dict[str, str], fill: list[str] | None = None) -> list[str]:
+    """The block as markdown; the first hole takes ``fill`` (the draft's own
+    matter definitions), and with no hole they follow the block's last line."""
     out: list[str] = []
+    pending = list(fill or [])
     for text, head in paras:
+        if text == HOLE:
+            out += [x for p in pending for x in (p, "")]
+            pending = []
+            continue
         filled = VALUE.sub(lambda m: values[m.group(1)], text)
         out += [f"**{filled}**" if head else filled, ""]
-    return out
+    return out + [x for p in pending for x in (p, "")]
 
 
 def apply(doc: str, frame: Frame, values: dict[str, str], variant: str | None = None) -> tuple[str, list[str]]:
@@ -206,7 +234,11 @@ def apply(doc: str, frame: Frame, values: dict[str, str], variant: str | None = 
         if region == CLOSING and a >= len(lines):
             notes.append(f"the firm's standard {named[region]} was not used: the draft has no closing")
             continue
-        out[a:b] = ["", *_md(frame.blocks[region], values)]
+        texts = [t for t, _h in frame.blocks[region] if t != HOLE]
+        if not texts:
+            continue
+        fill = _draft_definitions(lines[a:b], texts) if region == FRONT else None
+        out[a:b] = ["", *_md(frame.blocks[region], values, fill)]
         notes.append(f"the {named[region]} is the firm's own standard wording, from its library file")
     return "\n".join(out).rstrip() + "\n", notes
 
