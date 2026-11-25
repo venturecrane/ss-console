@@ -53,7 +53,7 @@ NOT_NAMED = "ground_not_named"
 #: A marker with no ``|`` whose run holds no objection sentence to adopt.
 NO_SENTENCE = "no_objection_sentence"
 #: How a marker was settled when it was converted.
-ONLY, HELD, LONG_FORM, BOOK_ORDER, OWN, ALREADY = "only", "held", "long_form", "book_order", "own_words", "already"
+ONLY, HELD, MOST_USED, BOOK_ORDER, OWN, ALREADY = "only", "held", "most_used", "book_order", "own_words", "already"
 
 #: A firm rule that tells a draft to include objections generally, so the
 #: draft's candidate objections are taken (the one place this is decided). By
@@ -153,28 +153,25 @@ def adopts(rules: Iterable[dict[str, Any]]) -> bool:
     return False
 
 
-def _long_form(text: str, lead: str) -> bool:
-    return bool(lead) and _words(text).startswith(_words(lead.split("{item}", 1)[0]))
-
-
 def choose(keys: list[str], sentence: str, book: Any) -> tuple[str, str]:
     """(the entry, how) for a ground several entries match: the one whose
-    sentence the marker already holds, else the long-form entry, else the
-    first in book order."""
+    sentence the marker already holds, else the one the firm's finished
+    documents carry most often (``Book.uses``, read from each entry's
+    ``source``), else the first in book order, which is how the book lists
+    the firm's primary form. 2026-11-25: preferring the long form took
+    attorney-client _034 where the firm's finals use _033."""
     if len(keys) == 1:
         return keys[0], ONLY
     said = f" {_words(sentence)} "
     held = [k for k in keys if _words(book.text(k, item="")) and _held(book.entries[k].text, said)]
     if held:
         return held[0], HELD
-    lead = book.objection_lead()
-    longs = [k for k in keys if _long_form(book.entries[k].text, lead)]
-    if len(longs) != 1:  # the lead does not tell them apart: the one entry clearly longer than the rest
-        pool = longs or keys
-        sizes = sorted(((len(_words(book.entries[k].text)), -pool.index(k), k) for k in pool), reverse=True)
-        longs = [sizes[0][2]] if sizes[0][0] > sizes[1][0] else []
-    if longs:
-        return longs[0], LONG_FORM
+    counts = [book.uses(k) for k in keys]
+    if all(c is not None for c in counts):
+        best = max(c or 0 for c in counts)
+        top = [k for k, c in zip(keys, counts) if c == best]
+        if len(top) < len(keys):
+            return top[0], MOST_USED
     return keys[0], BOOK_ORDER
 
 
@@ -296,6 +293,29 @@ def _one(
     return texts[key], Settled("", key, "", ground, how, among)
 
 
+#: A book sentence that expressly asserts a ground ("Responding Party expressly
+#: asserts the attorney work product doctrine"): the firm's finals follow a
+#: work product objection with it (2026-11-25, r3).
+EXPRESSLY = re.compile(r"(?i)\bexpressly\s+(?:asserts?|invokes?|claims?|reserves?)\b")
+
+
+def _companions(how: Settled, text: str, book: Any, item: str, whole: str) -> list[str]:
+    """The book's "expressly asserts" sentences for the ground just adopted,
+    not already stated: written after the objection, as the firm's finals do.
+    None when the book has no such sentence for the ground."""
+    groups = entry_groups(book.entries[how.key]) if how.key in book.entries else set()
+    groups |= ground_groups(text) | ground_groups(how.ground)
+    out = []
+    for k, e in book.entries.items():
+        if k == how.key or not EXPRESSLY.search(e.text):
+            continue
+        if (entry_groups(e) | ground_groups(e.text)) & groups:
+            said = book.text(k, item=item)
+            if f" {_words(said)} " not in whole and said not in out:
+                out.append(said)
+    return out
+
+
 def settle(
     number: str, blocks: list[str], book: Any, set_type: str, allowed: set[str], adopt_own: bool = False
 ) -> tuple[list[str], list[Settled]]:
@@ -318,6 +338,8 @@ def settle(
             done.append(Settled(number, how.key, how.left, how.ground, how.how, how.among))
             if how.left:
                 continue
+            if adopt_own:
+                text = " ".join(x for x in (text, *_companions(how, text, book, item, whole)) if x)
             new += [b[at:s], text]
             at = e
             whole += f"{_words(text)} "

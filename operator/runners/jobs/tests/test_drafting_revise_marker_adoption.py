@@ -72,11 +72,41 @@ def _marker(ground: str, words: str = "the documents are privileged") -> str:
 # ---- 1. a ground two entries match is settled in code, and the choice recorded ----
 
 
-def test_a_ground_two_entries_match_takes_the_long_form_and_records_it():
+def _counted(**sources: str):
+    return book_mod.parse(json.dumps([{**r, "source": sources.get(r["key"], r["source"])} for r in ROWS]))
+
+
+def test_a_ground_two_entries_match_takes_the_one_the_firms_finals_use_most_and_records_it():
+    blocks = [f"{_marker('attorney-client')} Responding Party will produce the file."]
+    counted = _counted(obj_033="final-a.docx; final-b.docx; final-c.docx", obj_034="seen in 1 final")
+    out, done = M.settle("4", blocks, counted, RFP, {"obj_033", "obj_034"})
+    assert out == [f"{_fill(AC_SHORT)} Responding Party will produce the file."]
+    assert (done[0].key, done[0].how, done[0].among) == ("obj_033", M.MOST_USED, ("obj_033", "obj_034"))
+    later = _counted(obj_033="seen in 2 finals", obj_034="seen in 9 finals")
+    assert M.choose(["obj_033", "obj_034"], "", later) == ("obj_034", M.MOST_USED)
+
+
+def test_with_no_count_in_the_book_the_first_entry_in_book_order_is_the_firms_primary_form():
     blocks = [f"{_marker('attorney-client')} Responding Party will produce the file."]
     out, done = M.settle("4", blocks, BOOK, RFP, {"obj_033", "obj_034"})
-    assert out == [f"{_fill(AC_LONG)} Responding Party will produce the file."]
-    assert (done[0].key, done[0].how, done[0].among) == ("obj_034", M.LONG_FORM, ("obj_033", "obj_034"))
+    assert out == [f"{_fill(AC_SHORT)} Responding Party will produce the file."]
+    assert (done[0].key, done[0].how) == ("obj_033", M.BOOK_ORDER)
+    one_counted = _counted(obj_034="seen in 9 finals")  # a count for one entry only says nothing of the other
+    assert M.choose(["obj_033", "obj_034"], "", one_counted) == ("obj_033", M.BOOK_ORDER)
+
+
+def test_a_source_says_how_many_finals_carry_the_entry_or_nothing():
+    for source, n in (
+        ("seen in 7 finals", 7),
+        ("12 of 40 documents", 12),
+        ("x3", 3),
+        ("count: 4", 4),
+        ("rfp-final-1.docx; rfp-final-2.docx", 2),
+        ("invented", None),
+        ("rule:r-include", None),
+        ("", None),
+    ):
+        assert book_mod.source_uses(source) == n, source
 
 
 def test_the_entry_the_marker_already_holds_is_chosen():
@@ -115,7 +145,7 @@ def test_a_rule_saying_privilege_names_the_attorney_client_entries_and_not_work_
     keys, _grounds, why = _named(fold("object on privilege where it applies"), BOOK, ["obj_034"], [])
     assert keys == ("obj_034",) and why == ""
     out, done = M.settle("2", [_marker("privilege")], BOOK, RFP, M.named_by(["Privilege"], BOOK))
-    assert out == [_fill(AC_LONG)] and done[0].key == "obj_034"
+    assert out == [_fill(AC_SHORT)] and done[0].key == "obj_033"
 
 
 # ---- 4. a ground the response already states is never written twice ----
@@ -228,3 +258,27 @@ def test_objection_sentences_do_not_end_inside_a_citation() -> None:
     assert got.endswith("is overbroad.")
     assert "(Evid. Code, § 954)" in got and "(Code Civ. Proc., § 2018.030)." in got
     assert "Note" not in got
+
+# ---- the third rehearsal, 2026-11-25: "expressly asserts" after an adopted work product objection ----
+
+EXPRESS = "Responding Party expressly asserts the attorney work product doctrine as to this {item}."
+
+
+def test_an_adopted_work_product_objection_is_followed_by_the_books_express_assertion():
+    row = {"key": "stmt_041", "kind": "statement", "text": EXPRESS, "names": [], "sets": [], "source": ""}
+    express = book_mod.parse(json.dumps([*ROWS, row]))
+    blocks = [f"{_marker('work product')} Responding Party will produce the file."]
+    out, _done = M.settle("3", blocks, express, RFP, set(), adopt_own=True)
+    said = _fill(EXPRESS)
+    assert out == [f"{_fill(WP_SHORT)} {said} Responding Party will produce the file."]
+    again, _done = M.settle("3", [*blocks, said], express, RFP, set(), adopt_own=True)
+    assert again[0].count("expressly") == 0 and again[1] == said  # already stated: never twice
+    ac, _done = M.settle("3", [_marker("attorney-client")], express, RFP, set(), adopt_own=True)
+    assert "expressly" not in ac[0]  # it asserts work product only
+    named, _done = M.settle("3", [_marker("work product")], express, RFP, {"obj_030"})
+    assert "expressly" not in named[0]  # written only under a rule that includes the objections
+
+
+def test_a_book_with_no_express_assertion_adds_nothing():
+    out, _done = M.settle("3", [_marker("work product")], BOOK, RFP, set(), adopt_own=True)
+    assert out == [_fill(WP_SHORT)]
