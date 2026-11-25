@@ -268,15 +268,20 @@ def _one(
 EXPRESSLY = re.compile(r"(?i)\bexpressly\s+(?:asserts?|invokes?|claims?|reserves?)\b")
 
 
-def _companions(how: Settled, text: str, book: Any, item: str, whole: str) -> list[str]:
+def _companions(how: Settled, text: str, book: Any, item: str, whole: str, set_type: str = "") -> list[str]:
     """The book's "expressly asserts" sentences for the ground just adopted,
     not already stated: written after the objection, as the firm's finals do.
-    None when the book has no such sentence for the ground."""
+    None when the book has no such sentence for the ground. An entry that names
+    its sets serves only those sets (2026-11-25: a special-interrogatory
+    response got the requests-for-production sentence)."""
+    mine = {set_type, SET_DOC.get(set_type, "")} - {""}
     groups = entry_groups(book.entries[how.key]) if how.key in book.entries else set()
     groups |= ground_groups(text) | ground_groups(how.ground)
     out = []
     for k, e in book.entries.items():
         if k == how.key or not EXPRESSLY.search(e.text):
+            continue
+        if e.sets and mine and not (set(e.sets) & mine):
             continue
         if (entry_groups(e) | ground_groups(e.text)) & groups:
             said = book.text(k, item=item)
@@ -308,7 +313,7 @@ def settle(
             if how.left:
                 continue
             if adopt_own:
-                text = " ".join(x for x in (text, *_companions(how, text, book, item, whole)) if x)
+                text = " ".join(x for x in (text, *_companions(how, text, book, item, whole, set_type)) if x)
             new += [b[at:s], text]
             at = e
             whole += f"{_words(text)} "

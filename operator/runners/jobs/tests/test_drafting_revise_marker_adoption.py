@@ -265,6 +265,16 @@ def test_an_adopted_work_product_objection_is_followed_by_the_books_express_asse
     assert "expressly" not in named[0]  # written only under a rule that includes the objections
 
 
+def test_an_express_assertion_serves_only_the_sets_its_entry_names() -> None:
+    row = {"key": "stmt_048", "kind": "statement", "text": EXPRESS, "names": [], "sets": [RFP], "source": ""}
+    express = book_mod.parse(json.dumps([*ROWS, row]))
+    blocks = [_marker("work product")]
+    rfp, _done = M.settle("3", blocks, express, RFP, set(), adopt_own=True)
+    assert "expressly" in rfp[0]
+    srog, _done = M.settle("3", blocks, express, "special_interrogatories", set(), adopt_own=True)
+    assert "expressly" not in srog[0]
+
+
 def test_a_book_with_no_express_assertion_adds_nothing():
     out, _done = M.settle("3", [_marker("work product")], BOOK, RFP, set(), adopt_own=True)
     assert out == [_fill(WP_SHORT)]
