@@ -1,4 +1,26 @@
 {
-  "_why": "Dotted paths (list indexes as numbers) that may differ from contracts/seat-config-callers.json (every seat-config reader, socket client and slug read, run), keyed seat-config-callers. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes how a site reads the seat's config on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. Rules that bind (2026-11-20): shared/readback_send.py is a new broker-socket client (the relay's send binds the read-back it carried, establish_readback_sent), so the broker-socket concept gains a file and a row and every later row's index moves. The broker's signature-block seed command (workspace_broker/sender_block.py main) is a second broker-tree socket client.",
-  "seat-config-callers": []
+  "_why": "Dotted paths (list indexes as numbers) that may differ from contracts/seat-config-callers.json (every seat-config reader, socket client and slug read, run), keyed seat-config-callers. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes how a site reads the seat's config on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. Rules that bind (2026-11-20): shared/readback_send.py is a new broker-socket client (the relay's send binds the read-back it carried, establish_readback_sent), so the broker-socket concept gains a file and a row and every later row's index moves. The broker's signature-block seed command (workspace_broker/sender_block.py main) is a second broker-tree socket client. Hand delivery --notify (2026-11-24): the connector's customer.yaml timezone read moved out of layout_tools._seat_today into layout_tools.authored_timezone (which _seat_today calls), so the jobs runner's hand_notify.seat_tz reuses the one reader; the row's symbol and its per-input return (the zone string, \"\" on every malformed or unreadable input, where it was the date those inputs fell back to) change, the fail-open handling does not.",
+  "seat-config-callers": [
+    "concepts.customer-yaml.fail_open.7.symbol",
+    "concepts.customer-yaml.rows.24.behaviour.block-malformed",
+    "concepts.customer-yaml.rows.24.behaviour.block-malformed-deep",
+    "concepts.customer-yaml.rows.24.behaviour.block-missing",
+    "concepts.customer-yaml.rows.24.behaviour.empty",
+    "concepts.customer-yaml.rows.24.behaviour.good",
+    "concepts.customer-yaml.rows.24.behaviour.missing",
+    "concepts.customer-yaml.rows.24.behaviour.not-mapping",
+    "concepts.customer-yaml.rows.24.behaviour.real-0e29268fcb",
+    "concepts.customer-yaml.rows.24.behaviour.real-5c81ccbc83",
+    "concepts.customer-yaml.rows.24.behaviour.real-7380b64d88",
+    "concepts.customer-yaml.rows.24.behaviour.real-87c9d88a05",
+    "concepts.customer-yaml.rows.24.behaviour.real-9302036937",
+    "concepts.customer-yaml.rows.24.behaviour.real-931453a391",
+    "concepts.customer-yaml.rows.24.behaviour.real-b02aa60269",
+    "concepts.customer-yaml.rows.24.behaviour.real-c388304bc1",
+    "concepts.customer-yaml.rows.24.behaviour.real-c3de4c838e",
+    "concepts.customer-yaml.rows.24.behaviour.real-d91ae216e0",
+    "concepts.customer-yaml.rows.24.behaviour.unreadable",
+    "concepts.customer-yaml.rows.24.behaviour.yaml-syntax-error",
+    "concepts.customer-yaml.rows.24.symbol"
+  ]
 }
