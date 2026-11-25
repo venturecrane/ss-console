@@ -102,7 +102,7 @@ def classify(d: Doc, ev: provenance.Evidence | None = None) -> tuple[str, str | 
         # No title in the capitals a caption prints: ours only on strong evidence
         # (``provenance.whose``, 2026-11-24); else a served set of the kind its
         # title or name reads, or a kind code cannot read (``other_set``).
-        w = provenance.whose(d.name, d.folder, head, ev=ev, doc_id=d.id, ext=d.ext)
+        w = provenance.whose(d.name, d.folder, head, ev=ev, doc_id=d.id, ext=d.ext, sha=d.sha)
         if w.side == provenance.OURS:
             return "response", w.kind
         return ("served", w.kind) if w.kind else ("other_set", None)

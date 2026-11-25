@@ -6,7 +6,7 @@ missing from the tree is reported as the module and function the stage needs
 instead of failing on an ImportError:
 
 * ``find``: ``served_find.find(data, job_dir, request, reader, *, clients,
-  other_side, firm)``, writing ``served.json`` and ``found-report.json`` in
+  other_side, firm, ledger_dir)``, writing ``served.json`` and ``found-report.json`` in
   ``job_dir`` (the replay's work dir). Its model calls go through the reader's
   ``ask``, which is the recorded doorway.
 * ``slice``: ``served.numbered(request_text) -> {n: text}``, the requests of a

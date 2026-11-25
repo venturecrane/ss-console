@@ -76,6 +76,11 @@ def was_served(name: str, text: str) -> bool:
     return bool(dated and _SIGNED.search(text, dated.end()))
 
 
+def has_proof(text: str) -> bool:
+    """The paper carries a proof of service heading, whoever served it."""
+    return bool(_PROOF.search(text or ""))
+
+
 def asks_amended(request: str) -> bool:
     """The request asks for amended, further or supplemental responses."""
     return bool(_AMENDED.search(request or ""))

@@ -113,9 +113,11 @@ def test_a_response_title_with_the_other_side_responding_is_not_ours():
 def test_our_filing_records_make_a_paper_ours():
     assert provenance.whose("Def SROGs.pdf", "/Discovery/Smith (Operator A1B2C3)").what == "filed"
     assert provenance.whose("x.docx", "", "", ev=provenance.Evidence(delivered=("X.docx",))).what == "filed"
-    proven = provenance.Evidence(proven=("f-9",))
-    assert provenance.whose("y.pdf", "", PARTY_LINES, ev=proven, doc_id="f-9").what == "filed"
-    assert provenance.whose("y.pdf", "", PARTY_LINES, ev=proven, doc_id="f-8").side == provenance.THEIRS
+    proven = provenance.Evidence(proven=(("f-9", "aa"),))
+    assert provenance.whose("y.pdf", "", PARTY_LINES, ev=proven, doc_id="f-9", sha="aa").what == "filed"
+    assert provenance.whose("y.pdf", "", PARTY_LINES, ev=proven, doc_id="f-8", sha="aa").side == provenance.THEIRS
+    # B7: the id alone is not ours; a paper that later took that id has other bytes.
+    assert provenance.whose("y.pdf", "", PARTY_LINES, ev=proven, doc_id="f-9", sha="bb").side == provenance.THEIRS
 
 
 def test_proven_ids_read_the_sibling_jobs_delivery_proof(tmp_path):
@@ -127,7 +129,7 @@ def test_proven_ids_read_the_sibling_jobs_delivery_proof(tmp_path):
         (tmp_path / job / "job.json").write_text(json.dumps({"matter_id": matter_id}))
         proof = {"proof": {"files": [{"file_id": f"f-{job}", "size": 1, "sha256": "0" * 64}]}}
         (tmp_path / job / "verdict.json").write_text(json.dumps(proof))
-    assert served_earlier.proven_ids(jd) == ("f-J0",)
+    assert served_earlier.proven_ids(jd) == (("f-J0", "0" * 64),)
 
 
 # ---- B1, B2: weak names and instruction prose never drop a real served set ---------------------
@@ -286,7 +288,7 @@ def test_a_leftover_of_another_kind_beside_served_sets_holds_and_keeps_its_note(
 
 def test_a_paper_of_ours_on_strong_evidence_of_no_readable_kind_proceeds_with_a_note(tmp_path):
     ours = {"id": "o1", "name": "Notice by A&P Operator Agent.pdf",
-            "pages": [CAPTION + "Notice to Counsel\n" + PARTY_LINES, "1. Example.\n", END]}  # fmt: skip
+            "pages": [CAPTION + "Notice to Counsel\n" + PARTY_LINES, "1. Example.\n"]}  # fmt: skip
     data, jd = matter(tmp_path, [*three_docs(), ours])
     run(data, jd, Fake(THREE))
     assert len(served.read(jd, [CLIENT])) == 3
@@ -326,3 +328,171 @@ def test_name_kind_reads_abbreviations_through_underscores_and_digits():
     assert provenance.name_kind("Def RFA2.pdf") == "requests_for_admission"
     assert provenance.name_kind("Def FROGs.pdf") == "form_interrogatories"
     assert provenance.name_kind("Letter to counsel.pdf") is None
+
+
+# ---- the backstop: every paper with both party lines is accounted for, or the job holds ----------
+
+HUNT_READ = {
+    "Request for Production No. 1": values("requests_for_production", 3),
+    "SPECIAL": values("special_interrogatories", 5),
+}
+SROG = {"id": "s1", "name": "Def SROG1.pdf", "pages": srog(5)}
+SERVED = [HEAD, _labelled(3), END]
+
+
+def _sibling(root, *, proof=(), delivered=None, plan_set_number=1) -> None:
+    """An earlier Operator job on the same matter: its delivery proof and its delivered drafts."""
+    sib = root / "job0"
+    (sib / "data").mkdir(parents=True)
+    (sib / "job.json").write_text(json.dumps({"matter_id": "M1"}))
+    if proof:
+        files = [{"file_id": i, "size": 1, "sha256": sha} for i, sha in proof]
+        (sib / "verdict.json").write_text(json.dumps({"proof": {"files": files}}))
+    if delivered:
+        plan = {"set_type": "requests_for_production", "set_number": plan_set_number,
+                "propounding_party": f"Defendant {DEF}"}  # fmt: skip
+        (sib / "data" / served.PLAN).write_text(json.dumps({"sets": [plan]}))
+        done = {"status": "filed", "drafted_by": "operator", "document": delivered}
+        (sib / "data" / served.OUTCOMES).write_text(json.dumps({"sets": [done]}))
+
+
+def _hunt(tmp_path, docs, **sib):
+    data, jd = matter(tmp_path, docs)
+    (jd / "job.json").write_text(json.dumps({"matter_id": "M1"}))
+    if sib:
+        _sibling(tmp_path, **sib)
+    return data, jd
+
+
+def _held(jd, name: str) -> None:
+    rep = _report(jd)
+    assert rep["stop"] == "served_other_set" and name in rep["reason"]
+    assert f'"{name}": {UNREAD}' in rep["attorney_notes"]
+
+
+@pytest.mark.parametrize(
+    "title",
+    ["Plaintiff's Responses to Request for Production, Set One\n",
+     "PLAINTIFF'S RESPONSES TO REQUEST FOR PRODUCTION, SET ONE\n"],
+    ids=["mixed case", "capitals"],
+)  # fmt: skip
+def test_b6_a_mistitled_served_set_with_a_proof_of_service_beside_an_srog_holds(tmp_path, title):
+    """Titled as a response, our client responding, a proof of service: it answers no set read here."""
+    paper = {"id": "p1", "name": "DIS RFP1.pdf", "pages": [CAPTION + title + PARTY_LINES, _labelled(3), END]}
+    data, jd = _hunt(tmp_path, [SROG, paper])
+    assert stop_of(lambda: run(data, jd, Fake(HUNT_READ))) == "served_other_set"
+    _held(jd, "DIS RFP1.pdf")
+
+
+def test_b7_a_proven_file_id_later_holding_their_served_set_is_read_as_served(tmp_path):
+    """The delivery proof names the id with OUR bytes; the paper there now has other bytes."""
+    data, jd = _hunt(tmp_path, [SROG, {"id": "p1", "name": "DIS RFP1.pdf", "pages": SERVED}], proof=[("p1", "aa")])
+    run(data, jd, Fake(HUNT_READ))
+    assert [s.source for s in served.read(jd, [CLIENT])] == ["s1", "p1"]
+
+
+def test_b7_backstop_a_proven_id_and_sha_on_a_paper_with_a_proof_of_service_still_holds(tmp_path):
+    """Even our own filing record does not let a paper carrying a proof of service and answering nothing vanish."""
+    data, jd = _hunt(tmp_path, [SROG, {"id": "p1", "name": "DIS RFP1.pdf", "pages": SERVED}], proof=[("p1", "p1")])
+    assert stop_of(lambda: run(data, jd, Fake(HUNT_READ))) == "served_other_set"
+    _held(jd, "DIS RFP1.pdf")
+
+
+def test_b8_a_delivered_name_colliding_with_a_served_set_holds(tmp_path):
+    data, jd = _hunt(tmp_path, [SROG, {"id": "p1", "name": "DIS RFP1.pdf", "pages": SERVED}], delivered="DIS RFP1.pdf")
+    assert stop_of(lambda: run(data, jd, Fake(HUNT_READ))) == "served_other_set"
+    _held(jd, "DIS RFP1.pdf")
+
+
+def test_a_stamped_name_on_a_paper_with_a_proof_of_service_holds(tmp_path):
+    name = "DIS RFP1 forwarded by A&P Operator Agent.pdf"
+    data, jd = _hunt(tmp_path, [SROG, {"id": "p1", "name": name, "pages": SERVED}])
+    assert stop_of(lambda: run(data, jd, Fake(HUNT_READ))) == "served_other_set"
+    _held(jd, name)
+
+
+def test_a_stamp_in_the_text_never_makes_a_served_set_ours(tmp_path):
+    pages = [HEAD + "Prepared by A&P Operator Agent\n", _labelled(3), END]
+    data, jd = _hunt(tmp_path, [SROG, {"id": "p1", "name": "DIS RFP1.pdf", "pages": pages}])
+    run(data, jd, Fake(HUNT_READ))
+    assert [s.source for s in served.read(jd, [CLIENT])] == ["s1", "p1"]
+
+
+def test_a_draft_named_copy_folds_into_its_set_and_the_set_is_read(tmp_path):
+    docs = [SROG, {"id": "p0", "name": "DIS RFP1 DRAFT 2026-11-01.pdf", "pages": SERVED},
+            {"id": "p1", "name": "DIS RFP1.pdf", "pages": SERVED}]  # fmt: skip
+    data, jd = _hunt(tmp_path, docs)
+    run(data, jd, Fake(HUNT_READ))
+    got = served.read(jd, [CLIENT])
+    assert [s.set_type for s in got] == ["special_interrogatories", "requests_for_production"]
+
+
+def test_a_mistitled_set_alone_still_stops(tmp_path):
+    mis = [CAPTION + "Plaintiff's Responses to Request for Production, Set One\n" + PARTY_LINES, _labelled(3), END]
+    data, jd = _hunt(tmp_path, [{"id": "p1", "name": "DIS RFP1.pdf", "pages": mis}])
+    assert stop_of(lambda: run(data, jd, Fake(HUNT_READ))) == "served_none"
+
+
+# ---- the ledger: a sibling job's records never crash the finder ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"verdict.json": "{not json", "data/served-plan.json": "{", "data/served-outcomes.json": "["},
+        {"verdict.json": json.dumps([{"proof": {"files": ["x", 3]}}])},
+        {"verdict.json": json.dumps({"proof": {"files": "abc"}})},
+        {"verdict.json": json.dumps({"proof": None})},
+        {"data/served-plan.json": json.dumps({"sets": [{"set_type": "x", "set_number": "One"}]}),
+         "data/served-outcomes.json": json.dumps({"sets": [{"status": "filed", "drafted_by": "operator",
+                                                            "document": "d"}]})},
+        {"job.json": "[1]"},
+    ],
+    ids=["corrupt", "proof-shape", "proof-str", "proof-null", "set-number-word", "job-json-list"],
+)  # fmt: skip
+def test_a_malformed_sibling_record_is_skipped_never_a_crash(tmp_path, files):
+    data, jd = _hunt(tmp_path, [SROG])
+    sib = tmp_path / "job0"
+    (sib / "data").mkdir(parents=True)
+    (sib / "job.json").write_text(json.dumps({"matter_id": "M1"}))
+    for rel, body in files.items():
+        (sib / rel).write_text(body)
+    run(data, jd, Fake(HUNT_READ))
+    assert [s.source for s in served.read(jd, [CLIENT])] == ["s1"]
+
+
+def test_delivered_drafts_skip_a_set_number_that_is_not_a_whole_number(tmp_path):
+    jd = tmp_path / "J1"
+    jd.mkdir()
+    (jd / "job.json").write_text(json.dumps({"matter_id": "M1"}))
+    _sibling(tmp_path, delivered="a.docx", plan_set_number="One")
+    assert served_earlier.delivered_drafts(jd) == []
+    (tmp_path / "job0" / "data" / served.PLAN).write_text(json.dumps({"sets": [
+        {"set_type": "requests_for_production", "set_number": 1, "propounding_party": "P"}]}))  # fmt: skip
+    assert [d.document for d in served_earlier.delivered_drafts(jd)] == ["a.docx"]
+
+
+# ---- replay parity: the $0 replay classifies as the seat does --------------------------------------
+
+
+def test_the_replay_and_the_seat_classify_the_same_paper_the_same_way(tmp_path):
+    """The seat's finder reads its own job dir's siblings; the replay works in another dir and
+    passes the saved job's (``ledger_dir``). The paper's only strong evidence is that ledger."""
+    name = "Gamma Responses to Delta RFP Set One.docx"
+    paper = _our_paper("w1", name, "", "")  # no title, no stamp: ours only by the delivered-drafts ledger
+    data, jd = _hunt(tmp_path, [SROG, _served_rfp(), paper], delivered=name)
+    reads = {**HUNT_READ, **RFP_READ, "Gamma Example will produce": values("requests_for_production", 1)}
+    run(data, jd, Fake(reads))
+    work = tmp_path / "replay-work"
+    work.mkdir()
+    served_find.find(data, work, "Draft responses.", Fake(reads).reader(), clients=[CLIENT], ledger_dir=jd)
+    seat, replay = _report(jd), _report(work)
+    assert seat["candidates"] == replay["candidates"] and seat["attorney_notes"] == replay["attorney_notes"]
+    assert served.read(jd, [CLIENT]) == served.read(work, [CLIENT])
+    assert [s.source for s in served.read(jd, [CLIENT])] == ["s1", "p1"]
+    assert served_find.planned_reads(data, "x", [CLIENT], None, jd) != served_find.planned_reads(data, "x", [CLIENT])
+    # The falsifier: a replay without the saved job's ledger reads the paper as a served set.
+    blind = tmp_path / "blind"
+    blind.mkdir()
+    with pytest.raises(served_find.Stop):
+        served_find.find(data, blind, "Draft responses.", Fake(reads).reader(), clients=[CLIENT])

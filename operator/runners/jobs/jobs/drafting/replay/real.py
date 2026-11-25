@@ -59,7 +59,7 @@ def find(matter: S.Matter, work: Path, doorway: Any, firm_data: dict[str, Any] |
     # each one without a recording is listed, not just the first, and a stage
     # with any missing stops before the finder runs (``--no-model``).
     missing: list[recorded.NeedsModelCall] = []
-    for text in sf.planned_reads(matter.data, request, clients, firm):
+    for text in sf.planned_reads(matter.data, request, clients, firm, matter.job_dir):
         try:
             ask(text)
         except recorded.NeedsModelCall as need:
@@ -74,6 +74,7 @@ def find(matter: S.Matter, work: Path, doorway: Any, firm_data: dict[str, Any] |
         clients=clients,
         other_side=sf.other_side(matter.data),
         firm=firm,
+        ledger_dir=matter.job_dir,
     )
 
 

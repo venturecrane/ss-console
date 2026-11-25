@@ -27,7 +27,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable
 
-from . import parties, served as served_mod
+from . import parties, provenance, served as served_mod
 from .served import OPERATOR, ServedSet
 from .served_docs import load
 
@@ -117,6 +117,8 @@ def delivered_drafts(job_dir: Path) -> list[Delivered]:
         for s, r in zip(sets, done):
             if (isinstance(s, dict) and isinstance(r, dict) and r.get("status") == served_mod.FILED
                     and r.get("drafted_by") == OPERATOR and not r.get(served_mod.PRIOR) and r.get("document")):  # fmt: skip
+                if not isinstance(s.get("set_number"), int):  # a hand-edited plan ("One"): not a record we can match
+                    continue
                 out.append(Delivered(str(s.get("set_type")), int(s.get("set_number") or 0),
                                      str(s.get("propounding_party") or ""), str(r["document"]), d.name))  # fmt: skip
     return out
@@ -134,13 +136,22 @@ def _siblings(job_dir: Path) -> list[Path]:
     return [d for d, j in jobs if isinstance(j, dict) and str(j.get("matter_id") or "") == matter]
 
 
-def proven_ids(job_dir: Path) -> tuple[str, ...]:
-    """Every file id an earlier Operator job on this matter filed, as its
-    delivery proof records it (``served_deliver.filed_proof``: the
-    ``DELIVERY_PROVEN`` files): our own filing record, never a served paper."""
+def proven_ids(job_dir: Path) -> tuple[tuple[str, str], ...]:
+    """Every (file id, sha256) an earlier Operator job on this matter filed, as
+    its delivery proof records it (``served_deliver.filed_proof``: the
+    ``DELIVERY_PROVEN`` files): our own filing record. Both must match a paper:
+    a file id the firm later reused for another paper is not ours."""
     from .served_deliver import filed_proof
 
-    out: list[str] = []
+    out: list[tuple[str, str]] = []
     for d in _siblings(job_dir):
-        out += [str(f["file_id"]) for f in filed_proof(d) or []]
+        out += [(str(f["file_id"]), str(f["sha256"])) for f in filed_proof(d) or []]
     return tuple(dict.fromkeys(out))
+
+
+def evidence(clients: Iterable[str], firm: Any, ledger_dir: Path | None) -> provenance.Evidence:
+    """What the finder knows of our side: our client, our firm, and the filing
+    records of the jobs beside ``ledger_dir`` (none without one)."""
+    mine = delivered_drafts(ledger_dir) if ledger_dir is not None else []
+    proven = proven_ids(ledger_dir) if ledger_dir is not None else ()
+    return provenance.Evidence(tuple(clients), firm, tuple(d.document for d in mine), proven)

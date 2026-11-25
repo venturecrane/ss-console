@@ -74,6 +74,8 @@ from .served_page import ours as ours, response_type as response_type, set_numbe
 from .served_page import title_type as title_type
 
 REPORT = "found-report.json"
+#: The attorney-note line for every paper the finder left unanswered and could not type.
+UNREAD = "the Operator could not read what kind of paper this is; it was not answered"
 #: The ledger's stage name for the finder's calls (the budget sums by it).
 STAGE = "served-find"
 #: At most this many served candidates are read; more goes to SMD (``served_many``):
@@ -119,10 +121,16 @@ class Found:
     notes: list[str] = field(default_factory=list)
     #: What the job knows of our side (``provenance.Evidence``): a paper is ours only on its strong evidence.
     ev: provenance.Evidence | None = None
+    #: Every paper with both party lines (``sort_docs``), and the ids that ended on a
+    #: strong reason other than a kept set: the final pass's inputs (``_account``).
+    lined: list[Doc] = field(default_factory=list)
+    settled: set[str] = field(default_factory=set)
 
     def note(self, doc: Doc | None, kind: str, kept: bool, why: str, **more: Any) -> None:
         head = {"id": doc.id, "name": doc.name, "folder": doc.folder, "copies": doc.copies} if doc else {}
         self.rows.append({**head, "kind": kind, "kept": kept, "why": why, **more})
+        if doc and kind in ("served", "other_set") and not kept:  # a copy, ours by its party lines, not asked for
+            self.settled.add(doc.id)
 
 
 # ---- the requests, sliced and numbered by code ----------------------------------------------
@@ -323,10 +331,18 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
     responding, asking, nums = _value(_RESPONDING, head), _value(_ASKING, head), set_numbers(head)
     if responding and not ours(responding, clients):
         f.note(d, "response", False, "the other side's response to our client's discovery; ignored", set_type=kind)
+        f.settled.add(d.id)
         return
-    if not kind:  # ours on strong evidence (provenance.whose), of a kind code cannot read
+    # Ours and answering nothing only on strong evidence and with no proof of
+    # service on it; anything else is held by the final pass (``_account``).
+    strong = (
+        provenance.whose(d.name, d.folder, head, ev=f.ev, doc_id=d.id, ext=d.ext, sha=d.sha).side == provenance.OURS
+    )
+    if strong and not papers.has_proof(d.text):
+        f.settled.add(d.id)
+    if not kind:
         f.note(d, "response", False, "our side's paper, not a served set; its kind is not read")
-        f.notes.append(f'"{d.name}": the Operator could not read what kind of paper this is; it was not answered.')
+        f.notes += [f'"{d.name}": {UNREAD}.'] if d.id in f.settled else []
         return
     if not papers.was_served(d.name, d.text):
         why = "a draft by its name" if papers.draft_name(d.name) else "no proof of service or dated signature"
@@ -341,8 +357,10 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
 
 def sort_docs(f: Found, all_docs: list[Doc], clients: list[str]) -> Sorted:
     """Every document by code's own reading; a set our client propounded is dropped here."""
-    out, ev = Sorted(), f.ev or provenance.Evidence(tuple(clients))
+    out = Sorted()
+    f.ev = ev = f.ev or provenance.Evidence(tuple(clients))
     ours_folders: set[str] = set()
+    f.lined = [d for d in all_docs if _ASKING.search(d.first) and _RESPONDING.search(d.first)]
     for d in all_docs:
         what, kind = classify(d, ev)
         if what == "response":
@@ -462,7 +480,7 @@ def _before_spend(f: Found, got: Sorted, kinds: list[str]) -> None:
     if got.others:  # never ours on strong evidence (that is a response paper), so it holds as before
         for d in got.others:
             f.note(d, "other_set", False, "a served set of a kind outside the list")
-            f.notes.append(f'"{d.name}": the Operator could not read what kind of paper this is; it was not answered.')
+            f.notes.append(f'"{d.name}": {UNREAD}.')
         names = ", ".join(repr(d.name) for d in got.others)
         raise Stop("served_other_set", f"the served sets include a kind outside the list: {names} "
                    '(record it as type "other", drafted by smd)')  # fmt: skip
@@ -527,6 +545,7 @@ def _answered(f: Found, got: Sorted) -> None:
         if later:
             f.note(later[0][0], "response", True, f"answers {s.label}, served {when}; that set is dropped")
             f.answered.append((s, later[0][0]))
+            f.settled.update(r[0].id for r in later)
             continue
         keep.append(s)
         dates.append(when)
@@ -544,18 +563,21 @@ def find(
     title: str = "Discovery Responses",
     form_by_operator: bool = False,
     firm: provenance.OurFirm | None = None,
+    ledger_dir: Path | None = None,
 ) -> Found | None:
     """The served sets, found and written as ``served.json``; None (nothing
     done) when the hand file is already there. Raises ``Stop`` on every stop;
-    ``found-report.json`` is written either way."""
+    ``found-report.json`` is written either way. ``ledger_dir`` is the job
+    directory whose sibling jobs hold our filing records (default ``job_dir``;
+    the $0 replay passes the saved job's, so it classifies as the seat does)."""
     if (Path(job_dir) / served_mod.FILE).exists():
         return None
-    mine = earlier.delivered_drafts(job_dir)
-    ev = provenance.Evidence(tuple(clients), firm, tuple(d.document for d in mine), earlier.proven_ids(job_dir))
-    f = Found(form_by_operator=form_by_operator, ev=ev)
+    ledger = Path(ledger_dir or job_dir)
+    f = Found(form_by_operator=form_by_operator)
     stop: Stop | None = None
     try:
-        _walk(f, data, request, reader, list(clients), list(other_side or []), title, Path(job_dir))
+        f.ev = earlier.evidence(clients, firm, ledger)
+        _walk(f, data, request, reader, list(clients), list(other_side or []), title, ledger)
     except Stop as exc:
         stop = exc
         raise
@@ -580,10 +602,13 @@ def candidates(f: Found, data: Path, request: str, clients: list[str]) -> Sorted
     return got
 
 
-def planned_reads(data: Path, request: str, clients: list[str], firm: provenance.OurFirm | None = None) -> list[str]:
+def planned_reads(
+    data: Path, request: str, clients: list[str], firm: provenance.OurFirm | None = None, ledger_dir: Path | None = None
+) -> list[str]:
     """The excerpt of every read the finder would make, in order; empty when
-    code stops before any read (the replay lists every call it needs at once)."""
-    f = Found(ev=provenance.Evidence(tuple(clients), firm))
+    code stops before any read (the replay lists every call it needs at once).
+    The same evidence as ``find`` (``ledger_dir``: the saved job's directory)."""
+    f = Found(ev=earlier.evidence(clients, firm, ledger_dir))
     try:
         return [d.excerpt() for d, _k in candidates(f, data, request, list(clients)).served]
     except Stop:
@@ -598,19 +623,37 @@ def _walk(
     clients: list[str],
     other: list[str],
     title: str,
-    job_dir: Path | None = None,
+    ledger: Path | None = None,
 ) -> None:
     got = candidates(f, data, request, clients)
     prior = prior_drafts(data, title)
     _read_all(f, got, reader, clients, other, {n for k, n in prior if k == "form_interrogatories"})
     _answered(f, got)
     if _amended(f, data, request):
-        return
+        return _account(f)
     if not f.keep:
         raise Stop("served_none", "every served set in the matter file is answered by a later response of ours")
-    delivered = earlier.delivered_drafts(job_dir) if job_dir is not None else []
+    delivered = earlier.delivered_drafts(ledger) if ledger is not None else []
     f.keep, notes = earlier.apply(with_priors(f, prior, delivered), got.drafts, delivered)
     f.notes += notes
+    _account(f)
+
+
+def _account(f: Found) -> None:
+    """The backstop (2026-11-24): every paper with both party lines ends as a kept
+    served set, a response that answers a served set read here, ours on strong
+    evidence with no proof of service on it, or a paper settled by its own party
+    lines or the request (``Found.note``). Anything else holds the job
+    (``served_other_set``) with an attorney note naming it: never a silent drop."""
+    done = {s.source for s in f.keep} | {s.source for s, _d in f.answered} | f.settled
+    loose = [d for d in f.lined if d.id not in done]
+    for d in loose:
+        f.note(d, "other_set", False, "a paper the finder could not account for; held")
+        f.notes.append(f'"{d.name}": {UNREAD}.')
+    if loose:
+        names = ", ".join(repr(d.name) for d in loose)
+        raise Stop("served_other_set", f"papers the finder could not account for: {names} "
+                   '(record each as a served set, or as type "other", drafted by smd)')  # fmt: skip
 
 
 def _amended(f: Found, data: Path, request: str) -> bool:

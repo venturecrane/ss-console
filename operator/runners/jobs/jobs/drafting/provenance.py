@@ -18,7 +18,7 @@ A paper is ours ONLY on strong evidence (the #4226 review: a real served set
 silently dropped is worse than a held job), first match wins:
 
 * ``filed``: our own filing records. A folder the Operator delivered into, a
-  file id an earlier Operator job's delivery proof names
+  file an earlier Operator job's delivery proof names by id AND sha256
   (``Evidence.proven``, the ``DELIVERY_PROVEN`` files), or a document name the
   delivered-drafts ledger names (``Evidence.delivered``).
 * ``stamped``: the Operator's own name stamp, "... by A&P Operator Agent"
@@ -80,12 +80,12 @@ class OurFirm:
 class Evidence:
     """What the job knows of our side: our client's names (None: not checked),
     our firm's attorneys, and our own filing records (delivered document names,
-    delivery-proven file ids)."""
+    delivery-proven (file id, sha256) pairs)."""
 
     clients: tuple[str, ...] | None = None
     firm: OurFirm | None = None
     delivered: tuple[str, ...] = ()
-    proven: tuple[str, ...] = ()
+    proven: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -197,7 +197,7 @@ def _ours_title(head: str, ext: str, ev: Evidence) -> bool:
 
 
 def whose(name: str, folder: str = "", head: str = "", *, ev: Evidence | None = None, doc_id: str = "",
-          ext: str = "") -> Whose:  # fmt: skip
+          ext: str = "", sha: str | None = None) -> Whose:  # fmt: skip
     """Ours on strong evidence only, else the other side's (``served``) when
     the paper carries both party lines, else ``unread`` (module docstring)."""
     ev = ev or Evidence()
@@ -206,7 +206,7 @@ def whose(name: str, folder: str = "", head: str = "", *, ev: Evidence | None = 
     clues = _clues(name, head, ext, ev)
     if papers.operator_folder(folder):
         return Whose(OURS, "filed", kind, "in a folder the Operator delivered into", clues)
-    if doc_id and doc_id in ev.proven:
+    if doc_id and sha and (doc_id, sha) in ev.proven:
         return Whose(OURS, "filed", kind, "a file an earlier Operator job's delivery proof names", clues)
     if _stem(name) in {_stem(d) for d in ev.delivered}:
         return Whose(OURS, "filed", kind, "a document an earlier Operator job delivered", clues)
