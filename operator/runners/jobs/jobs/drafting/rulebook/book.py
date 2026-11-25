@@ -51,7 +51,7 @@ GROUNDS: dict[str, tuple[str, ...]] = {
 
 _SLOT_START = re.compile(r"(?:^|[.!?:]\s+)$")
 _COUNT = re.compile(
-    r"(?i)(?:\b(?:seen|found|used|in|on)\s+)?\b(\d+)\s*(?:of\s+\d+\s+)?(?:finals?|final\s+documents?|documents?|files?|"
+    r"(?i)(?:\b(?:seen|found|used|in|on)\s+)?\b(\d+)\s*(?:of\s+\d+\s+)?(?:(?:filed|served|signed)\s+)?(?:finals?|final\s+documents?|documents?|files?|"
     r"responses?|times?)\b|\bx\s*(\d+)\b|\bcount\s*[:=]\s*(\d+)"
 )
 _DOC_REF = re.compile(r"(?i)\.(?:docx?|pdf)\b|^[0-9a-f-]{8,}$|^[A-Za-z0-9_-]+#\d+$")
