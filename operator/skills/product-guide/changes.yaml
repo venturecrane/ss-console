@@ -38,8 +38,12 @@ entries:
   - id: 4
     lines:
       - The hourly health check now covers all seven kinds of queued job, matter records included. A job waiting in its queue behind another kind of job that must finish first is described as waiting, not stalled.
-    library_sha256: d541dd61435f92a1af2df7dae2b2c28aeb20bb3fe3db0e4731f5d667dd90bc33
+    library_sha256: 8c65c385bce65bde001b9a76ac9b8f8428cd697cf5762b162afd5462e4f50939
   - id: 5
     lines:
+      - The Operator can now copy or move documents already on a matter into one of the matter's folders, so a request like create a folder and put these documents in it is done start to finish.
+    library_sha256: c8da7cee94f874b43a368e2b254323b0eba504fdb96611dd813d9dc2f7fe92a7
+  - id: 6
+    lines:
       - A staff request for matter records now covers documents asked for by kind as well as by name, such as every statement of one kind in a file, emails on the matter included. A document named by its title goes whole, exactly as the matter holds it.
-    library_sha256: d541dd61435f92a1af2df7dae2b2c28aeb20bb3fe3db0e4731f5d667dd90bc33
+    library_sha256: c8da7cee94f874b43a368e2b254323b0eba504fdb96611dd813d9dc2f7fe92a7

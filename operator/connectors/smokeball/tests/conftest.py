@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from smokeball_connector import logic_in_code, memo_confirm, readback
+from smokeball_connector import draft_sources, logic_in_code, memo_confirm, readback
 
 # operator/pytest.ini runs --import-mode=importlib, which puts no test dir on
 # sys.path; the shared fake document store (fake_files.py) is imported by name.
@@ -37,3 +37,6 @@ def _readback_never_sleeps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(readback, "SLEEP", lambda _seconds: None)
     # The memo read-back (memo_confirm.py) waits its own vendor-lag window.
     monkeypatch.setattr(memo_confirm, "SLEEP", lambda _seconds: None)
+    # The render's in-memory record of what it read (draft_sources.py) is per
+    # process; no test inherits another test's readings.
+    draft_sources.forget()

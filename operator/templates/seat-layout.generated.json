@@ -143,7 +143,12 @@
     },
     "jobs_pricing": {
       "path": "/opt/jobs/anthropic_pricing.json",
-      "when": "always"
+      "env": [
+        "JOBS_PRICING_JSON"
+      ],
+      "expect": "present",
+      "kind": "file",
+      "when": "lanes"
     },
     "jobs_python": {
       "path": "/opt/jobs/.venv/bin/python",

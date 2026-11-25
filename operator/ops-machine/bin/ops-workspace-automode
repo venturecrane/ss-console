@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""ops-workspace-automode TEMPLATE SETTINGS: install the client workspace's
+Claude Code auto-mode rules (the `autoMode` key) into SETTINGS.
+
+Why (2026-11-24): a client workspace's ~/.claude/settings.json had no autoMode
+block, so Claude's default classifier treated every write to the client's seat
+app (hermes-*) as production and refused the hand answers the workspace exists
+to make: stop or record a job, submit a lane job, file to the matter, reply in
+the thread. The fix was installed by hand; this makes the repo its source.
+
+Run by the entrypoint on every boot of a client workspace (OPS_WORKSPACE set).
+  * The template's {{WORKSPACE}}, {{WORKSPACE_APP}} and {{SEAT_APP}} are filled
+    from OPS_WORKSPACE, FLY_APP_NAME (else ops-<slug>) and OPS_SEAT_APP, inside
+    the parsed JSON strings, so an environment value cannot break the JSON.
+  * The `autoMode` key is REPLACED every run; every other key is kept.
+  * A missing file is created (mode 0600). A malformed one, or one that is not a
+    JSON object, is left exactly as it is and reported: exit 3. The entrypoint
+    logs that and boots on.
+Exit 0 installed, 2 usage or missing env, 3 settings left alone, 4 bad template.
+"""
+import json
+import os
+import re
+import sys
+import tempfile
+
+
+def fill(node, values):
+    if isinstance(node, str):
+        for k, v in values.items():
+            node = node.replace("{{" + k + "}}", v)
+        return node
+    if isinstance(node, list):
+        return [fill(x, values) for x in node]
+    if isinstance(node, dict):
+        return {k: fill(v, values) for k, v in node.items()}
+    return node
+
+
+def main(argv):
+    if len(argv) != 3:
+        print("usage: ops-workspace-automode TEMPLATE SETTINGS", file=sys.stderr)
+        return 2
+    template_path, settings_path = argv[1], argv[2]
+    slug = os.environ.get("OPS_WORKSPACE", "").strip()
+    seat = os.environ.get("OPS_SEAT_APP", "").strip()
+    if not slug or not seat:
+        print("ops-workspace-automode: OPS_WORKSPACE and OPS_SEAT_APP are both needed; nothing installed")
+        return 2
+    values = {
+        "WORKSPACE": slug,
+        "WORKSPACE_APP": os.environ.get("FLY_APP_NAME", "").strip() or "ops-" + slug,
+        "SEAT_APP": seat,
+    }
+    try:
+        with open(template_path, encoding="utf-8") as f:
+            block = fill(json.load(f), values)
+    except (OSError, ValueError) as e:
+        print(f"ops-workspace-automode: template {template_path} unreadable: {e}")
+        return 4
+    left = re.findall(r"\{\{[A-Z_]+\}\}", json.dumps(block))
+    if left or not isinstance(block, dict):
+        print(f"ops-workspace-automode: template not filled ({sorted(set(left))}); nothing installed")
+        return 4
+
+    settings = {}
+    if os.path.lexists(settings_path):
+        try:
+            with open(settings_path, encoding="utf-8") as f:
+                settings = json.load(f)
+        except (OSError, ValueError) as e:
+            print(f"ops-workspace-automode: {settings_path} is not valid JSON ({e}); left as it is, autoMode NOT installed")
+            return 3
+        if not isinstance(settings, dict):
+            print(f"ops-workspace-automode: {settings_path} is not a JSON object; left as it is, autoMode NOT installed")
+            return 3
+    settings["autoMode"] = block
+
+    d = os.path.dirname(os.path.abspath(settings_path))
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".settings.", dir=d)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, settings_path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    print(f"ops-workspace-automode: autoMode for {slug} (seat {seat}) installed in {settings_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

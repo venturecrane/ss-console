@@ -346,6 +346,9 @@ def test_the_drafting_run_checks_before_each_stage(tmp_path):
         def _done(self, n, **_kw):
             ran.append(n)
 
+        def _put(self, _key, _value):  # the stage it starts (drafting/progress.py)
+            pass
+
     stop_request.arm(tmp_path)
     try:
         DraftingRun._stage(Fake(), "facts", lambda: None)

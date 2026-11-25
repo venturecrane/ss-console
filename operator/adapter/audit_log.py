@@ -350,6 +350,7 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "DRAFTING_JOB_FAILED",
         "DRAFTING_JOB_RESUME_REQUESTED",
         "DRAFTING_JOB_REQUEST_ADDED",
+        "DRAFTING_JOB_PROGRESS",
         # "Set up our ...": the drafting lane's second kind of job, on a
         # switched-on seat only (operator/workspace_broker/library_setup_verbs.py).
         "LIBRARY_SETUP_SUBMITTED",

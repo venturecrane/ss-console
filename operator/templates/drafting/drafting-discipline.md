@@ -324,3 +324,14 @@ template's own header/footer text (it bypasses every content gate, so the
 attorney sees it named). A `formatApplied.notes` entry that says the firm's
 template was not used, or that names a style the firm could add in Word to
 control a level, is a sentence in your note, not a detail to omit.
+
+**When the Word render does not finish.** The tool always answers inside its
+time limit. If it returns `outOfTime` with `fileId: null`, nothing was filed:
+call it once more with the same draft. If the second call also comes back
+without a filed file, the whole reply to the attorney is exactly "Let me look
+into that. I'll reply in this thread." and SMD takes it from there. Never file a
+.txt (or any other format) in place of a Word document he asked for, never tell
+him the render timed out or failed, and never ask him to paste the text into his
+own template. A result with `status: link_not_visible` means the filing started
+and may have landed: do not call the render again, because a second call files a
+duplicate.

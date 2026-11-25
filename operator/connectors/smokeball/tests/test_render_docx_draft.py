@@ -341,3 +341,176 @@ def test_the_content_gate_runs_BEFORE_the_record_check(monkeypatch) -> None:
     assert any("em dash" in r for r in out["refusals"])
     assert not called, "the record check ran despite a content-gate refusal"
     assert "recordCheck" not in out
+
+
+# ---- A list of documents (2026-11-24) ---------------------------------------
+#
+# An attorney asked for the supplemental production list for the documents in a
+# folder, leaving out a withheld statement. The list had one entry more than the
+# folder had documents, named the withheld statement, and when the Word version
+# was refused the reply told the attorney why. Every name below is invented.
+
+_FOLDER = "fld-supp"
+_SUB = "fld-supp-sub"
+_FOLDER_FILES = [
+    {"id": "f1", "name": "Harbor Clinic Records.pdf", "folder": {"id": _FOLDER}},
+    {"id": "f2", "name": "Harbor Clinic Billing.pdf", "folder": {"id": _FOLDER}},
+    {"id": "f3", "name": "Quill Imaging Report.pdf", "folder": {"id": _SUB}},
+    {"id": "f4", "name": "Neighbor Witness Statement.pdf", "folder": {"id": _FOLDER}},
+    {"id": "f6", "name": "Old Production List.docx", "folder": {"id": _FOLDER}},
+    {"id": "f7", "name": "Scratch.txt", "folder": {"id": _FOLDER}},
+    {"id": "f5", "name": "Elsewhere.pdf", "folder": {"id": "fld-other"}},
+]
+_TREE = {
+    "value": [
+        {
+            "folders": [
+                {"id": _FOLDER, "name": "Supplemental Production", "folders": [{"id": _SUB, "name": "Imaging"}]},
+                {"id": "fld-other", "name": "Other"},
+            ]
+        }
+    ]
+}
+_HELD = ["Neighbor Witness Statement.pdf"]
+
+_LIST = """# SUPPLEMENTAL PRODUCTION LIST
+
+1. Harbor Clinic records, dates of service 03/27/2025 through 04/15/2025
+   1. Visit notes
+   2. Intake form
+2. Harbor Clinic billing, dates of service 03/27/2025 through 04/15/2025
+3. Quill Imaging report dated 04/02/2025
+"""
+
+
+def _tree_handler(captured: list[httpx.Request]):
+    base = _handler(captured)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path.endswith("/documents/folders"):
+            return httpx.Response(200, json=_TREE)
+        return base(request)
+
+    return handler
+
+
+def _setup(monkeypatch, *, passed: bool = True, disposition: str = "pass") -> list[httpx.Request]:
+    from smokeball_connector import list_check
+
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_tree_handler(captured)))
+    _stub_record_check(monkeypatch, passed=passed, disposition=disposition)
+    monkeypatch.setattr(list_check, "list_matter_files", lambda _c, _m: list(_FOLDER_FILES))
+    return captured
+
+
+def _list(draft: str = _LIST, held=tuple(_HELD), folder: str | None = _FOLDER):
+    return server.render_docx_draft(
+        "m-104", "Supp List", draft, held_out_file_names=list(held), listed_folder_id=folder
+    )
+
+
+def test_a_list_naming_a_held_out_document_is_refused_and_nothing_is_filed(monkeypatch) -> None:
+    captured = _setup(monkeypatch)
+    out = _list(_LIST + "4. Neighbor Witness Statement (withheld)\n")
+    assert out["fileId"] is None
+    assert out["status"] == "refused" and out["reason"] == "held_out_named"
+    assert not [r for r in captured if r.method == "PUT"]
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        _LIST + "\nAlso produced: Neighbor Witness Statement.pdf\n",
+        _LIST + "- Neighbor Witness Statement\n",
+    ],
+)
+def test_a_held_out_document_is_named_by_its_full_file_name_or_an_entry(draft) -> None:
+    from smokeball_connector import list_check
+
+    assert list_check.withheld_named(draft, _HELD) == _HELD
+
+
+@pytest.mark.parametrize(
+    ("draft", "held"),
+    [
+        # A one-word stem would catch ordinary words in an entry.
+        ("1. Progress Notes 3/2/25\n", ["Notes.pdf"]),
+        # A person's name in a caption is not the file.
+        ("| JANE DOE, Plaintiff | Case No. 1 |\n\nJane Doe was seen on 3/2/25.\n", ["Jane Doe.pdf"]),
+        # The draft's own held-out part may name it, by heading or by a Withheld: line.
+        (_LIST + "\n## Held out\n\nNeighbor Witness Statement.pdf\n", _HELD),
+        (_LIST + "\nWithheld: Neighbor Witness Statement.pdf\n", _HELD),
+        (_LIST + "\n**Held out:** Neighbor Witness Statement.pdf\n", _HELD),
+    ],
+)
+def test_held_out_names_raise_no_false_positives(draft, held) -> None:
+    from smokeball_connector import list_check
+
+    assert list_check.withheld_named(draft, held) == []
+
+
+def test_a_list_with_more_entries_than_the_folder_has_documents_is_refused(monkeypatch) -> None:
+    captured = _setup(monkeypatch)
+    out = _list(_LIST + "4. Harbor Clinic records (duplicate)\n")
+    assert out["status"] == "refused" and out["reason"] == "list_count_mismatch"
+    assert "4 numbered entries" in out["refusals"][0] and "holds 3" in out["refusals"][0]
+    assert not [r for r in captured if r.method == "PUT"]
+
+
+def test_a_held_out_name_matching_no_file_is_refused_on_its_own(monkeypatch) -> None:
+    captured = _setup(monkeypatch)
+    out = _list(held=["Parents Statement.pdf"])
+    assert out["status"] == "refused" and out["reason"] == "held_out_unmatched"
+    assert "Parents Statement.pdf" in out["refusals"][0]
+    assert not [r for r in captured if r.method == "PUT"]
+
+
+def test_a_list_counts_subfolders_and_skips_held_out_and_earlier_lists(monkeypatch) -> None:
+    """Three to list: two in the folder, one in its subfolder; the held-out
+    statement, the earlier list and a .txt are not counted, nor are nested entries."""
+    captured = _setup(monkeypatch)
+    out = _list()
+    assert out["fileId"] == "file-77" and out["refusals"] == []
+    assert out["fileName"] == "Supp List.docx"
+    put = next(r for r in captured if r.method == "PUT")
+    assert put.content[:2] == b"PK"
+    assert "Neighbor" not in _docx_text(put.content)
+
+
+def test_folder_ids_walk_the_folder_tree_down_only(monkeypatch) -> None:
+    from smokeball_connector import list_check
+
+    _setup(monkeypatch)
+    client = server._get_client()
+    assert list_check.folder_ids(client, "m-104", _SUB) == {_SUB}
+    assert list_check.folder_ids(client, "m-104", _FOLDER) == {_FOLDER, _SUB}
+
+
+@pytest.mark.parametrize(
+    ("draft", "disposition", "status", "reason"),
+    [
+        ("Body — dash.\n", "pass", "revise", "content_gate"),
+        (_FILLED_DRAFT, "fail_findings", "revise", "record_check"),
+        (_FILLED_DRAFT, "source_unextractable", "refused", "record_check"),
+        (_FILLED_DRAFT, "checker_absent", "refused", "record_check"),
+    ],
+)
+def test_refusal_status_pages_smd_only_on_a_final_outcome(monkeypatch, draft, disposition, status, reason) -> None:
+    """A finding the Operator fixes by redrafting is ``revise`` (not a shortfall,
+    so each iteration of meet-and-confer-drafter does not page SMD); a refusal a
+    redraft cannot clear is ``refused`` (a shortfall: SMD is paged). Before
+    this, no refusal carried a status and the audit scored every one ``ok``."""
+    _setup(monkeypatch, passed=disposition == "pass", disposition=disposition)
+    out = server.render_docx_draft("m-104", "Draft", draft)
+    assert out["fileId"] is None
+    assert out["status"] == status and out["reason"] == reason
+    assert "Let me look into that. I'll reply in this thread." in out["note"]
+
+
+def test_template_refusals_carry_the_same_shape(monkeypatch) -> None:
+    _setup(monkeypatch)
+    out = server.render_docx_template("m-104", "Skeleton", "Matter 2026-PI-104, $6,240.00 billed.\n")
+    assert out["fileId"] is None
+    assert out["status"] == "revise" and out["reason"] == "content_gate"
+    assert "Let me look into that. I'll reply in this thread." in out["note"]

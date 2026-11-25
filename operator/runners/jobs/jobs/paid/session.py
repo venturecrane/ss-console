@@ -50,6 +50,7 @@ class Caps:
     allowance_remaining_pages: int | None = None
     allowance_month: str | None = None
     allowance_cycle_label: str | None = None
+    cap_label: str = "the job's cost cap"
 
     def limits(self) -> limits_mod.Limits:
         return limits_mod.Limits(
@@ -61,6 +62,7 @@ class Caps:
             allowance_remaining_pages=self.allowance_remaining_pages,
             allowance_month=self.allowance_month,
             allowance_cycle_label=self.allowance_cycle_label,
+            cap_label=self.cap_label,
         )
 
 

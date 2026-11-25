@@ -46,6 +46,7 @@ from typing import Any
 
 import httpx
 
+from . import draft_budget
 from .write_record import WriteRecord, refuse_proof_run_write
 
 # /matters/{id} paths take the matter's UUID, never its human matter number.
@@ -93,6 +94,17 @@ _RATE_LIMIT_ATTEMPTS = 6
 _RATE_LIMIT_MAX_SLEEP = 30.0
 
 
+def _timeout(http: Any) -> Any:
+    """The client's own timeout, shortened to the time left when a render stage
+    deadline is set (``draft_budget``); unchanged outside one."""
+    default = getattr(http, "timeout", None)
+    if not isinstance(default, httpx.Timeout):
+        return httpx.USE_CLIENT_DEFAULT
+    if draft_budget.remaining() is None:
+        return default
+    return httpx.Timeout(draft_budget.request_timeout(default.read or 30.0))
+
+
 def _rate_limit_sleep(resp: Any, attempt: int) -> float:
     """Seconds to wait after a 429: the server's Retry-After when it is a
     number of seconds, else exponential from 1 s; never above the cap."""
@@ -123,6 +135,14 @@ class SmokeballAuthError(RuntimeError):
 class SmokeballWriteError(RuntimeError):
     """A document write (upload/delete) failed — the metadata POST returned no
     upload URL, or the presigned PUT was rejected. Surfaced as a clear refusal."""
+
+
+class DownloadTooLarge(SmokeballWriteError):
+    """A download refused because the file is over ``_MAX_DOWNLOAD_BYTES``: the
+    file is there, it is only too large to read into this process. A
+    subclass, so every caller that catches ``SmokeballWriteError`` still does,
+    and one that must tell "too large" from "failed" (``file_placement.py``)
+    can."""
 
 
 _MAX_ERROR_BODY = 600
@@ -377,14 +397,19 @@ class SmokeballClient:
                 "Accept": "application/json",
             }
             try:
-                last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
+                last = self._http.request(
+                    method, url, params=_clean(params), json=json, headers=headers, timeout=_timeout(self._http)
+                )
             except httpx.HTTPError as exc:
                 record.finish(None, error=f"{type(exc).__name__}: {exc}")
                 raise
             if last.status_code == 429:
-                if attempt + 1 >= _RATE_LIMIT_ATTEMPTS:
+                pause = _rate_limit_sleep(last, attempt)
+                # Inside a render's stage deadline (draft_budget), a rate limit
+                # that would outlast it is surfaced now instead of slept out.
+                if attempt + 1 >= _RATE_LIMIT_ATTEMPTS or draft_budget.would_pass(pause):
                     break
-                time.sleep(_rate_limit_sleep(last, attempt))
+                time.sleep(pause)
                 continue
             if last.status_code == 401 and not refreshed:
                 self._token = None  # force a fresh mint, then retry once
@@ -547,18 +572,18 @@ class SmokeballClient:
             raise SmokeballWriteError(f"download: no downloadUrl for file {file_id!r} on matter {matter_id!r}")
         advertised = info.get("sizeBytes")
         if isinstance(advertised, int) and advertised > _MAX_DOWNLOAD_BYTES:
-            raise SmokeballWriteError(
+            raise DownloadTooLarge(
                 f"download: file {file_id!r} is {advertised} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
             )
         try:
-            resp = self._http.get(info["downloadUrl"])
+            resp = self._http.get(info["downloadUrl"], timeout=_timeout(self._http))
         except httpx.HTTPError as exc:
             raise SmokeballWriteError(f"presigned download GET failed: {exc}") from exc
         if resp.status_code >= 400:
             raise SmokeballWriteError(f"presigned download GET rejected with HTTP {resp.status_code}")
         blob = resp.content
         if len(blob) > _MAX_DOWNLOAD_BYTES:
-            raise SmokeballWriteError(
+            raise DownloadTooLarge(
                 f"download: file {file_id!r} body is {len(blob)} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
             )
         return info, blob
@@ -604,7 +629,7 @@ class SmokeballClient:
         EMPTY ``Content-Type`` (the header is not part of the signed request)."""
         refuse_proof_run_write("PUT", "presigned upload")
         try:
-            resp = self._http.put(url, content=data, headers={"Content-Type": ""})
+            resp = self._http.put(url, content=data, headers={"Content-Type": ""}, timeout=_timeout(self._http))
         except httpx.HTTPError as exc:
             raise SmokeballWriteError(f"presigned upload PUT failed: {exc}") from exc
         if resp.status_code >= 400:
@@ -619,6 +644,23 @@ class SmokeballClient:
         if parent_folder_id is not None:
             body["parentFolderId"] = parent_folder_id
         return self.request("POST", f"/matters/{matter_id}/documents/folders", json=body)
+
+    def move_file(self, matter_id: str, file_id: str, folder_id: str, *, file_name: str) -> Any:
+        """Move a matter file into another folder of the SAME matter:
+        ``PATCH /matters/{id}/documents/files/{fileId}`` with ``folderId``.
+
+        Vendor contract (docs.smokeball.com, "Patch a file", read 2026-11-24):
+        a partial update of the file's metadata; "the file moves only when
+        /folderId is present in the request", and the destination "is not
+        validated for existence", so the caller proves the folder is on the
+        matter first (``file_placement.py``). ``fileName`` is listed as
+        required, so the file's own current name is sent back unchanged; the
+        extension cannot change through this call. Answers 202 with an
+        ``uploadUrl`` for an optional new version, which is never used here:
+        a move sends no bytes. The read-back (folder, name, sha256) is the
+        caller's."""
+        body = {"fileName": file_name, "folderId": folder_id}
+        return self.request("PATCH", f"/matters/{matter_id}/documents/files/{file_id}", json=body)
 
     def delete_file(self, matter_id: str, file_id: str) -> Any:
         """Delete a file from a matter (``DELETE /matters/{id}/documents/files/{fileId}``,

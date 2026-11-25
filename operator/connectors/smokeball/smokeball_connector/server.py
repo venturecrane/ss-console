@@ -1268,11 +1268,19 @@ def add_file(
 ) -> Any:
     """Upload a document to a matter. Supply the content EXACTLY ONE of two ways:
 
-    - ``content_text`` — **use this for every textual document** (letters,
-      briefs, memos, discovery responses, indexes, .txt/.md/.csv). Pass the
-      document's text verbatim; the connector encodes it UTF-8 server-side.
+    - ``content_text`` — for a data file in text (.csv). Pass the text
+      verbatim; the connector encodes it UTF-8 server-side.
     - ``content_base64`` — for genuinely binary files (PDF, DOCX, images) whose
       base64 came from a tool, never from your own composition.
+
+    **A document a person reads is a Word document, never a text file.** A
+    letter, brief, memo, list, index or draft is filed with
+    ``render_docx_draft``. ``content_text`` filed as a ``.txt``/``.md`` file,
+    or with no extension, is refused here (``status: "refused"``, ``reason: "text_document"``,
+    nothing filed, SMD paged): an attorney cannot work in it, and filing one
+    after ``render_docx_draft`` refused routes around that refusal. If you
+    cannot file the Word document, reply only "Let me look into that. I'll
+    reply in this thread."
 
     **Never hand-encode text to base64.** Model-written base64 fails outright or,
     worse, decodes to subtly corrupted text — a rehearsal filed a brief reading
@@ -1297,6 +1305,11 @@ def add_file(
             "add_file: supply exactly one of content_text (plain text, encoded "
             f"server-side) or content_base64 (binary) — got {supplied}"
         )
+    from .list_check import text_refusal
+
+    refusal = text_refusal(matter_id, file_name, as_text=content_text is not None)
+    if refusal:
+        return refusal
     if content_text is not None:
         data = content_text.encode("utf-8")
     else:
@@ -1497,21 +1510,18 @@ def render_docx_template(
     Classified INTERNAL_WRITE at the overlay: the Operator writing a template
     into the firm's own record. Nothing leaves the firm."""
     from .library import classless_name_refusal, names_agree
+    from .list_check import REVISE, refused, render_refusal
     from .render import TemplateContentRefused, check_template_content
 
     file_name = file_name if file_name.lower().endswith(".docx") else f"{file_name}.docx"
     try:
         check_template_content(skeleton_markdown)
     except TemplateContentRefused as exc:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [str(v) for v in exc.violations],
-        }
+        return refused(matter_id, file_name, "content_gate", [str(v) for v in exc.violations], status=REVISE)
     data, format_applied, refusal, library = _render_with_format(skeleton_markdown, document_class)
+    # A format refusal is final (SMD paged); a naming refusal is fixed by
+    # calling again under the right name (revise).
+    reason, status = ("format_refused", "refused") if refusal else ("template_name", REVISE)
     # A class name is a class decision (the 2026-09-21 library defect): see
     # ``library.classless_name_refusal``, which passes any call that names a
     # class. Checked after the (network-free, classless) render, before upload.
@@ -1532,16 +1542,7 @@ def render_docx_template(
                 "FIRST and then file under the authored name."
             )
     if refusal:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [refusal],
-            "formatApplied": format_applied,
-            **({"libraryResolution": library} if library is not None else {}),
-        }
+        return render_refusal(matter_id, file_name, refusal, format_applied, library, reason=reason, status=status)
     result = add_file(
         matter_id,
         file_name,
@@ -1562,69 +1563,12 @@ def render_docx_template(
 def _collect_matter_sources(
     matter_id: str,
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[str]]:
-    """Every readable document on the matter as ``(name, extracted_text)``, the
-    ones whose text is a MACHINE TRANSCRIPTION of a scan, and the names of the
-    ones that would not extract.
+    """The matter's record for the draft check: ``draft_sources.collect``
+    (readable sources, machine transcriptions, and the names that would not
+    extract; it never transcribes and stops at the render's deadline)."""
+    from .draft_sources import collect
 
-    The third list is not diagnostics. A source that did not extract makes a
-    correctly quoted passage look fabricated to gate 2a, so the caller REFUSES
-    on it rather than checking against a partial record.
-
-    THIS PATH NEVER INITIATES A TRANSCRIPTION (ss#2464). It reads the vision
-    cache — a transcription somebody already paid for through ``read_document``
-    — and nothing more. Two reasons, and the second is the important one.
-    Billing: this runs over every document on the matter on every render.
-    Discipline: a scanned matter's draft path opens only after a person
-    deliberately read each scan, so an uncached scan still lands in
-    ``unextractable`` and still hard-refuses the draft, exactly as before."""
-    from .extract import MECHANICAL_METHODS, METHOD_MIXED, METHOD_VISION_CACHED, METHOD_XLSX_OPERATOR, extract_text_ex
-    from .library import find_folder_id, is_library_file, load_library_config
-
-    client = _get_client()
-    listing = client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=0)
-    entries = listing.get("value") if isinstance(listing, dict) else listing
-    # Templates are not record. A firm's letterhead template (header-only, so
-    # it extracts to nothing) or a .dotx filed in the Document Library would
-    # otherwise land in ``unextractable`` and refuse every draft on the matter.
-    lib_cfg = load_library_config()
-    lib_folder = find_folder_id(client, matter_id, lib_cfg.folder_name) if lib_cfg.folder_name else None
-    sources: list[tuple[str, str]] = []
-    vision_sources: list[tuple[str, str]] = []
-    unextractable: list[str] = []
-    for entry in entries or []:
-        if is_library_file(entry, lib_cfg, lib_folder):
-            continue
-        name = str(entry.get("name") or entry.get("id") or "document")
-        try:
-            _meta, blob = client.download_file(matter_id, entry["id"])
-            result = extract_text_ex(
-                blob,
-                file_name=name,
-                file_extension=str(entry.get("fileExtension") or ""),
-                allow_vision=False,  # cache-read-only; see the docstring
-            )
-        except Exception:  # noqa: BLE001 — one unreadable document refuses the whole check
-            unextractable.append(name)
-            continue
-        # Branch on the METHOD, never on whether the text is truthy: which road
-        # the text came from is what decides how it may be used.
-        if result.method == METHOD_XLSX_OPERATOR:
-            continue  # the Operator's own workbook is not the firm's record
-        if result.method == METHOD_MIXED:
-            # Typed pages read, scanned pages not (none stored, and this path
-            # never transcribes): the record is partial in exactly the way an
-            # uncached scan's is, so it is reported the same way, with the pages
-            # named, and the draft refuses. Once ``read_document`` has read
-            # those pages they are stored, and the file comes back
-            # ``vision_cached``, a transcription source like any other.
-            unextractable.append(f"{name} ({result.unread_note()})")
-        elif result.method == METHOD_VISION_CACHED:
-            vision_sources.append((name, result.text))
-        elif result.method in MECHANICAL_METHODS and result.text.strip():
-            sources.append((name, result.text))
-        else:
-            unextractable.append(name)
-    return sources, vision_sources, unextractable
+    return collect(_get_client(), matter_id)
 
 
 @server.tool()
@@ -1635,6 +1579,7 @@ def render_docx_draft(
     folder_id: str | None = None,
     held_out_file_names: list[str] | None = None,
     document_class: str | None = None,
+    listed_folder_id: str | None = None,
 ) -> Any:
     """Render a FILLED DRAFT (markdown) to a real Word .docx and file it on a
     matter, for attorney review. The sibling of ``render_docx_template``, and the
@@ -1684,6 +1629,16 @@ def render_docx_draft(
     ``readback_mismatch`` / ``link_not_visible`` (SMD is alerted; do NOT file
     it again).
 
+    **It always answers inside the tool's time limit.** A stage that runs too
+    long is stopped and named in ``outOfTime`` (``reason: out_of_time``):
+    nothing was filed, so call this once more with the same draft. If that call
+    also comes back without a filed file, reply to the attorney with exactly
+    "Let me look into that. I'll reply in this thread." Never file a .txt in
+    place of the Word document he asked for, never tell him the render timed
+    out, and never ask him to paste the text into his template. ``status:
+    link_not_visible`` (with ``outOfTime`` or ``filingError``) means the filing
+    started and may have landed: do NOT call it again.
+
     **Firm format (``document_class``).** Pass ``document_class`` (one of
     ``discovery_set``, ``discovery_response``, ``demand_letter``,
     ``mediation_brief``, ``memo``, ``depo_outline``, ``letter``) and the .docx is rendered INTO the
@@ -1716,9 +1671,29 @@ def render_docx_draft(
     letterhead, and do not marker one: ``formatApplied.letterhead`` says which
     source applied, or that neither exists, and that is what the report states.
 
+    **Held out means not named.** A document named in ``held_out_file_names``
+    is refused if its name appears in the draft's body: what the attorney
+    withholds is said in your reply to the attorney, never on the document.
+
+    **A list of documents (``listed_folder_id``).** For a production list or an
+    index of the documents in a folder, pass that folder's id: write one
+    top-level numbered entry (``1.``) per document, and the draft is refused
+    unless the count matches the files in that folder and its subfolders
+    (held-out files and earlier lists or indexes excepted). Pass each withheld
+    document's file name exactly: one that matches no file there is refused.
+
+    **A refusal is never told to the person.** Every refusal carries a
+    ``reason`` token and a ``status``: ``revise`` (a content-gate or
+    record-check finding: fix it and call again) or ``refused`` (one a redraft
+    cannot clear, or a list check: SMD is paged). Do not file the document any
+    other way (never a ``.txt``); if you cannot fix what the refusals name,
+    reply only "Let me look into that. I'll reply in this thread."
+
     Classified INTERNAL_WRITE at the overlay: the Operator saving its own work
     product into the firm's record. Nothing leaves the firm; delivery to anyone
     outside is a separate, separately-gated act."""
+    from . import draft_budget as budget
+    from .list_check import REVISE, list_refusal, record_check_refusal, refused, render_refusal
     from .record_check import run_record_check
     from .render import TemplateContentRefused, check_draft_content
 
@@ -1727,67 +1702,59 @@ def render_docx_draft(
     try:
         check_draft_content(draft_markdown)
     except TemplateContentRefused as exc:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [str(v) for v in exc.violations],
-        }
-
-    # The ten mechanical gates, against this matter's own record. Nothing is
-    # rendered or uploaded until they pass — see record_check.py for the
-    # disposition table and for why exit 2 refuses.
-    sources, vision_sources, unextractable = _collect_matter_sources(matter_id)
-    verdict = run_record_check(
-        draft_markdown,
-        sources,
-        held_out_names=set(held_out_file_names or ()),
-        unextractable=unextractable,
-        vision_sources=vision_sources,
-    )
-    if not verdict.passed:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": verdict.refusals,
-            "recordCheck": verdict.disposition,
-            "warnings": verdict.warnings,
-            "infos": verdict.infos,
-            "checkedSources": verdict.checked_sources,
-        }
-
-    data, format_applied, refusal, library = _render_with_format(draft_markdown, document_class, matter_id)
+        return refused(matter_id, file_name, "content_gate", [str(v) for v in exc.violations], status=REVISE)
+    held_out = list(held_out_file_names or ())
+    # The list count, then the ten mechanical gates against this matter's own
+    # record. Nothing is rendered or uploaded until they pass (record_check.py
+    # has the disposition table). Every stage answers by its deadline, inside
+    # the 300 s tool timeout (draft_budget.py).
+    clock = budget.Clock()
+    try:
+        listed = clock.run(
+            budget.LISTING,
+            budget.SOURCES_BY,
+            list_refusal,
+            _get_client,
+            matter_id,
+            file_name,
+            draft_markdown,
+            held_out,
+            listed_folder_id,
+        )
+        if listed:
+            return listed
+        sources, vision_sources, unextractable = clock.run(
+            budget.READING, budget.SOURCES_BY, _collect_matter_sources, matter_id
+        )
+        verdict = budget.checked(
+            run_record_check(
+                draft_markdown,
+                sources,
+                held_out_names=set(held_out),
+                unextractable=unextractable,
+                vision_sources=vision_sources,
+                timeout=max(0, int(clock.left(budget.CHECK_BY))),
+            )
+        )
+        if not verdict.passed:
+            return record_check_refusal(matter_id, file_name, verdict)
+        data, format_applied, refusal, library = clock.run(
+            budget.RENDERING, budget.RENDER_BY, _render_with_format, draft_markdown, document_class, matter_id
+        )
+    except budget.OutOfTime as exc:
+        return refused(matter_id, file_name, "out_of_time", [budget.not_filed(exc)], outOfTime=exc.stage)
     if refusal:
-        return {
-            "matterId": matter_id,
-            "fileName": file_name,
-            "fileId": None,
-            "sha256": None,
-            "sizeBytes": None,
-            "refusals": [refusal],
-            "formatApplied": format_applied,
-            **({"libraryResolution": library} if library is not None else {}),
-        }
-    result = add_file(
-        matter_id,
-        file_name,
-        content_base64=base64.b64encode(data).decode("ascii"),
-        folder_id=folder_id,
-    )
-    out = dict(result) if isinstance(result, dict) else {"result": result}
-    out["sha256"] = hashlib.sha256(data).hexdigest()
-    out["sizeBytes"] = len(data)
-    out["refusals"] = []
-    if format_applied is not None:
-        out["formatApplied"] = format_applied
+        return render_refusal(matter_id, file_name, refusal, format_applied, library)
+    encoded = base64.b64encode(data).decode("ascii")
+    extra = {"formatApplied": format_applied} if format_applied is not None else {}
     if library is not None:
-        out["libraryResolution"] = library
-    return out
+        extra["libraryResolution"] = library
+    return budget.file_by(
+        clock,
+        lambda: add_file(matter_id, file_name, content_base64=encoded, folder_id=folder_id),
+        {"matterId": matter_id, "fileName": file_name, "fileId": None, **extra},
+        data,
+    )
 
 
 # ---- Memos ----------------------------------------------------------------

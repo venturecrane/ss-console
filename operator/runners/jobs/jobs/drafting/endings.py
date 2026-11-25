@@ -112,6 +112,7 @@ ENDINGS: dict[str, Ending] = {
     "policy_missing": _f(),
     "rule_unplaced": _f(),
     "request_too_large": _f(),
+    "request_door_unopenable": _f(),
     # The firm-rules stage (rulebook/): its item grid refused after a retry; a clause
     # code can make still unmet; the rule store moved twice during the job.
     "rule_unchecked": _f(),

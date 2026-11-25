@@ -20,11 +20,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import seat_layout
+
 # The console's table: operator/adapter/cost_telemetry/anthropic_pricing.json,
-# shipped in the image beside the runner (ss#2614). Path resolution mirrors the
-# connector's config-as-data pattern: env override, then the fixed default.
+# shipped in the jobs bundle beside the runner (templates/jobs-runtime.sh copies
+# it to the seat path ``seat_layout.JOBS_PRICING``). Path resolution mirrors the
+# connector's config-as-data pattern: env override, then the seat's own path.
+# 2026-11-24: the default named /opt/smd/cost_telemetry/, a path no seat ever
+# had. Only the daemon, launched with JOBS_PRICING_JSON, found the table; a root
+# ``python -m jobs.stop`` on ashton-price could not price the job it stopped.
 PRICING_ENV = "JOBS_PRICING_JSON"
-PRICING_DEFAULT = "/opt/smd/cost_telemetry/anthropic_pricing.json"
+PRICING_DEFAULT = seat_layout.JOBS_PRICING
 
 
 class BudgetError(RuntimeError):

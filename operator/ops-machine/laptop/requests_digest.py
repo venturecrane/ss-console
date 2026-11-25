@@ -37,6 +37,9 @@ JOB_FIELDS = (
     "kind",
     "state",
     "stage",
+    # A running drafting job's pull count, n/N (workspace_broker/drafting_progress.py).
+    "progress",
+    "expected_finish",
     "matter_id",
     "matter",
     "attempt",

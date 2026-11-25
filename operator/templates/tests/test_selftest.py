@@ -820,7 +820,10 @@ def test_a_lane_seat_missing_its_jobs_tree_fails_the_layout(seat: dict[str, Path
     root = _plant_layout(seat)
     _write(root / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
     found = _layout(seat)
-    assert found["ok"] is False and "/opt/data/jobs is missing" in found["detail"], found
+    # The check's detail is the probe's last lines, in id order: the run dir,
+    # and (2026-11-24) the rate card every lane prices spend with.
+    assert found["ok"] is False and "/run/smd-jobs is missing" in found["detail"], found
+    assert "jobs_pricing: /opt/jobs/anthropic_pricing.json is missing" in found["detail"], found
 
 
 def test_a_tree_that_disagrees_with_the_image_fails_the_layout(seat: dict[str, Path]) -> None:

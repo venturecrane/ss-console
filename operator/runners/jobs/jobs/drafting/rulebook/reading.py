@@ -41,6 +41,10 @@ from .types import ACTS, DOC_TYPES, Ask, Clause
 
 STAGE = "rulebook-read"
 MAX_TOKENS = 6_000
+#: Rules per call. One call for every rule outgrew MAX_TOKENS once the firm had
+#: enough of them (a cut-off answer parses as no object), so they are read a few
+#: at a time; each batch is saved as it lands, so a retry resumes.
+BATCH = 6
 FILE = "rule-read.json"
 WHENS = ("judged", "always")
 WORD_KINDS = ("objection", "disposition", "statement")
@@ -263,7 +267,7 @@ def _ask(rules: list[dict[str, Any]], book: Book, ask: Ask) -> dict[str, dict[st
 def read(data: Path, rules: list[dict[str, Any]], book: Book, ask: Ask | None) -> tuple[list[Clause], Book]:
     """(every rule's clauses, the book with the rules' own words added). Rules
     already read in this job come from ``rule-read.json``; the rest are asked
-    about in one call. ``ReadRefused`` after the retry; no ``ask`` with a rule
+    about BATCH at a time. ``ReadRefused`` after the retry; no ``ask`` with a rule
     unread is a refusal too, never a silent skip. Held under :func:`lock`, so
     units drafting together ask once: the second finds the first's answer."""
     with lock(data):
@@ -276,14 +280,16 @@ def _read(data: Path, rules: list[dict[str, Any]], book: Book, ask: Ask | None) 
     if todo:
         if ask is None:
             raise ReadRefused([f"rule {r['rule_id']} is unread and no model call is available" for r in todo])
-        for rid, rec in _ask(todo, book, ask).items():
-            rule = next(r for r in todo if str(r["rule_id"]) == rid)
-            cache[sha(rule)] = {
-                "rule": rid,
-                "clauses": [c.to_dict() for c in rec["clauses"]],
-                "entries": [e.to_dict() for e in rec["entries"]],
-            }
-        _save(data, cache)
+        for at in range(0, len(todo), BATCH):
+            batch = todo[at : at + BATCH]
+            for rid, rec in _ask(batch, book, ask).items():
+                rule = next(r for r in batch if str(r["rule_id"]) == rid)
+                cache[sha(rule)] = {
+                    "rule": rid,
+                    "clauses": [c.to_dict() for c in rec["clauses"]],
+                    "entries": [e.to_dict() for e in rec["entries"]],
+                }
+            _save(data, cache)
     clauses: list[Clause] = []
     entries: list[Entry] = []
     for r in rules:

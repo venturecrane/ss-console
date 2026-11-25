@@ -708,6 +708,16 @@ def check(
     return found
 
 
+def surface_rules(
+    surface: str, profile: str = PROFILE_PARALEGAL
+) -> tuple[tuple[str, ...], int | None]:
+    """``(rules, line ceiling)`` that :func:`check` applies on ``surface`` for
+    ``profile`` (no job-reply rule), for guidance that must state the same set."""
+    rules, ceiling, _on_wire = _SURFACES[surface]
+    dropped = _PROFILE_DROPS.get(profile, frozenset())
+    return tuple(rule for rule in rules if rule not in dropped), ceiling
+
+
 def refusing(violations: list[Violation]) -> list[Violation]:
     """The violations that refuse: everything except the report-only rules."""
     return [v for v in violations if v.rule not in REPORT_ONLY_RULES]
@@ -792,5 +802,6 @@ __all__ = [
     "fingerprint",
     "refusing",
     "rule_names",
+    "surface_rules",
     "wire_text",
 ]

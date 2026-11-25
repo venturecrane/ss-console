@@ -106,7 +106,7 @@ def test_server_add_file_rejects_bad_base64(monkeypatch) -> None:
 
     # never reaches the network: bad base64 is refused before the client is built
     with pytest.raises(ValueError, match="base64"):
-        server.add_file("m-1", "x.txt", content_base64="not!!base64!!")
+        server.add_file("m-1", "x.pdf", content_base64="not!!base64!!")
 
 
 def test_add_file_surfaces_literal_api_error_body() -> None:
@@ -147,9 +147,9 @@ def test_server_add_file_decodes_base64_and_delegates(monkeypatch) -> None:
 
     monkeypatch.setattr(server, "_get_client", lambda: _FakeClient())
     payload = base64.b64encode(b"hello bytes").decode()
-    out = server.add_file("m-2", "note.txt", content_base64=payload, folder_id="fld-1")
+    out = server.add_file("m-2", "note.pdf", content_base64=payload, folder_id="fld-1")
     assert out["uploaded"] is True and out["fileId"] and out["readback"] == "confirmed"
-    assert seen == {"matter_id": "m-2", "file_name": "note.txt", "data": b"hello bytes", "folder_id": "fld-1"}
+    assert seen == {"matter_id": "m-2", "file_name": "note.pdf", "data": b"hello bytes", "folder_id": "fld-1"}
 
 
 # ---- content_text: the model never encodes bytes (#2055) --------------------
@@ -183,14 +183,14 @@ def test_server_add_file_encodes_content_text_utf8_and_delegates(monkeypatch) ->
     monkeypatch.setattr(server, "_get_client", lambda: fake)
     # non-ASCII on purpose: this is exactly what hand-rolled base64 mangled
     text = "DRAFT FOR REVIEW\n§ 4.2 — café résumé ✓\n"
-    out = server.add_file("m-3", "brief.txt", content_text=text, folder_id="fld-2")
+    out = server.add_file("m-3", "brief.csv", content_text=text, folder_id="fld-2")
 
     assert out["uploaded"] is True and out["readback"] == "confirmed"
     assert fake.seen["data"] == text.encode("utf-8")
     # round-trips losslessly: no mojibake survives this path
     assert fake.seen["data"].decode("utf-8") == text
     assert fake.seen["matter_id"] == "m-3"
-    assert fake.seen["file_name"] == "brief.txt"
+    assert fake.seen["file_name"] == "brief.csv"
     assert fake.seen["folder_id"] == "fld-2"
 
 
@@ -199,7 +199,7 @@ def test_server_add_file_content_text_works_without_a_folder(monkeypatch) -> Non
 
     fake = _RecordingClient()
     monkeypatch.setattr(server, "_get_client", lambda: fake)
-    server.add_file("m-3", "note.md", content_text="hello")
+    server.add_file("m-3", "note.csv", content_text="hello")
     assert fake.seen["data"] == b"hello"
     assert fake.seen["folder_id"] is None
 
@@ -240,7 +240,7 @@ def test_server_add_file_treats_empty_text_as_supplied(monkeypatch) -> None:
 
     fake = _RecordingClient()
     monkeypatch.setattr(server, "_get_client", lambda: fake)
-    server.add_file("m-1", "empty.txt", content_text="")
+    server.add_file("m-1", "empty.csv", content_text="")
     assert fake.seen["data"] == b""
 
 
@@ -258,3 +258,42 @@ def test_add_file_schema_offers_content_text_and_requires_neither_content() -> N
     assert set(tool.input_schema.get("required", [])) == {"matter_id", "file_name"}
     assert "content_text" in (tool.description or "")
     assert "hand-encode" in (tool.description or "")
+
+
+# ---- A document is Word, never a text file (2026-11-24) ---------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "kwargs"),
+    [
+        ("Supplemental Production List - DRAFT.txt", {"content_text": "1. Harbor Clinic records"}),
+        ("Index of Documents.md", {"content_text": "1. Quill Imaging report"}),
+        ("Production List", {"content_text": "1. Quill Imaging report"}),
+        ("List.TXT", {"content_text": "1. a"}),
+    ],
+)
+def test_server_add_file_refuses_a_text_document_without_filing(monkeypatch, name, kwargs) -> None:
+    """The list a Word render refused was filed as a .txt instead. A refusal here
+    pages SMD (status refused) and files nothing (the client is never built).
+    Every name is invented."""
+    from smokeball_connector import server
+
+    def _boom():
+        raise AssertionError("a text document must not reach the matter")
+
+    monkeypatch.setattr(server, "_get_client", _boom)
+    out = server.add_file("m-1", name, **kwargs)
+    assert out["fileId"] is None
+    assert out["status"] == "refused" and out["reason"] == "text_document"
+    assert "render_docx_draft" in out["refusals"][0]
+
+
+def test_server_add_file_restages_an_existing_text_file_from_its_bytes(monkeypatch) -> None:
+    """Bytes are never refused by name: restaging an existing .txt keeps working."""
+    from smokeball_connector import server
+
+    fake = _RecordingClient()
+    monkeypatch.setattr(server, "_get_client", lambda: fake)
+    out = server.add_file("m-1", "Old Phone Log.txt", content_base64=base64.b64encode(b"saved").decode())
+    assert out["readback"] == "confirmed"
+    assert fake.seen["file_name"] == "Old Phone Log.txt" and fake.seen["data"] == b"saved"

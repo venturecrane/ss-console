@@ -134,8 +134,18 @@ paths:
   # ---- PR B: jobs family additions (W1) ----
   jobs_bin:
     path: '{jobs_bundle}/.venv/bin/jobs'
+  # The rate card every lane prices spend with (jobs/budget.py). The bundle
+  # ships it (templates/jobs-runtime.sh); `jobs.budget.PRICING_DEFAULT` reads
+  # this path, so a root command with no JOBS_PRICING_JSON (python -m
+  # jobs.stop) prices from the same file the daemon does. 2026-11-24: the
+  # default named /opt/smd/cost_telemetry/, which no seat has ever had, and a
+  # stop on ashton-price could not price the job's spend. Probed at boot.
   jobs_pricing:
     path: '{jobs_bundle}/anthropic_pricing.json'
+    env: [JOBS_PRICING_JSON]
+    expect: present
+    kind: file
+    when: lanes
   # Each lane's queue default. The broker reads SMD_<LANE>_QUEUE_DIR first
   # (entrypoint-lanes.sh sets it, empty when the lane is off); no `env` here,
   # because the probe asserts env equality and these were not measured as such.

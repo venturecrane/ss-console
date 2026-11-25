@@ -87,7 +87,7 @@ from bootstrap.cron_materialize import (
 from bootstrap.mcp_registry import MCP_CONNECTOR_REGISTRY
 from bootstrap.role_persona import RolePersonaError, load_role_persona
 from bootstrap.validate import validate_customer_yaml
-from shared import capabilities, seat_config
+from shared import capabilities, output_checklist_rules, seat_config
 from shared.cron_containment import containment_active, containment_reason, sentinel_path
 from shared.routine_change_spool import append_routine_change
 from shared.secrets import get_secret
@@ -2618,6 +2618,9 @@ def translate_customer_yaml(
     # SKILL.md byte-identical to the catalog — the idempotency contract
     # _write_if_changed relies on.
     spec_block = _spec_pointer_block()
+    # The send checklist's rules close every SOUL.md, for the seat's checklist
+    # profile read from the persona's own roles dir (output_checklist_rules).
+    checklist_rules = output_checklist_rules.soul_rules(customer, roles_dir)
 
     written_slugs: list[str] = []
     profiles_root = home_path / "profiles"
@@ -2627,13 +2630,12 @@ def translate_customer_yaml(
             raise TranslateError("persona missing slug after validation")
         profile_dir = profiles_root / slug
         config_path = profile_dir / "config.yaml"
-        soul_path = profile_dir / "SOUL.md"
 
         config_body = _persona_config(persona, customer, resolved_pins)
-        soul_body = _soul_body(persona, customer, role_persona)
+        soul_body = _soul_body(persona, customer, role_persona) + checklist_rules
 
         wrote_config = _write_if_changed(config_path, _yaml_bytes(config_body))
-        wrote_soul = _write_if_changed(soul_path, soul_body.encode())
+        wrote_soul = _write_if_changed(profile_dir / "SOUL.md", soul_body.encode())
         # NOTE: MEMORY.md / USER.md are intentionally NOT written here.
         # Hermes' flat-file memory core is the Phase-1 substrate; Hermes
         # auto-creates and maintains those files at profile boot. Earlier

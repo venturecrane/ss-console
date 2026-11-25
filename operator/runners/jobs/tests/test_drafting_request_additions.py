@@ -11,6 +11,8 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from drafting_testkit import envelope, make_inputs, make_job
 from jobs import request_additions as ra
 from jobs import smd_stop
@@ -230,3 +232,67 @@ def test_the_lane_takes_them_while_its_child_runs(tmp_path) -> None:
     lane._report = lambda job_id, code, out: str(code)  # type: ignore[method-assign]
     assert lane.run_job(JOB) == "0"
     assert _answer(lane, key)["result"] == "applied"
+
+
+def test_the_daemons_lock_under_its_umask_stays_openable_by_the_child(tmp_path) -> None:
+    """2026-11-24, A&P: root's ``umask 027`` made the lock 0640, which the
+    jobs-uid child (to that file, "other") cannot open, and a paid job died at
+    compose. FALSIFIER: drop the ``fchmod`` in ``_shareable`` and this lock is 0640."""
+    lane = _lane(tmp_path)
+    jd = _claimed(lane)
+    key = _mark(lane)
+    was = os.umask(0o027)
+    try:
+        ra.take(lane)
+    finally:
+        os.umask(was)
+    assert _answer(lane, key)["result"] == "applied"
+    assert (jd / ra.LOCK).stat().st_mode & 0o777 == 0o644
+
+
+def test_a_narrowed_lock_already_there_is_widened_by_its_owner(tmp_path) -> None:
+    lane = _lane(tmp_path)
+    jd = _claimed(lane)
+    (jd / ra.LOCK).touch()
+    (jd / ra.LOCK).chmod(0o640)
+    ra.close_door(jd)
+    assert (jd / ra.LOCK).stat().st_mode & 0o777 == 0o644
+
+
+def test_root_hands_a_lock_it_made_to_the_job_dirs_owner(tmp_path, monkeypatch) -> None:
+    """The chown half without root: the daemon is told it is root and the job
+    dir belongs to another uid, so the lock must go to that uid and group.
+    FALSIFIER: drop the ``fchown`` and nothing is handed over."""
+    jd = tmp_path / "job"
+    jd.mkdir()
+    real_stat = os.stat
+    child_uid, child_gid = 4242, 4343
+
+    def stat(path, *a, **kw):
+        st = real_stat(path, *a, **kw)
+        if not isinstance(path, int) and Path(path) == jd:
+            return os.stat_result((st.st_mode, st.st_ino, st.st_dev, st.st_nlink, child_uid, child_gid, *st[6:10]))
+        return st
+
+    calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(ra.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(ra.os, "stat", stat)
+    monkeypatch.setattr(ra.os, "fchown", lambda fd, uid, gid: calls.append((uid, gid)))
+    with ra._door_lock(jd):
+        pass
+    assert calls == [(child_uid, child_gid)]
+
+
+@pytest.mark.skipif(os.geteuid() != 0, reason="a real chown needs root")
+def test_as_root_the_lock_is_the_job_owners_and_0644(tmp_path) -> None:
+    jd = tmp_path / "job"
+    jd.mkdir()
+    os.chown(jd, 65534, 65534)
+    was = os.umask(0o077)
+    try:
+        with ra._door_lock(jd):
+            pass
+    finally:
+        os.umask(was)
+    st = (jd / ra.LOCK).stat()
+    assert (st.st_uid, st.st_gid, st.st_mode & 0o777) == (65534, 65534, 0o644)

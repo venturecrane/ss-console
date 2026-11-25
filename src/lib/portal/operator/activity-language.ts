@@ -299,6 +299,8 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
   DECOMMISSION_STEP_COMPLETE: 'INTERNAL. Per-step decommission marker for the compliance trail.',
   DECOMMISSION_STEP_FAILED: 'INTERNAL. Per-step decommission marker for the compliance trail.',
   DECOMMISSION_FINAL: 'INTERNAL. Decommission pipeline boundary, run by us.',
+  DRAFTING_JOB_PROGRESS:
+    'INSTRUMENT. A running drafting job moved a stage or a files-pulled count, for SMD to tell a long pull from a stuck one. The firm sees the job start and finish, already mapped.',
 }
 
 /**

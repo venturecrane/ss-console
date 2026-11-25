@@ -116,6 +116,7 @@ __all__ = [
     "release_job",
     "released_count",
     "review_dir",
+    "row_draft_ids",
     "row_job",
     "rows",
 ]
@@ -156,8 +157,14 @@ def hold(
     directory: Path | None = None,
     author: str = "",
     job: dict[str, str] | None = None,
+    draft_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Write one held reply for review; return the row (with ``id`` and ``digest``).
+
+    ``draft_ids`` are the Operator mailbox's working drafts of this reply (the
+    held one and every held draft it superseded in the turn): the release
+    discards them once the reply is sent, and never otherwise. Not digested:
+    they are the mailbox's copies, not what is sent.
 
     ``batches`` may be empty: a records reply from a turn that searched a file's
     pages is held whether or not it attached anything. ``reason`` is why the
@@ -183,8 +190,17 @@ def hold(
         author=author,
         job=job,
     )
+    kept = [d for d in draft_ids or () if isinstance(d, str) and d]
+    if kept:
+        row["draft_ids"] = kept
     write_row(row, directory or review_dir())
     return row
+
+
+def row_draft_ids(row: dict[str, Any]) -> list[str]:
+    """The working drafts a held row carries (``hold(draft_ids=...)``), or ``[]``."""
+    ids = row.get("draft_ids")
+    return [d for d in ids if isinstance(d, str) and d] if isinstance(ids, list) else []
 
 
 def rows(directory: Path | None = None) -> list[dict[str, Any]]:
