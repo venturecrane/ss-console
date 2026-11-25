@@ -101,6 +101,15 @@ if [ -f "$HOME_DIR/.crontab" ] || [ -n "${OPS_WORKSPACE:-}" ]; then
 # Move a Claude session stuck at its account's usage limit to the other account.
 * * * * * /opt/ops/bin/ops-claude-failover >> /home/ops/logs/claude-failover.log 2>&1
 EOF
+  # The stall watch (bin/ops-task-nudge) runs on client workspaces only, and a
+  # workspace's crontab is copied from the image on its first boot only, so a
+  # volume made before the watch existed gets the line here.
+  if [ -n "${OPS_WORKSPACE:-}" ]; then
+    grep -q ops-task-nudge "$HOME_DIR/.crontab" || cat >> "$HOME_DIR/.crontab" <<'EOF'
+# Tell a handed-off task's session that stopped at its prompt with no outcome to carry on.
+*/5 * * * * /opt/ops/bin/ops-task-nudge >> /home/ops/logs/task-nudge.log 2>&1
+EOF
+  fi
   crontab -u ops "$HOME_DIR/.crontab"
 fi
 service cron start >/dev/null

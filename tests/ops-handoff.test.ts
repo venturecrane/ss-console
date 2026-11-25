@@ -464,6 +464,49 @@ describe('ops-handoff', () => {
       expect(got.err).toMatch(/^not delivered: .*typing into ops-ashton-price-61703 failed/)
     })
 
+    // 2026-11-24: a task session answered a --say message, ended its turn and
+    // sat idle, twice on one matter. While the task has no outcome, the message
+    // file ends by telling it to go back to the task.
+    describe('the carry-on line', () => {
+      const CARRY_ON =
+        'When you have answered this, carry on with your task from where you left it, without stopping, until you write its outcome.'
+      const ws = () => path.join(home, 'ws')
+      const sayFile = (): string => {
+        const out = handoff(['ap', '--say', 'ops-ashton-price-61703', 'hold the filing'], {
+          REMOTE_EXEC: '1',
+        })
+        const id = out.match(/message (\d{6}-\d+) read back/)?.[1] ?? ''
+        return fs.readFileSync(path.join(ws(), 'inbox', `say-${id}.md`), 'utf8')
+      }
+      // The fake tmux's one window has pane pid 4242, as ops-start's task file
+      // and outbox file are named after it.
+      const claimTask = () => {
+        fs.mkdirSync(path.join(ws(), 'inbox'), { recursive: true })
+        fs.writeFileSync(path.join(ws(), 'inbox', 'task-20261124T150000-4242.md'), 'the task\n')
+      }
+
+      it('ends the message with it when the task has no outcome yet', () => {
+        claimTask()
+        expect(sayFile()).toBe(`hold the filing\n\n${CARRY_ON}\n`)
+      })
+
+      it('adds nothing when the task already wrote its outcome (or its hold)', () => {
+        claimTask()
+        fs.writeFileSync(path.join(ws(), 'outbox', 'task-20261124T150000-4242.md'), 'HOLD: x\n')
+        expect(sayFile()).toBe('hold the filing\n')
+      })
+
+      it('adds nothing for a session that is not a handed-off task', () => {
+        expect(sayFile()).toBe('hold the filing\n')
+      })
+
+      it("another task's outcome does not count as this one's", () => {
+        claimTask()
+        fs.writeFileSync(path.join(ws(), 'outbox', 'task-20261124T140000-999.md'), 'done\n')
+        expect(sayFile()).toContain(CARRY_ON)
+      })
+    })
+
     it('says delivery unknown, exit 3, when no screen comes back', () => {
       const got = sayStatus({ SAY_RESULT: '' })
       expect(got.status).toBe(3)

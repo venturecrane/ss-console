@@ -1,0 +1,127 @@
+#!/bin/bash
+# ops-task-nudge (cron, every 5 min, client workspaces only): a handed-off task's
+# Claude session that has stopped at its prompt before writing its outcome is
+# told to carry on.
+#
+# Why: a message typed into a task session (`ops-handoff <client> --say`) is a
+# new turn. The session answers it, ends the turn and waits at its prompt, with
+# nothing telling it to go back to the task. On 2026-11-24 one session on the
+# A&P workspace did this twice on one matter, about 75 minutes lost on the
+# attorney's last open request. --say now ends such a message with a line
+# telling the session to carry on; this catches a session that stops anyway.
+#
+# A window is nudged when ALL of:
+#   * it is a handed-off task: ops-start claimed ~/inbox/task-*-<pane pid>.md
+#     (the plain `ops` session has no task file and is never nudged);
+#   * the task has no outcome: no ~/outbox/task-*-<pane pid>.md. A task that
+#     stops on a question writes its hold there too (ops-start's prompt: "When
+#     you finish (or stop), write the outcome"), so a held task is not nudged;
+#   * its Claude is running (the pane has a child started with --name ops-...,
+#     the test ops-handoff --say uses), so the text never lands in a shell;
+#   * the window has printed nothing for TASK_NUDGE_IDLE_MINUTES (default 10):
+#     #{window_activity}, the clock ops-idle-stop and ops-reap-tasks read. A
+#     working Claude keeps redrawing its screen; one waiting at its prompt
+#     prints nothing;
+#   * the bottom of its screen is not a permission question ("Do you want to
+#     ...") or a usage-limit message: typing there would answer the question
+#     (Enter picks its first option) or fight ops-claude-failover.
+#
+# The nudge is typed the way --say types: one short line with an id, Enter, then
+# the id is looked for on the screen with whitespace stripped. Limits: one nudge
+# per TASK_NUDGE_GAP_MINUTES (default 20) per task, and TASK_NUDGE_MAX (default
+# 3) per task. A task still idle with no outcome once its nudges are spent is
+# stalled: one line goes to ~/state/task-stalls and ~/logs/task-nudge.log, and
+# the workspace fails its own healthchecks.io check (OPS_HC_URL), which emails
+# team@, the alert path ops-claude-failover uses. The hourly triage on smd-ops
+# reads no workspace's files (it reads only their Machine sizes), so that check
+# is how a stall reaches a person. Once per task.
+#
+# State: ~/state/task-nudge/<task file name>, one epoch per nudge typed, and
+# <name>.stalled once reported; removed when the task writes its outcome.
+#
+# Test seams: OPS_NUDGE_PAUSE (seconds between read-back looks, default 2),
+# OPS_NUDGE_KEY_PAUSE (seconds before Enter, default 1).
+set -uo pipefail
+IDLE_MIN="${TASK_NUDGE_IDLE_MINUTES:-10}"
+GAP_MIN="${TASK_NUDGE_GAP_MINUTES:-20}"
+MAX="${TASK_NUDGE_MAX:-3}"
+TRIES=3
+PAUSE="${OPS_NUDGE_PAUSE:-2}"
+KEY_PAUSE="${OPS_NUDGE_KEY_PAUSE:-1}"
+NUDGE='Continue your task from where you left it until you write its outcome.'
+S="$HOME/state/task-nudge"
+mkdir -p "$S" "$HOME/logs"
+now=$(date +%s)
+log() { echo "$(date -u +%FT%TZ) nudge: $*"; }
+
+# One run at a time. A directory, not a ~/locks/*.lock file: those keep a
+# workspace awake (ops-idle-stop).
+lock="$HOME/state/task-nudge.lockdir"
+if ! mkdir "$lock" 2>/dev/null; then
+  [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] && rm -rf "$lock"
+  exit 0
+fi
+trap 'rmdir "$lock" 2>/dev/null' EXIT
+
+# page <message>: fail this workspace's healthchecks.io check, which emails.
+page() {
+  # shellcheck disable=SC1091
+  [ -f "$HOME/.ops-secrets" ] && . "$HOME/.ops-secrets"
+  if [ -z "${OPS_HC_URL:-}" ]; then log "no OPS_HC_URL on this Machine; not paged: $1"; return 1; fi
+  curl -fsS -m 10 --retry 3 --data-raw "$1" "$OPS_HC_URL/fail" >/dev/null
+}
+
+# type_nudge <window> <id>: type the nudge and Enter, then look for the id on
+# the screen. Prints "read back", "not read back" or why it was not typed.
+type_nudge() {
+  local w="$1" id="$2" n=0
+  tmux send-keys -t "main:$w" -l "[nudge $id] $NUDGE" || { echo "typing failed"; return 1; }
+  sleep "$KEY_PAUSE"
+  tmux send-keys -t "main:$w" Enter || { echo "Enter failed"; return 1; }
+  for _ in $(seq 1 "$TRIES"); do
+    sleep "$PAUSE"
+    n=$({ tmux capture-pane -p -J -t "main:$w" -S -2000 2>/dev/null | tr -d '[:space:]'; echo; } | grep -cF "$id")
+    [ "${n:-0}" -gt 0 ] && { echo "read back"; return 0; }
+  done
+  echo "not read back"
+}
+
+panes=$(tmux list-panes -s -t main -F "#{pane_pid} #{window_index} #{window_activity}" 2>/dev/null) || exit 0
+
+while read -r ppid win activity; do
+  [[ "$ppid" =~ ^[0-9]+$ ]] && [[ "$activity" =~ ^[0-9]+$ ]] || continue
+  task=$(ls "$HOME"/inbox/task-*-"$ppid".md 2>/dev/null | head -1)
+  [ -n "$task" ] || continue
+  key=$(basename "$task" .md)
+  if ls "$HOME"/outbox/task-*-"$ppid".md >/dev/null 2>&1; then
+    rm -f "$S/$key" "$S/$key.stalled"
+    continue
+  fi
+  session=$(ps -o args= --ppid "$ppid" 2>/dev/null | grep -o -- '--name ops-[a-z0-9-]*' | head -1)
+  session="${session#--name }"
+  [ -n "$session" ] || continue
+  idle=$(( (now - activity) / 60 ))
+  [ "$idle" -ge "$IDLE_MIN" ] || continue
+  screen=$(tmux capture-pane -p -J -t "main:$win" 2>/dev/null | tail -n 30)
+  if grep -qE "Do you want to|You.ve hit your [A-Za-z0-9 .-]*limit" <<<"$screen"; then
+    continue
+  fi
+  sent=$(grep -c '^[0-9]' "$S/$key" 2>/dev/null); sent=${sent:-0}
+  last=$(tail -n 1 "$S/$key" 2>/dev/null); [[ "$last" =~ ^[0-9]+$ ]] || last=0
+  if [ $((now - last)) -lt $((GAP_MIN * 60)) ]; then continue; fi
+  if [ "$sent" -ge "$MAX" ]; then
+    [ -f "$S/$key.stalled" ] && continue
+    line="$(date -u +%FT%TZ) task session stalled: $session ($key) idle ${idle}m at its prompt with no outcome after $sent nudges"
+    echo "$line" >> "$HOME/state/task-stalls"
+    log "$line"
+    : > "$S/$key.stalled"
+    if page "$(hostname) $line. Look at window main:$win before anything else is sent to it."; then
+      log "$session ($key) reported stalled through the healthchecks.io check"
+    fi
+    continue
+  fi
+  id="$(date -u +%H%M%S)-$ppid"
+  echo "$now" >> "$S/$key"
+  log "$session ($key) idle ${idle}m with no outcome; nudge $((sent + 1)) of $MAX, $(type_nudge "$win" "$id")"
+done <<<"$panes"
+exit 0
