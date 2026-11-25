@@ -87,6 +87,7 @@ DOCUMENT_CLASSES = (
     "memo",
     "depo_outline",
     "letter",
+    "settlement_statement",
 )
 
 # ---- Rendering -----------------------------------------------------------------

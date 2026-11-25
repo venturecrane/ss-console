@@ -118,6 +118,7 @@ CLASS_RULES: dict[str, ClassRules] = {
     "memo": ClassRules(heading_align=("left", "left", "left"), page_numbers=True),
     "depo_outline": ClassRules(heading_align=("left", "left", "left"), page_numbers=True),
     "letter": ClassRules(heading_align=("left", "left", "left"), page_numbers=False),
+    "settlement_statement": ClassRules(heading_align=("left", "left", "left"), page_numbers=True),
 }
 
 

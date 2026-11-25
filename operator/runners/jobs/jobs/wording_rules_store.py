@@ -48,7 +48,8 @@ MANIFEST_KEY = "wordings"
 
 #: Every kind of document a wording rule may cover. The drafting lane's five
 #: (``plugins/hermes-smd-lanes/drafting.py`` ``DOCUMENT_CLASSES``), the demand
-#: lane's one, and the plain letter the chat-turn tool renders.
+#: lane's one, and the two a chat turn makes: the plain letter, and the client's
+#: settlement statement (the settlement-statement-feeder skill, 2026-11-25).
 KINDS: tuple[str, ...] = (
     "mediation_brief",
     "discovery_set",
@@ -57,12 +58,18 @@ KINDS: tuple[str, ...] = (
     "depo_outline",
     "demand_letter",
     "letter",
+    "settlement_statement",
 )
 
-#: The kinds a queued job makes and reads these rules for. ``letter`` is not one:
-#: nothing that makes a letter reads this file, so a rule for letters alone is
-#: never called in effect.
-LANE_KINDS: frozenset[str] = frozenset(k for k in KINDS if k != "letter")
+#: The kinds only a chat turn makes. No queued job makes them, so none reads
+#: this file for them: a chat turn reads the rule from its class's installed
+#: spec (``classes/work_product/<property>.md``, where the applier renders every
+#: confirmed rule of the class).
+CHAT_KINDS: frozenset[str] = frozenset({"letter", "settlement_statement"})
+
+#: The kinds a queued job makes and reads these rules for, so a rule for only
+#: chat-made kinds is never called in effect by a lane.
+LANE_KINDS: frozenset[str] = frozenset(k for k in KINDS if k not in CHAT_KINDS)
 
 #: How each kind is said to a person, singular and plural.
 KIND_WORDS: dict[str, tuple[str, str]] = {
@@ -73,6 +80,7 @@ KIND_WORDS: dict[str, tuple[str, str]] = {
     "depo_outline": ("deposition outline", "deposition outlines"),
     "demand_letter": ("demand letter", "demand letters"),
     "letter": ("letter", "letters"),
+    "settlement_statement": ("settlement statement", "settlement statements"),
 }
 
 #: Who a document is written for. A rule may be limited to one reader; a rule
@@ -255,6 +263,7 @@ __all__ = [
     "BLOCK_HEADING",
     "KINDS",
     "KIND_WORDS",
+    "CHAT_KINDS",
     "LANE_KINDS",
     "MANIFEST",
     "MANIFEST_KEY",

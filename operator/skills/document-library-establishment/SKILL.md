@@ -6,9 +6,10 @@ description: >-
   library", or "initialize yourself and set up for our firm"), it queues ONE job, in code, that
   hunts the firm's own documents of every kind the drafting job makes and replies with one
   numbered list per kind. The classes the drafting renderer knows (discovery set, discovery
-  response, demand letter, mediation brief, memo, deposition outline, letter) are covered as
-  the table below says: the five the drafting job makes are set up this way, a demand letter
-  already writes from the firm's own demand, and a letter is not part of this setup. The
+  response, demand letter, mediation brief, memo, deposition outline, letter, settlement
+  statement) are covered as the table below says: the five the drafting job makes are set up
+  this way, a demand letter already writes from the firm's own demand, and a letter and a
+  settlement statement are not part of this setup. The
   administrator answers per kind (use a number, keep the current one, or point at another
   document by matter or name) and code reads the answer from the email; nothing is made until
   they do. The Operator never builds its own starter templates. Refused for anyone who is not a
@@ -71,17 +72,18 @@ whenever the firm's style shifts or a new template comes along.
 
 **The goal is one template per document class the drafting renderer knows.** Those classes are
 the values the render tool's `document_class` parameter accepts, and the tool's own description
-lists them. Today they are seven, and each is covered this way:
+lists them. Today they are eight, and each is covered this way:
 
-| Class                | What it is                                                                       |
-| -------------------- | -------------------------------------------------------------------------------- |
-| `discovery_set`      | discovery the firm PROPOUNDS: interrogatories, requests for production/admission |
-| `discovery_response` | the firm's responses, on its client's behalf, to discovery served on it          |
-| `demand_letter`      | the firm's settlement demand to a carrier or opposing party                      |
-| `mediation_brief`    | the firm's brief or statement for a mediation or settlement conference           |
-| `memo`               | the firm's internal memo: a case evaluation, an analysis, a note to file         |
-| `depo_outline`       | the firm's outline for taking or defending a deposition                          |
-| `letter`             | the firm's correspondence: to its client, a carrier, a provider, other counsel   |
+| Class                  | What it is                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `discovery_set`        | discovery the firm PROPOUNDS: interrogatories, requests for production/admission |
+| `discovery_response`   | the firm's responses, on its client's behalf, to discovery served on it          |
+| `demand_letter`        | the firm's settlement demand to a carrier or opposing party                      |
+| `mediation_brief`      | the firm's brief or statement for a mediation or settlement conference           |
+| `memo`                 | the firm's internal memo: a case evaluation, an analysis, a note to file         |
+| `depo_outline`         | the firm's outline for taking or defending a deposition                          |
+| `letter`               | the firm's correspondence: to its client, a carrier, a provider, other counsel   |
+| `settlement_statement` | the client's settlement statement and disbursement list, made in a chat turn     |
 
 - `discovery_set`, `discovery_response`, `mediation_brief`, `memo` and `depo_outline` are the
   kinds the drafting job makes, and the library setup job covers all five in one request.

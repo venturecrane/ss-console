@@ -54,6 +54,7 @@ CLASS_TITLES: dict[str, str] = {
     "memo": "Memo",
     "depo_outline": "Deposition Outline",
     "letter": "Letter",
+    "settlement_statement": "Settlement Statement",
 }
 
 

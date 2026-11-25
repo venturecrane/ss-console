@@ -83,6 +83,7 @@ _KIND_NAMES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("depo_outline", re.compile(r"\bdepo(?:sition)? outlines?\b")),
     ("demand_letter", re.compile(r"\bdemand letters?\b|\bdemands\b")),
     ("letter", re.compile(r"(?<!demand )\bletters?\b")),
+    ("settlement_statement", re.compile(r"\bsettlement statements?\b")),
 )
 
 #: Each reader's names, matched the same way. A reader is recorded only when the

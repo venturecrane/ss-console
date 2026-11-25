@@ -73,6 +73,7 @@ DOCUMENT_CLASSES = (
     "memo",
     "depo_outline",
     "letter",
+    "settlement_statement",
 )
 
 #: The registry's variants, for the kinds that have them (the rest have none).
