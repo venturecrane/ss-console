@@ -9,6 +9,7 @@ import io
 import json
 import sys
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 import docx
@@ -51,15 +52,21 @@ def _paper(
     extra_front: tuple[str, ...] = (),
     responding: str = f"Plaintiff {CLIENT}",
     signature: tuple[str, ...] = ("Attorney 1, Esq.",),
+    dated: str = "DATED: November 3, 2026",
+    one_paragraph_closing: bool = False,
+    tail: tuple[str, ...] = (),
+    executed: str = "November 4, 2026",
 ) -> bytes:
     d = docx.Document()
     d.core_properties.author = author
     d.core_properties.last_modified_by = author
+    d.core_properties.created = datetime(2021, 6, 7, 8, 9, 10)
+    d.core_properties.modified = datetime(2022, 6, 7, 8, 9, 10)
     d.sections[0].header.paragraphs[0].text = FIRM
     for i, line in enumerate(footer):
         para = d.sections[0].footer.paragraphs[0] if i == 0 else d.sections[0].footer.add_paragraph()
         para.text = line
-    lines = [
+    lines: list[str | tuple[str, ...]] = [
         "Attorney 1, Esq.",
         FIRM,
         f"Attorneys for Plaintiff {CLIENT}",
@@ -79,20 +86,27 @@ def _paper(
         "State the date of the incident.",
         "RESPONSE TO SPECIAL INTERROGATORY NO. 1:",
         "The incident occurred on March 3, 2025 at Exampleville.",
-        "DATED: November 3, 2026",
-        FIRM,
-        "By: ______________",
-        *signature,
-        f"Attorneys for Plaintiff {CLIENT}",
+    ]
+    signing = (dated, FIRM, "By: ______________", *signature, f"Attorneys for Plaintiff {CLIENT}")
+    lines += [signing] if one_paragraph_closing else list(signing)
+    lines += [
         "VERIFICATION",
-        VERIFY,
+        VERIFY.replace("November 4, 2026", executed),
         "______________",
         CLIENT,
+        *tail,
         "PROOF OF SERVICE",
         "I, Sam Server, served the foregoing.",
     ]
     for line in lines:
-        d.add_paragraph(line)
+        if isinstance(line, tuple):  # one paragraph, its lines joined by line breaks
+            para = d.add_paragraph()
+            for i, piece in enumerate(line):
+                run = para.add_run(piece)
+                if i < len(line) - 1:
+                    run.add_break()
+        else:
+            d.add_paragraph(line)
     buf = io.BytesIO()
     d.save(buf)
     return buf.getvalue()
@@ -430,3 +444,88 @@ def test_a_draft_made_on_a_file_with_no_frame_is_unchanged(tmp_path, monkeypatch
 
     run = _real_run(tmp_path, monkeypatch, make_styles("discovery_response", _paper(), IDENTITY).data)
     assert F.at_gate(run, Unit("", "", "special_interrogatories", None, run.data), DRAFT) == DRAFT
+
+
+# ---- the second rerun on real papers, 2026-11-25: each cause, invented ----
+
+
+def _closing(made) -> list[str]:
+    return [t for t, _h in F.read(made.data).blocks[F.CLOSING]]
+
+
+def test_a_closing_of_one_paragraph_joined_by_line_breaks_is_read_line_by_line():
+    made = FM.make_frame("discovery_response", _paper(one_paragraph_closing=True), IDENTITY, BLOCKS)
+    assert made.counts["closing_refused"] == 0
+    closing = _closing(made)
+    assert closing[:5] == [
+        "DATED: [[v.date]]",
+        FIRM,
+        "By: ______________",
+        "[[v.signer]]",
+        "Attorneys for [[v.responding_party]]",
+    ]
+    _clean(made)
+
+
+def test_the_signer_printed_otherwise_than_authored_is_a_marked_place_never_a_drop():
+    made = FM.make_frame("discovery_response", _paper(signature=("ALEX J. QUENTWORTH",)), IDENTITY, BLOCKS)
+    assert "[[v.signer]]" in _closing(made) and "QUENTWORTH" not in _all_text(made.data)
+    assert made.counts["closing_refused"] == 0
+    _clean(made)
+    inline = FM._signer_lines(["By: ______ Alex J. Quentworth"], [])
+    assert inline == ["By: ______ [[v.signer]]"]
+    assert FM._signer_lines(["By: ____", FIRM], [FM.K.spaced(FIRM)]) == ["By: ____", FIRM]
+
+
+def test_a_declaration_for_additional_discovery_is_never_part_of_the_frame():
+    tail = (
+        "DECLARATION FOR ADDITIONAL DISCOVERY",
+        "I am propounding 42 interrogatories in this motor vehicle negligence case against WIDGETCO.",
+    )
+    made = FM.make_frame("discovery_response", _paper(tail=tail), IDENTITY, BLOCKS)
+    text = _all_text(made.data)
+    assert "ADDITIONAL DISCOVERY" not in text and "42 interrogatories" not in text and "negligence" not in text
+    assert made.counts["closing_refused"] == 0
+
+
+def test_the_made_file_carries_none_of_the_papers_dates_in_its_properties():
+    made = FM.make_frame("discovery_response", _paper(), IDENTITY, BLOCKS)
+    with zipfile.ZipFile(io.BytesIO(made.data)) as z:
+        props = z.read("docProps/core.xml").decode() + z.read("docProps/app.xml").decode()
+    assert "2021-" not in props and "2022-" not in props and "dcterms:created" not in props
+    assert "TotalTime" not in props and "<cp:revision" not in props
+    _clean(made)
+
+
+def test_a_dated_blank_with_its_year_is_one_marked_place():
+    paper = _paper(dated="DATED: ____________, 2026", executed="______________, 2026")
+    made = FM.make_frame("discovery_response", paper, IDENTITY, BLOCKS)
+    closing = _closing(made)
+    assert closing[0] == "DATED: [[v.date]]" and made.counts["closing_refused"] == 0
+    assert any("Executed on [[v.date]], at" in t for t in closing)
+    assert "2026" not in "".join(closing)
+    _clean(made)
+
+
+def test_a_hole_never_cuts_a_kept_sentence():
+    run_on = "Responding Party responds to these interrogatories subject to the following,"
+    tail = "and notes the Hondata sedan was inspected at Brightwell Clinic."
+    made = FM.make_frame("discovery_response", _paper(extra_front=(run_on, tail)), IDENTITY, BLOCKS)
+    front = [t for t, _h in F.read(made.data).blocks[F.FRONT]]
+    assert run_on not in front and front[-1] == F.HOLE and made.counts["front_refused"] == 2
+    assert front[1].endswith("section 2030.310.") and front[3] == OBJECTION
+
+
+def test_a_preliminary_statement_with_line_breaks_inside_is_kept_whole():
+    first, second = PRELIM.split(" These responses ", 1)
+    paper = _paper(prelim="")
+    d = docx.Document(io.BytesIO(paper))
+    target = next(p for p in d.paragraphs if p.text == "")
+    run = target.add_run(first)
+    run.add_break()
+    target.add_run("These responses " + second)
+    buf = io.BytesIO()
+    d.save(buf)
+    made = FM.make_frame("discovery_response", buf.getvalue(), IDENTITY, BLOCKS)
+    front = [t for t, _h in F.read(made.data).blocks[F.FRONT]]
+    assert front[1].endswith("section 2030.310.") and "These responses are made solely" in front[1]

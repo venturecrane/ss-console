@@ -60,6 +60,16 @@ _CHUNK = 280
 HOLE = ""
 VOCAB = K.VOCAB
 _FOOTER = re.compile(r"^word/footer\d*\.xml$")
+#: A closing's Dated line, its label kept: "DATED:", "Dated", "Date:".
+_DATED = re.compile(r"(?i)^(\W*(?:dated\s*:?|date\s*:))\s*\S.*$")
+#: "By:" with its blank, alone on its line: the next line is the signer's name.
+_BY_BLANK = re.compile(r"(?i)^by\s*:?\s*_*\s*$")
+#: "By: ______ Attorney Name": the name after the blank is the signer's.
+_BY_NAME = re.compile(r"(?i)^(by\s*:?\s*_*\s*)([A-Za-z][^\d]{2,60})$")
+#: A bare year left in the closing (a date's remnant), not a code section ("2015.5").
+_YEAR = re.compile(r"\b(?:19|20)\d{2}\b(?![.\d])")
+#: Where a kept sentence may end: a full stop, a colon, a closing quote or bracket.
+_ENDS = re.compile(r"[.:;!?\"”)\]]\s*$")
 _TITLE_TOKEN = re.compile(r"[A-Za-z]+(?:['’][Ss])?")
 
 
@@ -75,14 +85,20 @@ def _fold(text: str) -> str:
     return " ".join((text or "").split())
 
 
+_RUN_TEXT = {f"{_W}tab": "\t", f"{_W}br": "\n", f"{_W}cr": "\n"}
+
+
 def _body_lines(blob: bytes) -> list[str]:
-    """The source paper's body read as lines, a table row as one line."""
+    """The source paper's body read as lines, a table row as one line. A line
+    break inside a paragraph (``w:br``) is kept as a newline: a closing is often
+    one paragraph of lines (Dated, the firm, By, the signer, Attorneys for)."""
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         body = etree.fromstring(z.read("word/document.xml")).find(f"{_W}body")
     out: list[str] = []
     for el in body if body is not None else []:
         if el.tag == f"{_W}p":
-            out.append("".join((t.text or "") if t.tag == f"{_W}t" else "\t" for t in el.iter(f"{_W}t", f"{_W}tab")))
+            parts = el.iter(f"{_W}t", *_RUN_TEXT)
+            out.append("".join((t.text or "") if t.tag == f"{_W}t" else _RUN_TEXT[t.tag] for t in parts))
         elif el.tag == f"{_W}tbl":
             out += [
                 " | ".join(_fold("".join(t.text or "" for t in tc.iter(f"{_W}t"))) for tc in tr.iter(f"{_W}tc"))
@@ -119,7 +135,12 @@ class Facts:
             text = re.sub(rf"(?i)\b(set\s+(?:no\.?\s*)?){re.escape(number)}\b", r"\1[[v.set_number]]", text)
         for pat in self.signers:
             text = pat.sub("[[v.signer]]", text)
-        return K.DATE.sub("[[v.date]]", text) if closing else text
+        if not closing:
+            return text
+        dated = _DATED.match(text)
+        if dated:  # the whole value is the paper's date, a blank and a bare year included
+            return dated.group(1) + " [[v.date]]"
+        return K.DATE.sub("[[v.date]]", K.DATE_BLANK.sub("[[v.date]]", text))
 
 
 def facts_of(lines: list[str], identity: list[str], blocks: Iterable[Iterable[str]]) -> tuple[Facts, F.Regions]:
@@ -151,24 +172,60 @@ def blank_regions(
     facts, where = facts_of(lines, identity, blocks)
     out: dict[str, list[tuple[str, bool]]] = {F.FRONT: [], F.CLOSING: []}
     counts: dict[str, int] = {}
-    for region, (a, b) in ((F.FRONT, where.front), (F.CLOSING, where.closing)):
-        kept: list[tuple[str, bool]] = []
-        dropped = 0
-        for raw in lines[a:b]:
-            text = _fold(raw.replace("\t", " "))
-            if not text:
-                continue
-            blanked = facts.blank(text, region == F.CLOSING)
-            if not K.is_case_fact(blanked, facts.allowed, facts.identity):
-                kept.append((blanked, _is_head(blanked)))
-                continue
-            dropped += 1
-            if region == F.FRONT and (not kept or kept[-1][0] != HOLE):
-                kept.append((HOLE, False))
+    front = [_fold(raw.replace("\t", " ")) for raw in lines[slice(*where.front)]]
+    closing = [_fold(ln.replace("\t", " ")) for raw in lines[slice(*where.closing)] for ln in raw.split("\n")]
+    signed = _signer_lines([t for t in closing if t], facts.identity)
+    for region, texts in ((F.FRONT, front), (F.CLOSING, signed)):
+        kept, dropped = _judge(facts, [t for t in texts if t], region == F.CLOSING)
         counts[f"{region}_paragraphs"] = sum(1 for t, _h in kept if t != HOLE) + dropped
         counts[f"{region}_refused"] = dropped
         out[region] = kept
     return out, where.set_type, counts
+
+
+def _signer_lines(lines: list[str], identity: list[re.Pattern[str]]) -> list[str]:
+    """The closing's lines with the signing attorney's name a marked place: the
+    line after a bare "By: ____", or the name after its blank. The firm's own
+    signer is the job's attorney, never a dropped line. A line that is the
+    firm's own identity (its name after "By:") is left to the identity check."""
+
+    def identity_only(text: str) -> bool:
+        for pat in identity:
+            text = pat.sub(" ", text)
+        return not text.strip(" ,.;:")
+
+    out: list[str] = []
+    for i, line in enumerate(lines):
+        named = _BY_NAME.match(line)
+        if named and not _BY_BLANK.match(line):
+            line = line if identity_only(named.group(2)) else named.group(1) + "[[v.signer]]"
+        elif i and _BY_BLANK.match(lines[i - 1]) and len(line.split()) <= 6 and not re.search(r"\d", line):
+            line = line if identity_only(line) else "[[v.signer]]"
+        out.append(line)
+    return out
+
+
+def _judge(facts: Facts, texts: list[str], closing: bool) -> tuple[list[tuple[str, bool]], int]:
+    """Each paragraph kept (marked) or dropped alone. In the front a dropped
+    paragraph leaves one hole per run, and a kept paragraph whose sentence runs
+    on into a dropped one goes with it: a hole never cuts a sentence."""
+    kept: list[tuple[str, bool]] = []
+    dropped = 0
+    for text in texts:
+        blanked = facts.blank(text, closing)
+        year = closing and _YEAR.search(F.VALUE.sub(" ", blanked))
+        if not year and not K.is_case_fact(blanked, facts.allowed, facts.identity):
+            kept.append((blanked, _is_head(blanked)))
+            continue
+        dropped += 1
+        if closing:
+            continue
+        if kept and kept[-1][0] != HOLE and not kept[-1][1] and not _ENDS.search(kept[-1][0]):
+            kept.pop()
+            dropped += 1
+        if not kept or kept[-1][0] != HOLE:
+            kept.append((HOLE, False))
+    return kept, dropped
 
 
 def _title_words(text: str) -> str:
@@ -256,8 +313,24 @@ def _with_body(blob: bytes, paragraphs: list[str]) -> bytes:
                     elif body is not None:
                         body.append(p)
                 raw = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+            elif info.filename in (_CORE, _APP):
+                raw = _without_dates(raw)
             out.writestr(info, raw)
     return buf.getvalue()
+
+
+_CORE, _APP = "docProps/core.xml", "docProps/app.xml"
+#: What dates the firm's paper and counts its editing: created, saved, printed,
+#: revision and editing time. The made file is no copy of that paper's history.
+_DATED_PROPS = frozenset({"created", "modified", "lastPrinted", "revision", "TotalTime"})
+
+
+def _without_dates(raw: bytes) -> bytes:
+    root = etree.fromstring(raw)
+    for el in list(root):
+        if etree.QName(el).localname in _DATED_PROPS:
+            root.remove(el)
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
 def make_frame(kind: str, blob: bytes, identity: list[str], blocks: Iterable[Iterable[str]] = ()) -> FrameMade:

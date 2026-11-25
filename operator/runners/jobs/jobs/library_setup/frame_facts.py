@@ -28,6 +28,8 @@ from ..drafting import firm_frame as F
 
 _MONTH = r"(?:January|February|March|April|May|June|July|August|September|October|November|December)"
 DATE = re.compile(rf"(?i)\b{_MONTH}\s+\d{{1,2}},?\s+\d{{4}}\b|\b\d{{1,2}}/\d{{1,2}}/\d{{2,4}}\b")
+#: A date left to be written: "______, 2026", "November ___, 2026", "___ day of ____, 2026".
+DATE_BLANK = re.compile(rf"(?i)(?:\b{_MONTH}\s+)?_+\s*(?:day\s+of\s+(?:{_MONTH}|_+)\s*)?,?\s*(?:19|20)\d{{2}}\b")
 _MONEY = re.compile(r"\$\s*\d")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 _PHONE = re.compile(r"\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}")
