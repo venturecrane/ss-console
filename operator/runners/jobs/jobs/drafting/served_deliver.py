@@ -30,6 +30,9 @@ from ..hand_delivery import Refused
 from ..proof import watch
 from . import served as served_mod
 
+#: A set record emails nobody: SMD sends the reply line as an SMD note, then records --told.
+NO_EMAIL = "no email will be sent: send the reply line to the attorney as an SMD note, then run --told"
+
 #: The cumulative read-back of a response job's filed files, each set SMD
 #: recorded included: what the next record's proof row extends.
 PROOF_FILES = "served-proof.json"
@@ -98,7 +101,12 @@ def plan_set(d: Any, job_id: str, rec: dict[str, Any], set_label: str, *, quiet:
     jd = d.job_dir(job_id)
     names = [f["name"] for f in facts["files"]]
     document = " and ".join(names)
-    base = {"job_id": job_id, "set": set_label, "reply": None if quiet else served_mod.added_line(set_label, names)}
+    base = {
+        "job_id": job_id,
+        "set": set_label,
+        "email": NO_EMAIL,
+        "reply": None if quiet else served_mod.added_line(set_label, names),
+    }
     if hit.get("status") == served_mod.FILED:
         local = _local_rows(jd)
         if hit.get("document") == document and _hit(job_id, local, set_label).get("status") != served_mod.FILED:

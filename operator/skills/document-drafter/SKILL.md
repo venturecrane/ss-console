@@ -254,6 +254,11 @@ replies.
      `<code>: <sentence>` (for example `request_incomplete: the request is missing
 what the draft needs: ...`). Relay only the sentence AFTER the first `: `, in
      your own words; never the code, which is SMD's label, not the firm's.
+   - **Never say the document was checked against the firm's rules** (or any rules)
+     unless the wake says `Firm rules check: run.` A wake that says
+     `Delivered by: SMD, by hand.` and `Firm rules check: not run.` is a document
+     SMD filed by hand: report the files as the job row names them, say nothing
+     about a rules check, and never say how the document was made.
    - In every reply, never ask the firm to narrow, split or change its request, and
      never mention a token, a limit, a cap, a cost, a dollar figure or a job id. A
      limit of ours is ours to solve; the firm hears only what its file needs.

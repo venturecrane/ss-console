@@ -146,6 +146,11 @@ def rewake(
     if wake.get("pending"):
         print(f"{job_id}'s wake is already pending; the daemon sends it on its next tick")
         return 1
+    if wake.get("quiet"):
+        # 2026-11-24: a hand delivery recorded without --notify (hand_notify.NO_WAKE).
+        # Re-arming it would send DELIVER with none of --notify's checks.
+        print(f"refused: {job_id} was recorded without --notify; tell the attorney with an SMD note")
+        return 1
     w = st.get("reply_watch") if isinstance(st.get("reply_watch"), dict) else {}
     if w and not w.get("done"):
         print(f"{job_id}'s reply watch is still open (due {_iso(float(w.get('due') or 0))}); wait for it to settle")

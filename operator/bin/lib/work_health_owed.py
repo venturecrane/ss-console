@@ -94,12 +94,14 @@ _TODO = {
     ),
     "drafting_addition": (
         "Make the change by hand: draft job {job} with what that email asks, file the new version in the matter, "
-        "then record it with jobs.drafting.deliver_by_smd {job} (runbook drafting-deliver-by-smd); recording that "
-        "delivery closes this. Close it in work-health-closed.yaml (job: {owed}) if it is answered another way."
+        "then record it with jobs.drafting.deliver_by_smd {job} (runbook drafting-deliver-by-smd; it emails the "
+        "attorney only with --notify, once the files are on the matter); recording that delivery closes this. "
+        "Close it in work-health-closed.yaml (job: {owed}) if it is answered another way."
     ),
     "drafting_refused": (
         "Fix the cause, or draft and file it by hand: open it as a job (workspace_broker.smd_owed open-job {owed}, "
-        "runbook drafting-deliver-by-smd), then record it with jobs.drafting.deliver_by_smd {owed}. Close it in "
+        "runbook drafting-deliver-by-smd), then record it with jobs.drafting.deliver_by_smd {owed} (it emails the "
+        "attorney only with --notify, once the files are on the matter). Close it in "
         "work-health-closed.yaml (job: {owed}) if it is answered another way."
     ),
     "help_question": (

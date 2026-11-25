@@ -321,7 +321,7 @@
       "refused/ascii": "raise ConnectionRefusedError connects=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py:1842 broker_socket.request(\n        socket_path, payload, timeout=_TIMEOUT_SECONDS, lone_surrogates=\"raise\"\n    )"
+      "operator/hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py:1852 broker_socket.request(\n        socket_path, payload, timeout=_TIMEOUT_SECONDS, lone_surrogates=\"raise\"\n    )"
      ],
      "file": "operator/hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py",
      "kind": "function",
@@ -2341,7 +2341,7 @@
       "fails-open-on-unreadable",
       "fails-open-on-yaml-syntax-error"
      ],
-     "symbol": "_seat_today"
+     "symbol": "authored_timezone"
     },
     {
      "file": "operator/connectors/smokeball/smokeball_connector/letterhead.py",
@@ -3976,28 +3976,28 @@
     },
     {
      "behaviour": {
-      "block-malformed": "return value:date d65807839b588038 reads=1",
-      "block-malformed-deep": "return value:date d65807839b588038 reads=1",
-      "block-missing": "return value:date d65807839b588038 reads=1",
-      "empty": "return value:date d65807839b588038 reads=1",
-      "good": "return value:date d65807839b588038 reads=1",
-      "missing": "return value:date d65807839b588038 reads=1",
-      "not-mapping": "return value:date d65807839b588038 reads=1",
-      "real-0e29268fcb": "return value:date reads=1",
-      "real-5c81ccbc83": "return value:date reads=1",
-      "real-7380b64d88": "return value:date reads=1",
-      "real-87c9d88a05": "return value:date reads=1",
-      "real-9302036937": "return value:date reads=1",
-      "real-931453a391": "return value:date reads=1",
-      "real-b02aa60269": "return value:date reads=1",
-      "real-c388304bc1": "return value:date reads=1",
-      "real-c3de4c838e": "return value:date reads=1",
-      "real-d91ae216e0": "return value:date reads=1",
-      "unreadable": "return value:date d65807839b588038 reads=1",
-      "yaml-syntax-error": "return value:date d65807839b588038 reads=1"
+      "block-malformed": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "block-malformed-deep": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "block-missing": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "empty": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "good": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "missing": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "not-mapping": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "real-0e29268fcb": "return value:str reads=1",
+      "real-5c81ccbc83": "return empty:str reads=1",
+      "real-7380b64d88": "return value:str reads=1",
+      "real-87c9d88a05": "return value:str reads=1",
+      "real-9302036937": "return empty:str reads=1",
+      "real-931453a391": "return empty:str reads=1",
+      "real-b02aa60269": "return empty:str reads=1",
+      "real-c388304bc1": "return value:str reads=1",
+      "real-c3de4c838e": "return empty:str reads=1",
+      "real-d91ae216e0": "return value:str reads=1",
+      "unreadable": "return empty:str 12ae32cb1ec02d01 reads=1",
+      "yaml-syntax-error": "return empty:str 12ae32cb1ec02d01 reads=1"
      },
      "calls": [
-      "operator/connectors/smokeball/smokeball_connector/layout_tools.py:78 seat_config.parse(fh)"
+      "operator/connectors/smokeball/smokeball_connector/layout_tools.py:82 seat_config.parse(fh)"
      ],
      "file": "operator/connectors/smokeball/smokeball_connector/layout_tools.py",
      "kind": "function",
@@ -4022,7 +4022,7 @@
       "business_hours"
      ],
      "status": "executable",
-     "symbol": "_seat_today",
+     "symbol": "authored_timezone",
      "tree": "connector"
     },
     {
@@ -5975,7 +5975,7 @@
       "yaml-syntax-error": "raise ConfigError"
      },
      "calls": [
-      "operator/runners/jobs/jobs/medchron/config.py:362 yaml.safe_load(path.read_text(encoding=\"utf-8\"))"
+      "operator/runners/jobs/jobs/medchron/config.py:384 yaml.safe_load(path.read_text(encoding=\"utf-8\"))"
      ],
      "file": "operator/runners/jobs/jobs/medchron/config.py",
      "kind": "function",
@@ -7002,7 +7002,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/drafting_verbs.py:112 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/drafting_verbs.py:121 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/drafting_verbs.py",
      "kind": "function",

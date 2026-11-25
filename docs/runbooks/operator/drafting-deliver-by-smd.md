@@ -81,8 +81,8 @@ the same way it runs from `env -i` in the withdraw command. Copy `record.json`
 onto the seat first.
 
 ```bash
-fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> /tmp/record.json --quiet --dry-run"
-fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> /tmp/record.json --quiet --confirm <digest>"
+fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> /tmp/record.json --dry-run"
+fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> /tmp/record.json --confirm <digest>"
 ```
 
 The dry run prints the proof row, the ledger records, the job's state entry, the
@@ -99,11 +99,27 @@ withdrawal, which is true. Recording the delivery adds "Is drafting a document"
 (the ledger's move through `running`) and then "Filed a drafted document on the
 matter". The tool writes no "Could not finish" row of its own.
 
-**What the attorney receives.** With `--quiet`: nothing from this tool. Use it
-when SMD already answered him. Without `--quiet`: the lane's own delivered
-reply, from the Operator in his request thread, exactly as a seat delivery
-sends it; the daemon dispatches it on its next tick and pages SMD
-(`reply_unproven`) if it is not in Sent Items within 20 minutes.
+**What the attorney receives.** By default, nothing: recording a delivery sends
+no email (`--quiet` is still accepted and changes nothing). The dry run says so
+in one line, `EMAIL: no email will be sent ...`. Tell him yourself, as an SMD
+note in his request's thread ([smd-note](smd-note.md)), once the files are on
+his matter.
+
+With `--notify`, the lane's own delivered reply goes from the Operator in his
+request thread, naming the recorded files; the daemon dispatches it on its next
+tick and pages SMD (`reply_unproven`) if it is not in Sent Items within 20
+minutes. The dry run prints `EMAIL: the Operator WILL email the attorney: <subject>`.
+`--notify` reads each file by its id from the matter in Smokeball first, and
+refuses (writing nothing) unless every file is on the matter now, at the
+record's size, and was filed or updated today in the seat's timezone, or the
+record carries `"filed_at": "<ISO 8601 time>"` within the last 24 hours. Where
+no Smokeball read is available it refuses outright. Run `--notify` only after
+the files are filed: on 2026-11-24 a record made without `--quiet` (then the
+default was to email) told an attorney at 6:02 PM that his responses were
+filed; they were filed about 8:40 PM.
+
+The reply never says the document was checked against the firm's rules unless
+the record says a check ran: add `"firm_rules_checked": true` only when one did.
 
 **It refuses** (exit 2, nothing written): a held job (withdraw it first), a job
 still running or queued, a job already delivered, a job with a wake still to go

@@ -68,18 +68,28 @@ def _client() -> Any:
     return server._get_client()
 
 
+#: The seat timezone bootstrap exports to the gateway's process tree (not the jobs daemon's).
+TZ_VAR = "HERMES_TIMEZONE"
+
+
+def authored_timezone() -> str:
+    """The live customer.yaml's ``business_hours.timezone``, or "" when it is
+    absent or the file cannot be read. The one reader: the jobs runner's
+    hand-delivery check (``jobs/hand_notify.py``) uses it too, because the jobs
+    daemon runs without ``HERMES_TIMEZONE``."""
+    try:
+        with open(os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML, encoding="utf-8") as fh:
+            doc = seat_config.parse(fh) or {}
+        hours = doc.get("business_hours") if isinstance(doc, dict) else None
+        return str((hours or {}).get("timezone") or "").strip() if isinstance(hours, dict) else ""
+    except Exception:  # noqa: BLE001 - an unreadable config has no authored zone
+        return ""
+
+
 def _seat_today() -> date:
     """The seat's calendar day: ``HERMES_TIMEZONE``, else the authored
     ``business_hours.timezone``, else UTC."""
-    zone = os.environ.get("HERMES_TIMEZONE", "").strip()
-    if not zone:
-        try:
-            with open(os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML, encoding="utf-8") as fh:
-                doc = seat_config.parse(fh) or {}
-            hours = doc.get("business_hours") if isinstance(doc, dict) else None
-            zone = str((hours or {}).get("timezone") or "").strip() if isinstance(hours, dict) else ""
-        except Exception:  # noqa: BLE001 - an unreadable config dates the summary in UTC
-            zone = ""
+    zone = os.environ.get(TZ_VAR, "").strip() or authored_timezone()
     try:
         return datetime.now(ZoneInfo(zone or "UTC")).date()
     except Exception:  # noqa: BLE001 - an unknown zone dates the summary in UTC

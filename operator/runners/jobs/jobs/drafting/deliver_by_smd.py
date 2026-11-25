@@ -1,7 +1,15 @@
 """Record a document SMD drafted and filed by hand as the drafting job's delivery.
 
-    python -m jobs.drafting.deliver_by_smd <job_id> <record.json> [--quiet] --dry-run
-    python -m jobs.drafting.deliver_by_smd <job_id> <record.json> [--quiet] --confirm <digest>
+    python -m jobs.drafting.deliver_by_smd <job_id> <record.json> [--notify] --dry-run
+    python -m jobs.drafting.deliver_by_smd <job_id> <record.json> [--notify] --confirm <digest>
+
+RECORDING SENDS NO EMAIL (2026-11-24). By default this records the delivery
+and arms NO wake: the attorney is not emailed. ``--notify`` arms the lane's
+DELIVER wake, so the Operator emails him in his request thread naming the
+recorded files, and it is refused unless every file is on the matter in
+Smokeball now and was filed today (or the record carries ``filed_at`` within
+24 hours): ``jobs/hand_notify.py``. ``--quiet`` is still accepted and changes
+nothing. The dry run says in one line whether an email will be sent.
 
 Root only, on the seat, with the jobs venv's python. It talks to the broker and
 reads the job dirs exactly as the runner daemon does, from the same environment
@@ -27,17 +35,22 @@ the proof before the record), so the row is never delivered without its proof:
      order as the files, which is what `DraftingLedger.proven_files` pairs by;
   2. the ledger row moves `failed` -> `running` -> `delivered`, with the folder
      and the files (name, size, role);
-  3. the job's daemon state goes terminal (`delivered`), with the lane's own
-     DELIVER wake pending (the daemon dispatches it and arms the reply watch),
-     or with `--quiet` no wake, when SMD already answered the attorney.
+  3. the job's daemon state goes terminal (`delivered`), with no wake; with
+     `--notify` (and its checks passed), the lane's own DELIVER wake pending
+     (the daemon dispatches it and arms the reply watch).
 
 A run cut short is finished by running it again: a `running` row, or a
 `delivered` row carrying exactly this record's folder and files while the
 daemon state still says the job ended, is taken as this tool's own write. The
 proof row is written again then (the ledger reads the last one).
 
-It verifies nothing against Smokeball: the filing step already read each file
-back by id, and the record carries what that read-back said.
+Without ``--notify`` it verifies nothing against Smokeball: the filing step
+already read each file back by id, and the record carries what that read-back
+said. With ``--notify`` it reads each file by id from the matter first.
+
+The wake says the delivery was SMD's, by hand, and that no firm-rules check
+ran unless the record carries ``"firm_rules_checked": true``; the DELIVER reply
+never says the document was checked against the firm's rules otherwise.
 
 What it refuses (nothing is written): a HELD job (withdraw it first with
 `jobs.stop`: a held row may move only to failed, and a failed row that SMD did
@@ -58,7 +71,7 @@ import os
 import sys
 from typing import Any
 
-from .. import budget, daemon as daemon_mod, drafting_lane, hand_delivery, run_record, seat_config, spend
+from .. import budget, daemon as daemon_mod, drafting_lane, hand_delivery, hand_notify, run_record, seat_config, spend
 from ..broker_client import BrokerError
 from ..hand_delivery import Refused
 from ..proof import watch
@@ -71,7 +84,7 @@ RECORDABLE_FROM = frozenset({"failed"})
 ENDED_DAEMON = frozenset({"failed", "stopped_by_smd"})
 #: The roles the lane files under (`drafting/finish.py`); the revise path keys on them.
 ROLES = ("draft", "attorney_notes")
-QUIET = "SMD answered the requester by hand; no DELIVER wake"
+QUIET = hand_notify.NO_WAKE
 #: What the tool needs from the daemon's environment (`daemon.build`, `drafting_lane.build_lane`).
 #: The rate card is one of them: without it a job's spend is priced from a path the seat does not
 #: have, and the record falls back to the row's own cents (seen on the firm seat, 2026-11-20).
@@ -105,7 +118,10 @@ def parse_record(rec: Any) -> dict[str, Any]:
         raise Refused("record.files must name at least one filed draft (role draft)")
     if len({f["file_id"] for f in out}) != len(out):
         raise Refused("record.files names one file id twice")
-    return {"folder_id": folder_id, "files": out}
+    checked = rec.get("firm_rules_checked", False)
+    if not isinstance(checked, bool):
+        raise Refused("record.firm_rules_checked must be true or false: whether a firm-rules check ran on these files")
+    return {"folder_id": folder_id, "files": out, "firm_rules_checked": checked}
 
 
 def _twin(d: Any, row: dict[str, Any]) -> str | None:
@@ -132,10 +148,71 @@ def _stored_files(row: dict[str, Any]) -> list[Any] | None:
         return None
 
 
-def plan(d: Any, job_id: str, rec: dict[str, Any], *, quiet: bool) -> dict[str, Any]:
-    """Every check, and what would be written. Raises Refused."""
+def plan(
+    d: Any,
+    job_id: str,
+    rec: dict[str, Any],
+    *,
+    notify: bool = False,
+    quiet: bool = False,
+    seat_factory: Any = None,
+    now: Any = None,
+) -> dict[str, Any]:
+    """Every check, and what would be written. Raises Refused. No wake unless
+    ``notify``; ``quiet`` is the old flag and changes nothing."""
+    del quiet
     facts = parse_record(rec)
     files = [{"name": f["name"], "size": f["bytes"], "role": f["role"]} for f in facts["files"]]
+    row = _recordable_row(d, job_id, facts, files)
+    cents = spend.recorded_cents(d.job_dir(job_id), d.LANE, int(row.get("cents") or 0))
+    records: list[tuple[str, dict[str, Any]]] = []
+    if row.get("state") == "failed":
+        records.append(("running", {}))
+    if row.get("state") != "delivered":
+        delivered = {
+            "cents": cents,
+            "folder_id": facts["folder_id"],
+            "delivery": {"files": files, "cents": cents},
+            **run_record.fields_for(d, "hand_delivery", by="smd", with_release=True),
+        }
+        records.append(("delivered", delivered))
+    email = hand_notify.gate(
+        d.job_dir(job_id),
+        rec,
+        facts["files"],
+        notify=notify,
+        ref_key="message_ref",
+        now=now,
+        **({"seat_factory": seat_factory} if seat_factory else {}),
+    )
+    wake_fields = {
+        "cents": cents,
+        "folder_id": facts["folder_id"],
+        "files": files,
+        "delivered_by": "smd",
+        "firm_rules_checked": facts["firm_rules_checked"],
+    }
+    task = d._compose_wake(job_id, "delivered", wake_fields)
+    return {
+        "job_id": job_id,
+        "from_state": row.get("state"),
+        **email,
+        "proof_first": True,
+        "records": records,
+        "proof": hand_delivery.proof_request(
+            d, job_id, facts["files"], review="released", attempt=watch._attempt(d, job_id)
+        ),
+        "state": {
+            "state": "delivered",
+            "delivered_by": "smd",
+            "reason": None,
+            "wake": hand_notify.wake(task, notify),
+        },
+    }
+
+
+def _recordable_row(d: Any, job_id: str, facts: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+    """The job's ledger row, when this tool may record it. Raises Refused."""
     first = d.broker.status(job_id)
     if first is not None and first.get("state") == "held":
         raise Refused(
@@ -163,35 +240,7 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, quiet: bool) -> dict[str, 
             f"job {twin} is live for the same request email and document class; recording {job_id} "
             "would collide with it. Nothing was written"
         )
-    cents = spend.recorded_cents(d.job_dir(job_id), d.LANE, int(row.get("cents") or 0))
-    records: list[tuple[str, dict[str, Any]]] = []
-    if row.get("state") == "failed":
-        records.append(("running", {}))
-    if row.get("state") != "delivered":
-        delivered = {
-            "cents": cents,
-            "folder_id": facts["folder_id"],
-            "delivery": {"files": files, "cents": cents},
-            **run_record.fields_for(d, "hand_delivery", by="smd", with_release=True),
-        }
-        records.append(("delivered", delivered))
-    task = d._compose_wake(job_id, "delivered", {"cents": cents, "folder_id": facts["folder_id"], "files": files})
-    wake = {"pending": False, "attempts": 0, "task": task, "quiet": QUIET} if quiet else None
-    return {
-        "job_id": job_id,
-        "from_state": row.get("state"),
-        "proof_first": True,
-        "records": records,
-        "proof": hand_delivery.proof_request(
-            d, job_id, facts["files"], review="released", attempt=watch._attempt(d, job_id)
-        ),
-        "state": {
-            "state": "delivered",
-            "delivered_by": "smd",
-            "reason": None,
-            "wake": wake or {"pending": True, "attempts": 0, "task": task},
-        },
-    }
+    return row
 
 
 apply = hand_delivery.apply
@@ -235,7 +284,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="jobs.drafting.deliver_by_smd", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("job_id")
     ap.add_argument("record", nargs="?", help="JSON: folder_id, files [{file_id, name, bytes, sha256, role}]")
-    ap.add_argument("--quiet", action="store_true", help="SMD already answered the attorney: queue no DELIVER wake")
+    ap.add_argument(
+        "--notify",
+        action="store_true",
+        help="arm the DELIVER wake so the Operator emails the attorney (refused unless every file is on the "
+        "matter and filed today)",
+    )
+    ap.add_argument("--quiet", action="store_true", help="accepted for older commands; recording sends no email anyway")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written and its digest; write nothing")
     ap.add_argument("--confirm", default=None, help="the digest the dry run printed")
     ap.add_argument("--set", dest="set_label", default=None, help="a served set SMD owed on a delivered response job")
@@ -243,15 +298,22 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if not a.record and not (a.set_label and a.told):
         ap.error("the record is required (only --set ... --told takes none)")
-    for k, v in hand_delivery.daemon_env([n for n in ENV if not os.environ.get(n)]).items():
+    if a.notify and (a.quiet or a.set_label):
+        ap.error("--notify is for a whole job's record, and never with --quiet")
+    names = (*ENV, *hand_notify.ENV_NAMES) if a.notify else ENV
+    for k, v in hand_delivery.daemon_env([n for n in names if not os.environ.get(n)]).items():
         os.environ[k] = v
     d = drafting_lane.build_lane(daemon_mod.build())
     if a.set_label:
         return _run_set(d, a)
-    after = "no wake (--quiet)" if a.quiet else "the daemon dispatches its DELIVER wake on its next tick"
+    after = (
+        "the daemon dispatches its DELIVER wake on its next tick and the Operator emails the attorney"
+        if a.notify
+        else "no wake and no email (tell the attorney by hand, or record with --notify)"
+    )
     return hand_delivery.run_cli(
         d,
-        lambda lane: plan(lane, a.job_id, hand_delivery.read_record(a.record), quiet=a.quiet),
+        lambda lane: plan(lane, a.job_id, hand_delivery.read_record(a.record), notify=a.notify),
         dry_run=a.dry_run,
         confirm=a.confirm,
         use_digest=True,
