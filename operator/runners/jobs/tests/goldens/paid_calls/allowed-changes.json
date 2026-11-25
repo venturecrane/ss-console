@@ -84,9 +84,7 @@
     "1.stage",
     "2.body_sha256",
     "2.max_tokens",
-    "2.output_format_sha256",
-    "2.seam",
-    "2.stage"
+    "2.output_format_sha256"
   ],
   "records_cap": ["0.body_sha256", "0.output_format_sha256"]
 }

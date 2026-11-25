@@ -120,9 +120,7 @@ def test_framing_never_hides_a_part() -> None:
     assert not rank.names_whole(_item("pages 2-5 of the file named Dana Roe Statement.pdf on matter 900417"), name)
     assert not rank.names_whole(_item("the file named Dana Roe Statement.pdf", dates=["3/2/2024"]), name)
     # A folder word that is not the file's own folder still narrows.
-    assert not rank.names_whole(
-        _item("file Dana Roe Statement.pdf from the Medical folder"), name, folder="Discovery"
-    )
+    assert not rank.names_whole(_item("file Dana Roe Statement.pdf from the Medical folder"), name, folder="Discovery")
 
 
 def test_a_folder_frames_a_name_only_when_the_words_call_it_a_folder() -> None:
