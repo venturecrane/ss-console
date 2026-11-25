@@ -31,9 +31,9 @@ from typing import Any
 
 from . import accept as accept_mod
 from .frame_make import make_frame
+from ..drafting.firm import ENV_DIR as INPUTS_ENV
 from .make import Unusable
 
-INPUTS_ENV = "JOBS_DRAFTING_INPUTS"
 MADE, SIDECAR = "library-file.docx", "library-file.json"
 
 
@@ -102,7 +102,7 @@ def add_parser(sub: Any) -> None:
     p.add_argument("--source-version", default="filed")
     p.add_argument("--attorney", default=None, help="an attorney key for that attorney's own slot; none for the firm")
     p.add_argument("--out", required=True, help="the directory to write the made file into")
-    p.add_argument("--inputs", default=None, help="the drafting firm-inputs dir (default: JOBS_DRAFTING_INPUTS)")
+    p.add_argument("--inputs", default=None, help="the drafting firm-inputs dir (default: the drafting lane's inputs env var)")
     p.add_argument("--allow-partial", action="store_true", help="stock even when one block kept a case fact")
     p.set_defaults(fn=cmd)
 
