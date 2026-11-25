@@ -215,11 +215,42 @@ def objection_sentences(run: str) -> str:
     if not start:
         return ""
     kept = []
-    for sentence in re.split(r"(?<=[.!?])\s+", text[start.start() :]):
+    for sentence in _sentences(text[start.start() :]):
         if _NOTE.match(sentence) or not _OBJECTS.match(sentence) or not sentence.endswith((".", "!", "?")):
             break
         kept.append(sentence)
     return " ".join(kept)
+
+
+# Citation abbreviations a sentence never ends on ("Evid. Code", "Code Civ.
+# Proc.", "Cal. App."). 2026-11-25: splitting at every ". " cut 9 delivered
+# objection sentences after "(Evid." and "Code Civ.".
+_ABBREV = re.compile(
+    r"\b(?:Evid|Civ|Proc|Cal|App|Gov|Bus|Prof|Pen|Fam|Lab|Ins|Veh|Rptr|Supp|Fed|Stat|"
+    r"subd|seq|Inc|Co|No|Nos|Id|id|v|vs|e\.g|i\.e|U\.S|Sec|Art|para|Corp|Ltd)\.$"
+)
+
+
+def _sentences(text: str) -> list[str]:
+    """``text`` split into sentences: an end mark followed by space, outside
+    parentheses, and not closing a citation abbreviation."""
+    out, at, depth = [], 0, 0
+    for i, ch in enumerate(text):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif (
+            ch in ".!?"
+            and depth == 0
+            and i + 1 < len(text)
+            and text[i + 1] == " "
+            and not _ABBREV.search(text[at : i + 1])
+        ):
+            out.append(text[at : i + 1].strip())
+            at = i + 1
+    tail = text[at:].strip()
+    return [*out, tail] if tail else out
 
 
 def _unmarked(block: str) -> str:

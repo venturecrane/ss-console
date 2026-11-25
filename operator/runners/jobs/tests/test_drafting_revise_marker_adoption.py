@@ -213,3 +213,18 @@ def test_the_item_word_is_lower_case_mid_sentence_and_capitalised_only_at_a_sent
     assert BOOK.text("obj_031", item="Interrogatory").startswith("Responding Party objects to this interrogatory on")
     out, _done = M.settle("1", [_marker("overbroad")], BOOK, "special_interrogatories", {"obj_031"})
     assert out == [OVERBROAD.replace("{item}", "interrogatory")]
+
+
+def test_objection_sentences_do_not_end_inside_a_citation() -> None:
+    from jobs.drafting.revise.markers import objection_sentences
+
+    run = (
+        "Responding Party objects to this request to the extent it seeks information protected "
+        "by the attorney-client privilege (Evid. Code, § 954) and the attorney work product "
+        "doctrine (Code Civ. Proc., § 2018.030). Responding Party further objects that the "
+        "request is overbroad. Note: confirm with the client."
+    )
+    got = objection_sentences(run)
+    assert got.endswith("is overbroad.")
+    assert "(Evid. Code, § 954)" in got and "(Code Civ. Proc., § 2018.030)." in got
+    assert "Note" not in got
