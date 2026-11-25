@@ -36,7 +36,7 @@ from typing import Any
 
 from ...matter.store import write_atomic
 from ..verify.items import parse_json
-from .book import Book, Entry, fold, norm
+from .book import Book, Entry, entry_groups, fold, ground_groups, norm
 from .types import ACTS, DOC_TYPES, Ask, Clause
 
 STAGE = "rulebook-read"
@@ -128,7 +128,8 @@ def _named(quote: str, book: Book, keys: Any, grounds: Any) -> tuple[tuple[str, 
         e = book.entries.get(str(k))
         if e is None:
             return (), (), f"key {k!r} is not in the phrase book"
-        if not any(fold(n) in quote for n in e.names):
+        # by a short name, or by a word of its ground's synonyms ("Privilege" names the attorney-client entries)
+        if not any(fold(n) in quote for n in e.names) and not (ground_groups(quote) & entry_groups(e)):
             return (), (), f"key {k!r}: none of its short names {list(e.names)} is in the quote"
     for g in grounds:
         if not fold(str(g)) or fold(str(g)) not in quote:

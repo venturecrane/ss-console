@@ -37,8 +37,54 @@ LEAD_WORDS = 4
 _FOLD = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"', " ": " "})
 #: Exhibit letters as they read once folded: "a", "a and b", "a, b and c".
 _LETTERS = r"[a-z]{1,2}(?:(?:,\s*(?:and\s+)?|\s+and\s+)[a-z]{1,2})*"
-_CAPS = re.compile(r"\b[A-Z][a-z]+(?: [A-Z][a-z]+)*\b")
 _SLOT = re.compile(r"(\{item\}|\{exhibit\})")
+
+#: The one table of an objection ground's names, compared as folded words: a
+#: rule, a marker or a book entry that names any of a group's words names that
+#: ground (2026-11-25: a rule saying "Privilege" allowed no entry, because the
+#: firm's attorney-client entries are named "attorney-client").
+GROUNDS: dict[str, tuple[str, ...]] = {
+    "attorney_client": ("privilege", "privileged", "attorney client", "attorney-client", "attorney client privilege"),
+    "work_product": ("work product", "work-product", "attorney work product", "work product doctrine"),
+}
+
+
+_SLOT_START = re.compile(r"(?:^|[.!?:]\s+)$")
+
+
+def fill_item(text: str, word: str) -> str:
+    """``text`` with its ``{item}`` slots filled by the response's own word for
+    what it answers, in lower case mid-sentence ("objects to this
+    interrogatory", "this request") and capitalised only where it starts a
+    sentence. The firm's finals write it so (2026-11-25: the lane wrote "this
+    Interrogatory")."""
+    out, at = [], 0
+    for m in re.finditer(r"\{item\}", text):
+        out.append(text[at : m.start()])
+        starts = bool(_SLOT_START.search("".join(out)))
+        out.append(word[:1].upper() + word[1:].lower() if starts else word.lower())
+        at = m.end()
+    return "".join(out) + text[at:]
+
+
+def _bare_words(text: str) -> str:
+    return " ".join(re.findall(r"\w+", fold(text)))
+
+
+def ground_groups(text: str) -> set[str]:
+    """The grounds of :data:`GROUNDS` that ``text`` names by any of their words."""
+    hay = f" {_bare_words(text)} "
+    return {g for g, names in GROUNDS.items() if any(f" {_bare_words(n)} " in hay for n in names)}
+
+
+def entry_groups(entry: Entry) -> set[str]:
+    """The grounds of :data:`GROUNDS` an entry is, by its short names. A work
+    product entry named "work product privilege" is not an attorney-client one."""
+    groups: set[str] = set().union(*(ground_groups(n) for n in entry.names)) if entry.names else set()
+    explicit = any(" attorney client " in f" {_bare_words(n).replace('_', ' ')} " for n in entry.names)
+    if "work_product" in groups and not explicit:
+        groups.discard("attorney_client")
+    return groups
 
 
 def norm(text: str) -> str:
@@ -121,7 +167,7 @@ class Book:
 
     def text(self, key: str, item: str = "", exhibits: str = "") -> str:
         """An entry's words with its ``{item}`` and ``{exhibit}`` slots filled."""
-        return self.entries[key].text.replace("{item}", item).replace("{exhibit}", exhibits)
+        return fill_item(self.entries[key].text, item).replace("{exhibit}", exhibits)
 
     def find(self, sentence: str) -> str | None:
         """The key of the entry whose words are this sentence (quotes, spacing,
@@ -158,14 +204,14 @@ class Book:
         return " ".join(lead) if len(lead) >= LEAD_WORDS and "{item}" in lead else ""
 
     def cased(self, words: str) -> str:
-        """``words`` with each run of capitalised words the book writes
-        ("Responding Party", "Request") in the book's casing, a capital first
-        letter and a full stop: a rule's stated words made the firm's sentence
-        without adding or changing a word."""
-        runs = sorted({m.group(0) for e in self.entries.values() for m in _CAPS.finditer(e.text)}, key=len)
+        """``words`` made the firm's sentence without adding or changing a word:
+        every word in the casing it is written in, a capital first letter and a
+        full stop. 2026-11-25: recasing the book's capitalised words wrote "The
+        Responding Party ... The Request" where the firm writes "Responding
+        Party ... the request", and "Interrogatory" where it writes
+        "interrogatory"; the stated words are the firm's own, so their casing
+        is kept."""
         out = norm(words).strip(" \"'")
-        for run in reversed(runs):
-            out = re.sub(rf"\b{re.escape(run)}\b", run, out, flags=re.I)
         return (out[:1].upper() + out[1:]).rstrip(" .;,:") + "."
 
 

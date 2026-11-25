@@ -29,9 +29,9 @@ from jobs.drafting.revise import book_run
 from jobs.drafting.rulebook import reading, stage as rule_stage
 from jobs.drafting.rulebook.types import Applied, Clause, StageResult
 
-PRIVACY = "Responding party objects to this Request on the ground that it seeks private information."
+PRIVACY = "Responding party objects to this request on the ground that it seeks private information."
 BOOK = [
-    {"key": "privacy", "kind": "objection", "text": PRIVACY.replace("Request", "{item}"), "names": ["privacy"],
+    {"key": "privacy", "kind": "objection", "text": PRIVACY.replace("request", "{item}"), "names": ["privacy"],
      "sets": [], "source": "invented"},
     {"key": "no_docs", "kind": "disposition", "text": "No responsive documents exist.", "names": ["no documents"],
      "sets": [], "source": "invented"},

@@ -28,7 +28,7 @@ from typing import Any
 
 from ..revise.checks import tokens
 from ..verify.items import parse_json
-from .book import Book, fold, norm
+from .book import Book, fill_item, fold, norm
 from .types import Ask
 
 STAGE = "rulebook-write"
@@ -121,7 +121,7 @@ def _named(problems: list[str], item: str, ground: str) -> bool:
 
 def write(needs: list[Need], item_word: str, book: Book, call: Ask | None) -> dict[tuple[str, str], str]:
     """{(item, ground): the sentence} for each need code accepted; the rest are left."""
-    lead = book.objection_lead().replace("{item}", item_word)
+    lead = fill_item(book.objection_lead(), item_word)
     if not needs or not lead or call is None:
         return {}
     got: dict[tuple[str, str], str] = {}

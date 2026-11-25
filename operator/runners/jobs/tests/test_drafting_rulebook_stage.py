@@ -43,8 +43,8 @@ GRID = {
                                                      "sentences": ["Responding Party will produce the bills he has."]}}},
     ]
 }  # fmt: skip
-PRIV = "Responding Party objects to this Request on the ground that it invades the privacy of Responding Party."
-LEAD = "Responding Party objects to this Request on the ground that it"
+PRIV = "Responding Party objects to this request on the ground that it invades the privacy of Responding Party."
+LEAD = "Responding Party objects to this request on the ground that it"
 
 
 def _firm(stages=("revise",)) -> SimpleNamespace:
@@ -88,7 +88,7 @@ def test_code_writes_the_firms_words_where_the_grid_says_and_names_each_in_the_n
     assert model.stages() == [reading.STAGE, grid.STAGE]
     assert "[3]" not in model.calls[1][1]  # the one-matter clause is never judged
     assert f"overbroad. {PRIV} Without waiving said objections" in res.md
-    assert "The Responding Party will not respond further." in res.md
+    assert "The responding party will not respond further." in res.md
     assert "the bills he has" not in res.md
     assert [(a.source, a.item) for a in res.applied] == [("rule:r1", "1"), ("rule:r2", "2")]
     assert res.notes == (
@@ -157,7 +157,7 @@ def test_a_refused_grid_or_rule_read_holds_unchecked(tmp_path):
 
 
 def test_a_made_sentence_the_recheck_cannot_find_holds_unmet(tmp_path, monkeypatch):
-    monkeypatch.setattr(makers, "add", lambda blocks, own, sentence, book: (list(blocks), ""))
+    monkeypatch.setattr(makers, "add", lambda blocks, own, sentence, book, names=(): (list(blocks), ""))
     with pytest.raises(DraftingFailed, match="^rule_unmet: document 00: response 1: missing"):
         stage.run(_job(tmp_path, Model()), _doc())
 

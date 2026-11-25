@@ -49,7 +49,7 @@ def test_a_first_draft_gets_the_firms_words_and_the_notes_join_the_attorney_note
     model = Model()
     out = hook.at_gate(_run(tmp_path, model), _unit(tmp_path), DRAFTED)
     body, notes = render.split_notes(out)
-    assert PRIV in body and "The Responding Party will not respond further." in body
+    assert PRIV in body and "The responding party will not respond further." in body
     assert notes.splitlines() == [
         "- Invented note from the draft.",
         "- Response 1: the firm's objection added, by rule r1.",
