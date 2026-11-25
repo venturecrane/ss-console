@@ -186,7 +186,8 @@ def read(blob: bytes | None) -> Frame | None:
     except (KeyError, ValueError, zipfile.BadZipFile):
         return None
     frame, seen = Frame(), False
-    joined: dict[tuple[str, int], tuple[list[str], bool]] = {}
+    #: (region, n) -> (its text pieces, its lead's suffix: "", ".head" or ".hole")
+    joined: dict[tuple[str, int], tuple[list[str], str]] = {}
     for text in texts:
         st = SET_TYPE.match(text)
         if st:
@@ -272,7 +273,8 @@ def apply(doc: str, frame: Frame, values: dict[str, str], variant: str | None = 
     where = regions(lines)
     if where is None:
         return doc, ["the firm's standard wording was not used: the draft has no identification block or no items"]
-    kind = variant if type_values(variant or "") else (where.set_type or frame.set_type)
+    own = variant or ""
+    kind = own if type_values(own) else (where.set_type or frame.set_type)
     values = {**type_values(kind), **values}
     notes: list[str] = []
     if frame.set_type and kind and kind != frame.set_type:
