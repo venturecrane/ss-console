@@ -84,3 +84,12 @@ kinds:
     variants: []
     produced_by: [chat_tool]
     reader: addressee
+
+  # The client's settlement statement, made in a chat turn by the
+  # settlement-statement-feeder skill (output-classes.yaml: settlement_statement,
+  # class work_product). Added 2026-11-25 so a firm's wording rule can name it.
+  - key: settlement_statement
+    library_title: Settlement Statement
+    variants: []
+    produced_by: [chat_tool]
+    reader: client

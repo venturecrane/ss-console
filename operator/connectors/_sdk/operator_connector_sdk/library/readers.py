@@ -61,6 +61,7 @@ KIND_READERS: dict[str, str] = {
     "memo": "internal",
     "depo_outline": "internal",
     "letter": "addressee",
+    "settlement_statement": "client",
 }
 #: A variant whose reader is not its kind's, the registry's ``variant_readers``.
 VARIANT_READERS: dict[str, dict[str, str]] = {

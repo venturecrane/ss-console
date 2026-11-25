@@ -3,7 +3,7 @@
  * one list of kinds of document the Operator makes in a firm's Word files.
  * Every other copy of that list is read here, out of its own file, and must
  * agree with it: equal where the copy means "every kind", a subset where the
- * copy is one path's kinds (the drafting lane makes five of the seven; the
+ * copy is one path's kinds (the drafting lane makes five of the eight; the
  * demand lane and the chat tool make the others).
  *
  * Each pinned copy is read from source, never restated here, so editing any one
@@ -120,10 +120,10 @@ function disagreement(
 }
 
 describe('the registry itself', () => {
-  it('declares seven kinds, each once, each with a known producer', () => {
+  it('declares eight kinds, each once, each with a known producer', () => {
     expect(registry.version).toBe(1)
-    expect(KINDS).toHaveLength(7)
-    expect(new Set(KINDS).size).toBe(7)
+    expect(KINDS).toHaveLength(8)
+    expect(new Set(KINDS).size).toBe(8)
     for (const k of registry.kinds) {
       expect(k.library_title, k.key).toMatch(/^[A-Z][A-Za-z ]+$/)
       expect(Array.isArray(k.variants), k.key).toBe(true)
