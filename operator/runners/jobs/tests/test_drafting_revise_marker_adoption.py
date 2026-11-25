@@ -268,3 +268,10 @@ def test_an_adopted_work_product_objection_is_followed_by_the_books_express_asse
 def test_a_book_with_no_express_assertion_adds_nothing():
     out, _done = M.settle("3", [_marker("work product")], BOOK, RFP, set(), adopt_own=True)
     assert out == [_fill(WP_SHORT)]
+
+
+def test_source_uses_reads_the_phrase_book_provenance_line() -> None:
+    from jobs.drafting.rulebook.book import source_uses
+
+    assert source_uses("plan-9 phrase-book rec:7: verbatim in 4 filed finals (2 matters); tier A") == 4
+    assert source_uses("plan-9 phrase-book rec:8: verbatim in 2 served finals (1 matter)") == 2
