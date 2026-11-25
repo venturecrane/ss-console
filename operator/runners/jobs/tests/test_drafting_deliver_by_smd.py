@@ -583,6 +583,32 @@ def test_notify_refuses_an_old_file_whose_filed_at_is_older_than_a_day(seat):
     assert _wakes(lane) == []
 
 
+@pytest.mark.parametrize("hermes", [None, "Not/AZone"])
+def test_with_no_timezone_in_the_env_the_authored_zone_dates_today(seat, monkeypatch, tmp_path, hermes):
+    """FALSIFIER (review of 61d331b1c): the jobs daemon runs with neither
+    HERMES_TIMEZONE nor TZ (templates/entrypoint.sh), so "filed today" never
+    passed on a seat. The live customer.yaml's business_hours.timezone answers;
+    an invalid HERMES_TIMEZONE falls through to it."""
+    _broker, _client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    monkeypatch.delenv("TZ", raising=False)
+    if hermes is None:
+        monkeypatch.delenv("HERMES_TIMEZONE", raising=False)
+    else:
+        monkeypatch.setenv("HERMES_TIMEZONE", hermes)
+    cfg = tmp_path / "customer.yaml"
+    cfg.write_text("business_hours:\n  timezone: America/Phoenix\n")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(cfg))
+    # 2026-03-05T05:30Z is 10:30 PM on the 4th in Phoenix: the file's day, though UTC has turned over.
+    late = datetime(2026, 3, 5, 5, 30, tzinfo=timezone.utc)
+    seat_rows = _MatterSeat(_filed())
+    p = dbs.plan(lane, jid, _rec(), notify=True, seat_factory=lambda: seat_rows, now=late)
+    assert p["email"].startswith("the Operator WILL email the attorney")
+    cfg.write_text("business_hours: {}\n")  # nothing authored: no zone, so no "today"
+    with pytest.raises(dbs.Refused, match="not today in the seat's timezone"):
+        dbs.plan(lane, jid, _rec(), notify=True, seat_factory=lambda: seat_rows, now=late)
+
+
 def test_notify_with_no_smokeball_read_is_refused_never_faked(seat):
     broker, _client, lane, _db, _q = seat
     jid = _ended(seat, "stopped")

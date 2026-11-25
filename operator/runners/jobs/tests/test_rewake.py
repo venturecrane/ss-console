@@ -280,3 +280,18 @@ def test_a_drafting_wake_goes_when_the_broker_could_not_check(tmp_path):
     d.tick()
     gate.close()
     assert len(gate.requests) == 1
+
+
+def test_a_hand_delivery_recorded_without_notify_is_never_rewoken(tmp_path, capsys):
+    """2026-11-24: deliver_by_smd without --notify writes a used wake marked
+    quiet. Re-arming it would email the attorney with none of --notify's checks
+    (the files on his matter, filed today)."""
+    from jobs import hand_notify
+
+    jd = tmp_path / JOBS["drafting"] / "01H"
+    jd.mkdir(parents=True)
+    st = {"state": "delivered", "delivered_by": "smd", "wake": hand_notify.wake("Outcome: delivered.", False)}
+    (jd / "daemon.json").write_text(json.dumps(st))
+    assert rewake.rewake(tmp_path, "drafting", "01H", "scott", "tell him", False, clock=lambda: 1.0) == 1
+    assert "recorded without --notify; tell the attorney with an SMD note" in capsys.readouterr().out
+    assert json.loads((jd / "daemon.json").read_text()) == st  # nothing re-armed

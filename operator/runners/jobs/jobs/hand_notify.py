@@ -35,16 +35,19 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from smokeball_connector.layout_tools import TZ_VAR, authored_timezone
+from smokeball_connector.library import CUSTOMER_YAML_ENV  # where the live customer.yaml is
+
 from .daemon import CHILD_ENV_PASS
 from .hand_delivery import Refused
 
-#: The seat's IANA timezone: bootstrap exports the customer.yaml timezone as
-#: ``HERMES_TIMEZONE``; a plain ``TZ`` is the fallback.
-TZ_ENV = ("HERMES_TIMEZONE", "TZ")
+#: The seat's IANA timezone, when a process carries one; else the authored
+#: ``business_hours.timezone`` (``seat_tz``).
+TZ_ENV = (TZ_VAR, "TZ")
 #: The Smokeball settings the runner daemon hands its jobs.
 SMOKEBALL_ENV = tuple(k for k in CHILD_ENV_PASS if k.startswith("SMOKEBALL_"))
 #: What ``--notify`` takes from the daemon's environment, by name only.
-ENV_NAMES = (*SMOKEBALL_ENV, *TZ_ENV)
+ENV_NAMES = (*SMOKEBALL_ENV, *TZ_ENV, CUSTOMER_YAML_ENV)
 FILED_AT_WINDOW = timedelta(hours=24)
 #: A ``filed_at`` this far ahead of the clock is a typo, never a filing.
 FUTURE_SLACK = timedelta(minutes=5)
@@ -81,15 +84,23 @@ def matter_id_of(env: dict[str, Any]) -> str:
     return str(env.get("file_to_matter_id") or env.get("matter_id") or nested or "").strip()
 
 
+def _zone(raw: str) -> ZoneInfo | None:
+    try:
+        return ZoneInfo(raw) if raw else None
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+
+
 def seat_tz() -> ZoneInfo | None:
+    """``TZ_VAR`` (bootstrap's seat timezone), else ``TZ``, else the live customer.yaml's authored
+    ``business_hours.timezone``; an invalid one falls through to the next.
+    The jobs daemon runs with neither variable (templates/entrypoint.sh), so on
+    a seat the authored zone is the one that answers."""
     for name in TZ_ENV:
-        raw = (os.environ.get(name) or "").strip()
-        if raw:
-            try:
-                return ZoneInfo(raw)
-            except (ZoneInfoNotFoundError, ValueError):
-                return None
-    return None
+        tz = _zone((os.environ.get(name) or "").strip())
+        if tz is not None:
+            return tz
+    return _zone(authored_timezone())
 
 
 def when(value: Any) -> datetime | None:
