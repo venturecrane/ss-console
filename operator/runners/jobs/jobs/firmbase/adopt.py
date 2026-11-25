@@ -45,7 +45,7 @@ _THUMBNAIL = re.compile(r"^docProps/thumbnail\.\w+$")
 DOCUMENT_RELS = "word/_rels/document.xml.rels"
 _STORY = re.compile(r"^word/(header|footer|footnotes|endnotes|comments)\d*\.xml$")
 #: What a page number's line says: its field results and "Page 1 of 2".
-_KEEP_IN_STORY = re.compile(r"(?i)(\d+|page|of|\s)*")
+_KEEP_IN_STORY = re.compile(r"(?i)(\d+|page|of|[-\u2013\u2014]|\s)*")
 
 
 def _serial(root: etree._Element) -> bytes:

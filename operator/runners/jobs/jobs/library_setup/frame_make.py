@@ -8,23 +8,32 @@ WHY (2026-11-24). A styles base cleared the whole body, so the firm's standard
 wording never reached a draft: the model wrote it fresh. What makes the paper
 the firm's is exactly the wording a styles base threw away.
 
-WHAT IS A CASE FACT, AND WHAT HAPPENS TO IT, in the paragraphs after the
-identification block and before the first numbered item, and from the closing
-(the Dated line, the signature block, the verification) to the proof of service:
+WHAT IS A CASE FACT, AND WHAT HAPPENS TO IT (``frame_facts`` decides), in the
+paragraphs after the identification block and before the first numbered item,
+and from the closing (the Dated line, the signature block, the verification) to
+the proof of service:
 
-* the parties the identification block names (its whole value and the name
-  alone) become ``[[v.responding_party]]`` and the rest (``firm_frame.VALUES``);
+* the parties (the identification block and the caption, with their shorter
+  forms) become ``[[v.responding_party]]`` and the rest (``firm_frame.VALUES``),
+  wherever they appear;
 * the set number after "Set" becomes ``[[v.set_number]]``;
-* the date on a Dated or Executed line becomes ``[[v.date]]``;
-* an authored attorney's name becomes ``[[v.signer]]``.
+* a date in the closing becomes ``[[v.date]]`` (it is the paper's own date);
+* an authored attorney's name becomes ``[[v.signer]]``, its spacing ignored.
 
-WHAT REFUSES A BLOCK. After those, every capitalised word left must be a word of
-a closed list (procedure, the parts of a discovery paper, plain English) or of
-the firm's own authored identity; no other date, no amount of money, no email
-address or telephone number outside the firm's identity, no case number. A block
-with anything else is dropped whole, counted, and never written (fail closed:
-a wrong guess about a word must never put a client's name in every later
-matter). Only counts and codes come back, never a word of the paper.
+A PARAGRAPH that still holds a case fact after that (a matter-tailored
+definition, a date in the front, a place, a provider) is dropped ALONE and
+counted; the rest of its block is kept. In the front it leaves a hole, where a
+draft puts its own matter definitions. Fail closed, paragraph by paragraph: a
+wrong guess about a word must never put a client's name in every later matter.
+
+THE FOOTER (2026-11-25: 11 of 16 real papers stopped there). A footer line that
+names the paper's kind, its running title, keeps only its title words ("Responses
+to Special Interrogatories, Set One"): the party names in it go, never a
+refusal. Each draft made in the file prints its own title there
+(``pleading.retitle_footer``), and the chat tool, which does not retitle, prints
+no mark and no name.
+
+Only counts and codes come back, never a word of the paper.
 """
 
 from __future__ import annotations
@@ -38,7 +47,8 @@ from typing import Iterable
 from lxml import etree
 
 from ..drafting import firm_frame as F
-from .make import Unusable
+from . import frame_facts as K, frame_lines as L
+from .make import TITLE_WORDS, Unusable
 from .styles_make import make_styles
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -46,44 +56,15 @@ _XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 #: The root writer's bounds (``establish_intake/library_accept.py``).
 MAX_FIXED_STRINGS, MAX_FIXED_CHARS = 200, 300
 _CHUNK = 280
-
-_MONTH = r"(?:January|February|March|April|May|June|July|August|September|October|November|December)"
-_DATE = re.compile(rf"(?i)\b{_MONTH}\s+\d{{1,2}},?\s+\d{{4}}\b|\b\d{{1,2}}/\d{{1,2}}/\d{{2,4}}\b")
-#: A closing paragraph whose date is the paper's own: the Dated line, the verification's "Executed on".
-_DATED_LINE = re.compile(r"(?i)\b(dated|date:|executed)")
-_MONEY = re.compile(r"\$\s*\d")
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
-_PHONE = re.compile(r"\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}")
-_CASE_NO = re.compile(r"(?i)\bcase\s+(?:no\.?|number)\s*:?\s*\S*\d")
-_WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
-
-#: The words a firm's standard wording may carry capitalised: procedure, the
-#: parts of a discovery paper, and plain English. Closed: a word not here and not
-#: in the firm's identity refuses its block.
-VOCAB = frozenset(
-    """
-    a about above according accordingly act action actions additional admission admissions after against all also
-    america an and answer answering answers any appear applicable are article as at attorney attorneys based be
-    because been before being bound burdensome but by calif california can case civil code codes complaint
-    concerning confidential consistent constitution contained contend contention correct counsel county court
-    cross-complainant cross-defendant date dated declare declares definition definitions demand describe
-    described describing discovery doctrine document documents does each esq esquire evidence except executed
-    extent fact facts federal following for foregoing form forth from further furthermore general given has have
-    having he hereby herein hereinafter hereto however i identify if in include including information instruction
-    instructions interrogatories interrogatory into is it its knowledge law laws limitation llp llc apc pc inc
-    matter matters may me meaning means my no nos not nothing notwithstanding objection objections objects of on
-    one or other our party parties penalty perjury person persons plaintiff plaintiffs defendant defendants
-    pleading possession preliminary privacy privilege privileged procedure produce produced product production
-    propounded propounding propounding's proportional provide provided pursuant reasonably record regarding
-    relevant request requested requests reserve reserves respectfully respond responded responding response
-    responses right rights rule rules said section sections seek seeks served set shall she special state
-    statement states subject submitted such superior supplement supplemental that the their them thereto these
-    they this those three to true two under undersigned united upon verification verified vague ambiguous
-    overbroad oppressive harass harassing was we were what when where whether which who whom will with within
-    without work you your two three four five six seven eight nine ten am declare foregoing behalf
-    individually entity entities inspection copying custody control diligent search inquiry made
-    """.split()
-)
+#: A front paragraph dropped for a case fact: a hole the draft fills.
+HOLE = ""
+VOCAB = K.VOCAB
+_FOOTER = re.compile(r"^word/footer\d*\.xml$")
+#: A bare year left in the closing (a date's remnant), not a code section ("2015.5").
+_YEAR = re.compile(r"\b(?:19|20)\d{2}\b(?![.\d])")
+#: Where a kept sentence may end: a full stop, a colon, a closing quote or bracket.
+_ENDS = re.compile(r"[.:;!?\"”)\]]\s*$")
+_TITLE_TOKEN = re.compile(r"[A-Za-z]+(?:['’][Ss])?")
 
 
 @dataclass(frozen=True)
@@ -98,14 +79,20 @@ def _fold(text: str) -> str:
     return " ".join((text or "").split())
 
 
+_RUN_TEXT = {f"{_W}tab": "\t", f"{_W}br": "\n", f"{_W}cr": "\n"}
+
+
 def _body_lines(blob: bytes) -> list[str]:
-    """The source paper's body read as lines, a table row as one line."""
+    """The source paper's body read as lines, a table row as one line. A line
+    break inside a paragraph (``w:br``) is kept as a newline: a closing is often
+    one paragraph of lines (Dated, the firm, By, the signer, Attorneys for)."""
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         body = etree.fromstring(z.read("word/document.xml")).find(f"{_W}body")
     out: list[str] = []
     for el in body if body is not None else []:
         if el.tag == f"{_W}p":
-            out.append("".join((t.text or "") if t.tag == f"{_W}t" else "\t" for t in el.iter(f"{_W}t", f"{_W}tab")))
+            parts = el.iter(f"{_W}t", *_RUN_TEXT)
+            out.append("".join((t.text or "") if t.tag == f"{_W}t" else _RUN_TEXT[t.tag] for t in parts))
         elif el.tag == f"{_W}tbl":
             out += [
                 " | ".join(_fold("".join(t.text or "" for t in tc.iter(f"{_W}t"))) for tc in tr.iter(f"{_W}tc"))
@@ -114,80 +101,172 @@ def _body_lines(blob: bytes) -> list[str]:
     return out
 
 
-def _sub(pattern: str, mark: str, text: str) -> str:
-    return re.sub(rf"(?i)(?<![\w\[]){pattern}(?![\w\]])", mark, text) if pattern else text
-
-
-def _blank(text: str, values: dict[str, str], signers: list[str], dated: bool) -> str:
-    """One paragraph with its case facts replaced by marked places."""
-    for key in ("responding_party", "propounding_party", "responding_name", "propounding_name"):
-        if values.get(key):
-            text = _sub(re.escape(values[key]), f"[[v.{key}]]", text)
-    if values.get("set_number"):
-        text = re.sub(rf"(?i)\b(set\s+(?:no\.?\s*)?){re.escape(values['set_number'])}\b", r"\1[[v.set_number]]", text)
-    for name in signers:
-        text = _sub(re.escape(name), "[[v.signer]]", text)
-    return _DATE.sub("[[v.date]]", text) if dated else text
-
-
-def _residue(text: str, allowed: frozenset[str], identity: list[str]) -> bool:
-    """True when the blanked paragraph still holds what may be a case fact."""
-    left = F.VALUE.sub(" ", text)
-    for piece in identity:
-        left = left.replace(piece, " ")
-    if _DATE.search(left) or _MONEY.search(left) or _EMAIL.search(left) or _PHONE.search(left):
-        return True
-    if _CASE_NO.search(left):
-        return True
-    for w in _WORD.findall(left):
-        low = re.sub(r"['’]s$", "", w.lower())
-        if w != w.lower() and low not in VOCAB and low not in allowed:
-            return True
-    return False
-
-
-def _signers(identity_blocks: Iterable[Iterable[str]]) -> list[str]:
-    names = []
+def _signers(identity_blocks: Iterable[Iterable[str]]) -> list[re.Pattern[str]]:
+    """Each authored attorney's name as it may be printed, its spacing ignored."""
+    names: set[str] = set()
     for block in identity_blocks:
         lines = [str(x) for x in block]
         if lines:
-            names += [lines[0], re.sub(r"(?i),?\s*esq\.?$", "", lines[0]).strip()]
-    return sorted({n for n in names if n}, key=len, reverse=True)
+            names |= {lines[0], re.sub(r"(?i),?\s*esq\.?$", "", lines[0]).strip()}
+    return [K.spaced(n) for n in sorted((n for n in names if n), key=len, reverse=True)]
+
+
+@dataclass(frozen=True)
+class Facts:
+    """What the paper's own text says its case facts are, and the firm's identity."""
+
+    values: dict[str, str]
+    pairs: list[tuple[str, str]]
+    signers: list[re.Pattern[str]]
+    allowed: frozenset[str]
+    identity: list[re.Pattern[str]]
+    set_type: str = ""
+
+    def identity_only(self, text: str) -> bool:
+        for pat in self.identity:
+            text = pat.sub(" ", text)
+        return not text.strip(" ,.;:")
+
+    def blank(self, text: str, closing: bool) -> str:
+        """One paragraph with its case facts replaced by marked places."""
+        if not closing and L.ATTORNEY_LINE.match(text) and not self.identity_only(text):
+            return "[[v.signer]]"
+        text = K.mark_names(text, self.pairs)
+        number = self.values.get("set_number")
+        if number:
+            text = re.sub(rf"(?i)\b(set\s+(?:no\.?\s*)?){re.escape(number)}\b", r"\1[[v.set_number]]", text)
+        for pat in self.signers:
+            text = pat.sub("[[v.signer]]", text)
+        text = K.mark_set_type(text, self.set_type)
+        if not closing:
+            return text
+        dated = L.DATED.match(text)
+        if dated and L.dated_value(dated.group(2)):  # the whole value is the date, a blank and a year included
+            return dated.group(1) + " [[v.date]]"
+        return K.DATE.sub("[[v.date]]", K.DATE_BLANK.sub("[[v.date]]", text))
+
+
+def facts_of(lines: list[str], identity: list[str], blocks: Iterable[Iterable[str]]) -> tuple[Facts, F.Regions]:
+    where = F.regions(lines)
+    if where is None:
+        raise Unusable("no_identification_block")
+    values = K.party_values(lines, where.id_end)
+    if not values.get("responding_party"):
+        raise Unusable("no_identification_block", "no responding party")
+    allowed = frozenset(w.lower() for p in identity for w in K.WORD.findall(p))
+    # A party's one-word short form that is also a word of the firm's own
+    # identity is never marked: it would cut the firm's name in the signature.
+    pairs = [(t, m) for t, m in K.name_marks(values, K.caption_parties(lines[: where.id_end])) if t not in allowed]
+    pats = [K.spaced(p) for p in sorted(identity, key=len, reverse=True) if p.strip()]
+    return Facts(values, pairs, _signers(blocks), allowed, pats, where.set_type), where
 
 
 def _is_head(text: str) -> bool:
-    words = _WORD.findall(text)
+    words = K.WORD.findall(text)
     return bool(words) and text == text.upper() and len(words) <= 10 and not F.VALUE.search(text)
 
 
 def blank_regions(
     lines: list[str], identity: list[str], blocks: Iterable[Iterable[str]]
 ) -> tuple[dict[str, list[tuple[str, bool]]], str, dict[str, int]]:
-    """(each region's blanked paragraphs, the set type, counts). A region with
-    any paragraph that keeps a possible case fact is empty, and counted."""
-    where = F.regions(lines)
-    if where is None:
-        raise Unusable("no_identification_block")
-    values, _end = F.identification(lines)
-    if not values.get("responding_party"):
-        raise Unusable("no_identification_block", "no responding party")
-    signers = _signers(blocks)
-    allowed = frozenset(w.lower() for p in identity for w in _WORD.findall(p))
+    """(each region's blanked paragraphs, the set type, counts). A paragraph
+    that still holds a possible case fact is dropped alone and counted; in the
+    front it leaves one :data:`HOLE` per run of dropped paragraphs."""
+    facts, where = facts_of(lines, identity, blocks)
     out: dict[str, list[tuple[str, bool]]] = {F.FRONT: [], F.CLOSING: []}
     counts: dict[str, int] = {}
-    for region, (a, b) in ((F.FRONT, where.front), (F.CLOSING, where.closing)):
-        paras = []
-        for raw in lines[a:b]:
-            text = _fold(raw.replace("\t", " "))
-            if not text:
-                continue
-            paras.append((_blank(text, values, signers, region == F.CLOSING and bool(_DATED_LINE.search(text))), text))
-        refused = sum(1 for blanked, _t in paras if _residue(blanked, allowed, identity))
-        counts[f"{region}_paragraphs"] = len(paras)
-        counts[f"{region}_refused"] = refused
-        if not refused:
-            out[region] = [(blanked, _is_head(blanked)) for blanked, _src in paras]
+    front = [_fold(raw.replace("\t", " ")) for raw in lines[slice(*where.front)]]
+    signed = L.signer_lines(L.closing_lines(lines[slice(*where.closing)]), facts.identity_only)
+    signed, firm = L.firm_attorneys(signed, facts.identity_only)
+    for region, texts in ((F.FRONT, [t for t in front if t]), (F.CLOSING, signed)):
+        kept, why = _judge(facts, texts, region == F.CLOSING, frozenset(firm) if region == F.CLOSING else frozenset())
+        dropped = sum(why.values())
+        counts[f"{region}_paragraphs"] = sum(1 for t, _h in kept if t != HOLE) + dropped
+        counts[f"{region}_refused"] = dropped
+        counts.update({f"{region}_drop_{k}": v for k, v in why.items()})
+        out[region] = kept
     return out, where.set_type, counts
+
+
+def _attorneys_for(blanked: str, facts: Facts) -> str:
+    """An "Attorneys for" line that did not come out clean, as the firm's
+    words: "Attorneys for <role>, [[v.<party>]]" when that marks cleanly, else
+    "Attorneys for <role>" alone; "" when it names no role."""
+    lead = re.match(r"(?i)^(attorneys?\s+for)\s+(?:the\s+)?(\w+(?:[- ]\w+)?)", blanked)
+    if not lead or lead.group(2).lower().rstrip("s") not in {"plaintiff", "defendant", "cross-complainant"}:
+        return ""
+    base = f"{lead.group(1)} {lead.group(2)}"
+    mark = F.VALUE.search(blanked)
+    with_party = f"{base}, {mark.group(0)}" if mark else ""
+    if with_party and not K.case_fact(with_party, facts.allowed, facts.identity):
+        return with_party
+    return base
+
+
+def _judge(
+    facts: Facts, texts: list[str], closing: bool, firm: frozenset[int] = frozenset()
+) -> tuple[list[tuple[str, bool]], dict[str, int]]:
+    """Each paragraph kept (marked) or dropped alone, with the reason codes of
+    the drops. In the front a dropped paragraph leaves one hole per run, a kept
+    paragraph whose sentence runs on into a dropped one goes with it (a hole
+    never cuts a sentence). A numbered list that loses an item keeps its other
+    items: ``firm_frame`` numbers every list afresh when it lays the frame, the
+    draft's own definitions in the hole included, so a gap never shows. In the
+    closing, ``firm`` names the lines that are the firm's own attorneys (kept as
+    written), and an "Attorneys for" line that is not clean keeps its role."""
+    kept: list[tuple[str, bool]] = []
+    why: dict[str, int] = {}
+    for i, text in enumerate(texts):
+        if i in firm:
+            kept.append((text, False))
+            continue
+        blanked = facts.blank(text, closing)
+        reason = "year" if closing and _YEAR.search(F.VALUE.sub(" ", blanked)) else ""
+        reason = reason or K.case_fact(blanked, facts.allowed, facts.identity)
+        if reason and closing and L.ATTORNEYS_FOR.match(blanked) and _attorneys_for(blanked, facts):
+            blanked, reason = _attorneys_for(blanked, facts), ""
+        if not reason:
+            kept.append((blanked, _is_head(blanked)))
+            continue
+        why[reason] = why.get(reason, 0) + 1
+        if closing:
+            continue
+        if kept and kept[-1][0] != HOLE and not kept[-1][1] and not _ENDS.search(kept[-1][0]):
+            kept.pop()
+            why["sentence_runs_on"] = why.get("sentence_runs_on", 0) + 1
+        if not kept or kept[-1][0] != HOLE:
+            kept.append((HOLE, False))
+    return kept, why
+
+
+def _title_words(text: str) -> str:
+    keep = [w for w in _TITLE_TOKEN.findall(text) if re.sub(r"['’]s$", "", w.lower()) in TITLE_WORDS]
+    return " ".join(keep)
+
+
+def retitled_footers(blob: bytes) -> tuple[bytes, int]:
+    """The source with each footer running title kept as its title words only
+    (the module docstring); (bytes, how many lines)."""
+    from ..drafting.pleading import RUNNING_TITLE
+
+    buf, n = io.BytesIO(), 0
+    with zipfile.ZipFile(io.BytesIO(blob)) as src, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        for info in src.infolist():
+            raw = src.read(info.filename)
+            if _FOOTER.match(info.filename):
+                root = etree.fromstring(raw)
+                for p in root.iter(f"{_W}p"):
+                    ts = list(p.iter(f"{_W}t"))
+                    text = "".join(t.text or "" for t in ts)
+                    if not ts or not RUNNING_TITLE.search(text) or _title_words(text) == _fold(text):
+                        continue
+                    ts[0].text = _title_words(text)
+                    for t in ts[1:]:
+                        t.text = ""
+                    n += 1
+                raw = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+            out.writestr(info, raw)
+    return buf.getvalue(), n
 
 
 def _chunks(text: str) -> list[str]:
@@ -207,6 +286,9 @@ def frame_paragraphs(blocks: dict[str, list[tuple[str, bool]]], set_type: str) -
     out = [f"[[frame.set_type.{set_type}]]"] if set_type else []
     for region in (F.FRONT, F.CLOSING):
         for n, (text, head) in enumerate(blocks[region], start=1):
+            if text == HOLE:
+                out.append(f"[[frame.{region}.{n}.hole]]")
+                continue
             lead = f"[[frame.{region}.{n}{'.head' if head else ''}]]"
             out += [lead + c for c in _chunks(text)]
     return out
@@ -242,8 +324,40 @@ def _with_body(blob: bytes, paragraphs: list[str]) -> bytes:
                     elif body is not None:
                         body.append(p)
                 raw = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+            elif info.filename in (_CORE, _APP):
+                raw = _without_dates(raw)
             out.writestr(info, raw)
     return buf.getvalue()
+
+
+_CORE, _APP = "docProps/core.xml", "docProps/app.xml"
+#: What dates the firm's paper, counts it or names where it came from: created,
+#: saved, printed, revision, editing time, its template, and its page, word,
+#: character, line and paragraph counts. The made file is no copy of that paper.
+_DATED_PROPS = frozenset(
+    {
+        "created",
+        "modified",
+        "lastPrinted",
+        "revision",
+        "TotalTime",
+        "Template",
+        "Pages",
+        "Words",
+        "Characters",
+        "CharactersWithSpaces",
+        "Lines",
+        "Paragraphs",
+    }
+)
+
+
+def _without_dates(raw: bytes) -> bytes:
+    root = etree.fromstring(raw)
+    for el in list(root):
+        if etree.QName(el).localname in _DATED_PROPS:
+            root.remove(el)
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
 def make_frame(kind: str, blob: bytes, identity: list[str], blocks: Iterable[Iterable[str]] = ()) -> FrameMade:
@@ -253,13 +367,25 @@ def make_frame(kind: str, blob: bytes, identity: list[str], blocks: Iterable[Ite
         raise Unusable("not_a_discovery_kind", kind)
     blocks = [list(b) for b in blocks]
     regions, set_type, counts = blank_regions(_body_lines(blob), identity, blocks)
-    styles = make_styles(kind, blob, identity)
+    source, counts["footer_titles"] = retitled_footers(blob)
+    styles = make_styles(kind, source, identity)
     paragraphs = frame_paragraphs(regions, set_type)
     fixed = list(dict.fromkeys([*styles.fixed_strings, *fixed_of(paragraphs)]))
     if len(fixed) > MAX_FIXED_STRINGS or any(len(s) > MAX_FIXED_CHARS for s in fixed):
         raise Unusable("frame_too_long", f"{len(fixed)} fixed strings")
-    counts.update({"fixed_strings": len(fixed), **{f"kept_{r}": len(regions[r]) for r in regions}})
+    kept = {f"kept_{r}": sum(1 for t, _h in regions[r] if t != HOLE) for r in regions}
+    counts.update({"fixed_strings": len(fixed), **kept})
     return FrameMade(_with_body(styles.data, paragraphs), tuple(fixed), set_type, counts)
 
 
-__all__ = ["VOCAB", "FrameMade", "blank_regions", "fixed_of", "frame_paragraphs", "make_frame"]
+__all__ = [
+    "HOLE",
+    "VOCAB",
+    "FrameMade",
+    "blank_regions",
+    "facts_of",
+    "fixed_of",
+    "frame_paragraphs",
+    "make_frame",
+    "retitled_footers",
+]

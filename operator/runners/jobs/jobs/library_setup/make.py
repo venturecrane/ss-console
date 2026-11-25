@@ -60,7 +60,7 @@ SETTINGS_RELS = "word/_rels/settings.xml.rels"
 _LINK_SETTINGS = frozenset({"attachedTemplate", "docVars", "mailMerge"})
 #: The fields a header or footer may keep: page numbering, as the root writer's check allows them.
 FIELDS_ALLOWED = frozenset({"PAGE", "NUMPAGES", "SECTIONPAGES", "SECTION"})
-_PAGE_LINE = re.compile(r"(?i)(\d+|page|of|\s)*")
+_PAGE_LINE = re.compile(r"(?i)(\d+|page|of|[-\u2013\u2014]|\s)*")
 _HEAD_FOOT = re.compile(r"^word/(header|footer)\d*\.xml$")
 _NOTES = re.compile(r"^word/(footnotes|endnotes|comments)\d*\.xml$")
 #: Words a letterhead line may carry beside the firm's own values.
