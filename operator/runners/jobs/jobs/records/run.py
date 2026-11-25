@@ -47,6 +47,7 @@ from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from . import (
     assemble,
+    candidates as candidates_mod,
     cut as cut_mod,
     firm as firm_mod,
     free as free_mod,
@@ -62,8 +63,6 @@ from .outcome import REASON, RecordsFailed, RecordsHold, Verdict, proof_ending
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
 #: The statuses a matter named by its number is resolved among.
 MATTER_STATUSES = ("Open", "Pending")
-#: Candidate files per record, at most.
-MAX_CANDIDATES = 3
 
 
 class CapStop(pf.CallRefused):
@@ -265,13 +264,19 @@ class RecordsRun(RunBase):
             return "sha256" in files[file_id]
         dest = self.data / "files" / f"{file_id}.pdf"
         dest.parent.mkdir(parents=True, exist_ok=True)
+        email = False
         try:
             meta = self.client.get(f"/matters/{mid}/documents/files/{file_id}")
             if not mf._on_matter(meta, mid):
                 raise mf.StageRefused("the file's own record does not name this matter")
-            if str(meta.get("fileExtension") or "").strip().lower().lstrip(".") != "pdf":
-                raise mf.StageRefused("not a PDF")
-            if not dest.is_file():
+            kind = rank.extension(meta)
+            if kind not in rank.EXTENSIONS:
+                raise mf.StageRefused("not a PDF or an email")
+            # An email is rendered to a PDF of the job's own (candidates.email_pdf).
+            email = kind == "msg"
+            if email and not dest.is_file():
+                candidates_mod.email_pdf(self, mid, file_id, dest)
+            elif not dest.is_file():
                 tmp = dest.with_suffix(".part")
                 mf._download_to(self.client, mid, file_id, tmp, mf.MAX_SOURCE_BYTES)
                 tmp.replace(dest)
@@ -289,29 +294,14 @@ class RecordsRun(RunBase):
             "sha256": pf.file_sha256(dest),
             "page_count": int(total),
             "size": dest.stat().st_size,
+            **({"email": True} if email else {}),
         }
         free_mod.note_file(files[file_id]["sha256"], file_id)
         return True
 
     def _ranked(self, mid: str, rec: dict[str, Any], files: dict[str, Any]) -> list[tuple[str, int]]:
-        """The record's candidates: the matter's PDFs ranked by its words
-        (``rank.py``), the best :data:`rank.TOP` downloaded, then ties broken
-        by a complete page index and fewer pages; the best
-        :data:`MAX_CANDIDATES` kept. ``[]`` when no file scores for it."""
-        from smokeball_connector import matter_files as mf
-
-        try:
-            rows, _complete = mf._all_files(self.client, mid)
-        except Exception as exc:  # could not look is never "no file is named for it"
-            raise RecordsHold("finder_failed: the matter's files could not be listed") from exc
-        got = [(fid, sc) for fid, sc in rank.rank(rows, rec) if self._fetch(mid, fid, files)]
-        # Every free file (a complete index: only its match costs anything),
-        # then the best-scored priced ones, at most MAX_CANDIDATES of those.
-        free = [fs for fs in got if search.unread(files[fs[0]]) == 0]
-        priced = [fs for fs in got if search.unread(files[fs[0]]) > 0]
-        priced.sort(key=lambda fs: (-fs[1], search.read_none(files[fs[0]]), int(files[fs[0]]["page_count"]), fs[0]))
-        # Then the matter PDFs already read whole (free.py), before any priced one.
-        return free + free_mod.extras(self, mid, rows, files, dict(got)) + priced[:MAX_CANDIDATES]
+        """The record's candidates (``candidates.ranked``)."""
+        return candidates_mod.ranked(self, mid, rec, files)
 
     def _resolve(self) -> None:
         mid = self._matter_id()

@@ -98,6 +98,93 @@ def test_names_whole_is_code_and_never_a_part() -> None:
     assert not rank.names_whole(_item("the 17-page Declaration of Jane Roe 4"), "Declaration of Jane Roe.pdf")
 
 
+@pytest.mark.parametrize(
+    ("asked", "folder"),
+    [
+        # The live phrasing that was cut to 4 pages (2026-11-24), names invented.
+        ("the file named Dana Roe Statement.pdf on matter 900417", ""),
+        ("the document called Dana Roe Statement", ""),
+        ("file Dana Roe Statement.pdf from the Discovery folder", "Discovery"),
+        ("the file titled Dana Roe Statement in matter no. 2026-PI-101", ""),
+        ("the document entitled Dana Roe Statement in the Discovery folder", "Discovery"),
+    ],
+)
+def test_framing_around_a_file_name_still_names_the_whole_file(asked: str, folder: str) -> None:
+    """FALSIFIER: "named", "called", the matter number and the folder's own
+    words read as extra words, so each of these went to the page finder."""
+    assert rank.names_whole(_item(asked), "Dana Roe Statement.pdf", folder=folder)
+
+
+def test_framing_never_hides_a_part() -> None:
+    name = "Dana Roe Statement.pdf"
+    assert not rank.names_whole(_item("pages 2-5 of the file named Dana Roe Statement.pdf on matter 900417"), name)
+    assert not rank.names_whole(_item("the file named Dana Roe Statement.pdf", dates=["3/2/2024"]), name)
+    # A folder word that is not the file's own folder still narrows.
+    assert not rank.names_whole(_item("file Dana Roe Statement.pdf from the Medical folder"), name, folder="Discovery")
+
+
+def test_a_folder_frames_a_name_only_when_the_words_call_it_a_folder() -> None:
+    """Re-review of #4210: the folder's words were subtracted whether or not the
+    request named the folder, so "the Banner ER records" sent Banner.pdf (in a
+    folder ER) whole instead of the ER pages."""
+    assert not rank.names_whole(_item("the Banner ER records"), "Banner.pdf", folder="ER")
+    assert rank.names_whole(_item("Banner.pdf from the ER folder"), "Banner.pdf", folder="ER")
+    assert rank.names_folder(_item("the records in the Medical folder"), "Medical")
+    assert not rank.names_folder(_item("the Medical records"), "Medical")
+
+
+class _FolderSeat(FakeSmokeball):
+    """A matter whose PDFs sit in named folders."""
+
+    def __init__(self, folders: dict[str, str]) -> None:
+        super().__init__()
+        self.folders = folders  # folder id -> name
+
+    def add_in(self, n: int, name: str, data: bytes, folder_id: str) -> str:
+        f = self.add(n, name, data)
+        self.rows[-1]["folder"] = {"id": folder_id}
+        self.meta[f]["folder"] = {"id": folder_id}
+        return f
+
+    def get(self, path: str, **params: Any) -> Any:
+        if path.endswith("/documents/folders"):
+            return {"value": [{"folders": [{"id": k, "name": v} for k, v in self.folders.items()]}]}
+        return super().get(path, **params)
+
+
+@pytest.mark.parametrize("name", ["Medical Records.pdf", "Medical.pdf"])
+def test_words_naming_a_folder_of_several_pdfs_send_no_file_whole(
+    tmp_path: Path, env: dict[str, Path], model: FakeFinderModel, name: str
+) -> None:
+    """FALSIFIER: "the records in the Medical folder" sent the one file whose
+    name matched (Medical Records.pdf, or Medical.pdf) whole, from a folder of
+    several."""
+    sb = _FolderSeat({"F1": "Medical", "F2": "Billing"})
+    sb.add_in(1, name, pdf(6), "F1")
+    sb.add_in(2, "Northside Clinic records.pdf", pdf(10), "F1")
+    sb.add_in(3, "Invoice.pdf", pdf(2), "F2")
+    asked = "the records in the Medical folder"
+    r, _v = _run(tmp_path, env, sb, [_item(asked)], f"Please send me {asked}.")
+    cuts = json.loads((r.data / "cuts.json").read_text()) if (r.data / "cuts.json").is_file() else []
+    assert not any(c["pages"] == "" and c["page_count"] == 6 for c in cuts), cuts
+    located = list((r.data / "locate").rglob("*.json")) if (r.data / "locate").is_dir() else []
+    assert not any(json.loads(p.read_text()).get("namedFile") for p in located)
+
+
+def test_the_live_phrasing_goes_whole_end_to_end(tmp_path: Path, env: dict[str, Path], model: FakeFinderModel) -> None:
+    stored = pdf(17)
+    sb = FakeSmokeball()
+    f = sb.add(1, "Dana Roe Statement.pdf", stored)
+    sb.add(2, "Northside Clinic records.pdf", pdf(10))
+    asked = "the file named Dana Roe Statement.pdf on matter 900417"
+    r, v = _run(tmp_path, env, sb, [_item(asked)], f"Please send me {asked}.")
+    assert v["verdict"] == "delivered", v
+    (cut,) = json.loads((r.data / "cuts.json").read_text())
+    assert (cut["file_id"], cut["pages"], cut["page_count"]) == (f, "", 17)
+    assert cut["sha256"] == hashlib.sha256(stored).hexdigest()
+    assert model.index_calls() == 0
+
+
 def test_a_named_pdf_with_an_active_key_holds_rather_than_going_altered() -> None:
     assert as_stored(pdf(1))
     assert not as_stored(b"%PDF-1.4 << /OpenAction << /S /JavaScript /JS (x) >> >>")

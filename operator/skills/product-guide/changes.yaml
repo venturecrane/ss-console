@@ -42,4 +42,8 @@ entries:
   - id: 5
     lines:
       - The Operator can now copy or move documents already on a matter into one of the matter's folders, so a request like create a folder and put these documents in it is done start to finish.
-    library_sha256: 77ebf84d34ca0c787f75c224441c858416b90c4a533bbcd5427cb6617e3c1fb9
+    library_sha256: c8da7cee94f874b43a368e2b254323b0eba504fdb96611dd813d9dc2f7fe92a7
+  - id: 6
+    lines:
+      - A staff request for matter records now covers documents asked for by kind as well as by name, such as every statement of one kind in a file, emails on the matter included. A document named by its title goes whole, exactly as the matter holds it.
+    library_sha256: c8da7cee94f874b43a368e2b254323b0eba504fdb96611dd813d9dc2f7fe92a7

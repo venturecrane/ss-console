@@ -72,6 +72,8 @@ export const COULD_NOT_CODES = [
   'cannot_complete',
   'not_permitted',
   'none_available',
+  'product_limit',
+  'looking_into',
   'other',
 ] as const
 export type CouldNotCode = (typeof COULD_NOT_CODES)[number]

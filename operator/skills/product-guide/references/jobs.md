@@ -20,7 +20,7 @@ The runner handles one queue per kind of queued job and runs one job at a time f
 
 There are 7 kinds of queued job.
 
-- One is general in shape: a staff request for named records, answered with files, with an optional SMD review hold.
+- One is general in shape: a staff request for documents from a matter's file, named or by kind, answered with files, with an optional SMD review hold.
 - Six serve the law-firm industry pack: a medical chronology, a demand, document drafting, a litigation status report, watching a negotiation, and reviewing a case file.
 
 A further kind of work runs through the same broker without a queue: a note that SMD approves and that is sent as part of a digest.

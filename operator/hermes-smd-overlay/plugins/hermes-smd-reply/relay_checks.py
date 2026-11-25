@@ -46,7 +46,7 @@ from shared import (
     turn_says,
 )
 
-from . import binding, held_notice, job_reply, notice, relay, working_drafts
+from . import binding, held_notice, job_reply, limit_check, notice, relay, working_drafts
 
 _PACKAGE = __name__.rpartition(".")[0]
 #: The plugin module this copy of the steps serves. The plugin drops any earlier
@@ -361,6 +361,12 @@ def body_and_facts(
         return None
     if mechanics_held(origin, reply_to, send_text, send_html):
         return None
+    # A turn's fixed sentence owns its own wording (5a), so the limit rule
+    # reads only replies the model wrote freely.
+    lim = say is None and limit_check.stated(origin, reply_to, send_text, send_html, _LIMIT_HOLDS)
+    if lim:
+        _plugin._held(limit_check.LIMIT_HOLD_REASON, origin, rule=lim[0], _detail=lim[1])
+        return None
     if facts is not None and not facts_hold:
         # The invariant, checked on the body that would go: no marker, and
         # the facts block present whenever there is one.
@@ -416,11 +422,6 @@ MECHANICS_HOLD_REASON = "mechanics_named"
 _SAY_MAX = 1024
 
 
-#: The broker's comparison and its HTML reading, kept where the register is.
-_norm = turn_says.norm
-_from_html = turn_says.from_html
-
-
 #: The register (``shared.turn_says``), one per load of this module, which is
 #: one per load of the plugin.
 TurnSays = turn_says.TurnSays
@@ -431,6 +432,8 @@ _TURN_SAYS = TurnSays()
 #: runs out). Past ``SAY_MAX_REDRAFTS`` redrafts the model is told to stop; the
 #: hold stays ``fixed_wording``, which pages SMD as ``reply_held:fixed_wording``.
 _SAY_HOLDS = held_notice.HoldCounter()
+#: The limit rule's own redraft count (``limit_check``), per load as 5a's is.
+_LIMIT_HOLDS = held_notice.HoldCounter()
 SAY_MAX_REDRAFTS = 2
 SAY_STOP_DETAIL = notice.FIXED_WORDING_STOP
 

@@ -237,12 +237,14 @@ def test_a_later_email_is_not_held_to_an_earlier_emails_sentence(mod: Any) -> No
 
 
 def test_the_normaliser_is_the_brokers() -> None:
-    """``relay_checks._norm`` is a copy of ``workspace_broker/fixed_wording._norm``
-    (the overlay cannot import the broker): the same folds, the same result."""
-    m = load_plugin("hermes-smd-reply").relay_checks
-    assert m._norm("  a  b\n\tc ") == "a b c"
-    assert m._norm("‘x’ “y”") == "'x' \"y\""
-    assert m._from_html("<p>a &amp; b</p>") == " a & b "
+    """``turn_says.norm`` (step 5a reads through it) is a copy of
+    ``workspace_broker/fixed_wording._norm`` (the overlay cannot import the
+    broker): the same folds, the same result."""
+    from shared import turn_says
+
+    assert turn_says.norm("  a  b\n\tc ") == "a b c"
+    assert turn_says.norm("\u2018x\u2019 \u201cy\u201d") == "'x' \"y\""
+    assert turn_says.from_html("<p>a &amp; b</p>") == " a & b "
 
 
 def test_other_words_are_capped_at_two_redrafts_on_a_seat_without_held_notice(mod: Any) -> None:  # noqa: F811

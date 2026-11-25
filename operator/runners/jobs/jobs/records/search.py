@@ -305,7 +305,14 @@ def locate(run: Any, hook: Any, stop_cls: type[BaseException]) -> None:
             named = named or not extra
             state, reason = _try(run, n, fid, rec, files[fid], hook, stop_cls, extra)
             if state == "found":
-                pending, found = "", True
+                found = True
+                if rec.get("every"):
+                    # Every document of a kind: each candidate is looked in, never
+                    # only the first that answers, and a candidate left unread
+                    # still holds the record: some of a kind is never sent as
+                    # all of it (2026-11-24).
+                    continue
+                pending = ""
                 break
             # A hold on one file (its first read would pass the cap) never ends
             # the search: a later file may answer the record. Its reason stands

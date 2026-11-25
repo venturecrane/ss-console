@@ -181,6 +181,19 @@ RELAY: tuple[Case, ...] = (
             }
         },
     ),
+    # The limit rule (2026-11-24): a reply stating a limit of the Operator's own.
+    case(
+        "limit_named",
+        "guard",
+        knobs={
+            "args": {
+                "to": ["greg@whitfield.example"],
+                "subject": "Re: New matter",
+                "text": "I cannot attach files to this reply.",
+                "html": "",
+            }
+        },
+    ),
     case("checklist_hold", "guard", _checklist_violations=("staff_ids", "name the matter")),
     case("advertising_hold", "guard", _advertising_violations=("rule_7_1", "remove the guarantee")),
     case("empty_body", "guard", relay__draft_body=("Re: x\n", "", "")),

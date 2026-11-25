@@ -30,7 +30,8 @@ from typing import Any
 TOP = 8
 STOP = frozenset(
     "a an and any all as at by for from in into me my of on or our please send the their this to with records record "
-    "copy copies file files documents document notes note report reports visit visits".split()
+    "copy copies file files documents document notes note report reports visit visits every each attached attach "
+    "email emails".split()
 )
 CREDENTIALS = frozenset("md m d do psyd phd abpp atr bc faaos faoa dr np pa rn".split())
 _MONTHS = "january february march april may june july august september october november december".split()
@@ -85,17 +86,39 @@ def is_pdf(row: dict[str, Any]) -> bool:
 
 
 _PAGE_RANGE = re.compile(r"\bpages?\s+\d", re.I)
+#: Words that frame a file's name without narrowing it (2026-11-24, live: "the
+#: file named <name>.pdf on matter 900417" was cut to 4 pages because "named"
+#: and the matter number read as extra words).
+_FRAMING = frozenset("file named called titled entitled document folder pdf msg matter".split())
+#: "on matter 900417", "in matter no. 2026-PI-101", "matter #900417": the matter
+#: the request is about, never a part of the file.
+_MATTER_REF = re.compile(r"\bmatter\s+(?:no\.?\s*|number\s+|#\s*)?[\w./-]*\d[\w./-]*", re.I)
 _PAGE_COUNT = re.compile(r"\b(\d+)[\s-]pages?\b", re.I)
 
 
-def names_whole(rec: dict[str, Any], label: Any) -> bool:
+def names_folder(rec: dict[str, Any], folder: Any) -> bool:
+    """Do the record's words name ``folder`` as a folder: its name followed by
+    the word "folder" ("from the Discovery folder")? Only then do the folder's
+    words frame a file's name (re-review of #4210: "the Banner ER records" is
+    the ER part of Banner.pdf, never Banner.pdf because it sits in a folder ER)."""
+    name = " ".join(_WORD.findall(str(folder or "").casefold()))
+    if not name:
+        return False
+    asked = " ".join(_WORD.findall(str(rec.get("asked") or "").casefold()))
+    return re.search(rf"\b{re.escape(name)} folder\b", asked) is not None
+
+
+def names_whole(rec: dict[str, Any], label: Any, folder: Any = "") -> bool:
     """Does the record NAME the file called ``label`` (a file's name, or its
     folder's), asking for the whole of it? Code, never a model: every word of
     the label (stop words aside) is in the record's words, and the record asks
     for nothing narrower: no date or page range in its hints, and no word
     beyond the label's but stop words, "whole", "copy", "attached" and the
     like, and a page count ("the 17-page declaration"). "the ER visit of 3/2
-    from the hospital records" names a part of a file, never the file."""
+    from the hospital records" names a part of a file, never the file.
+    Framing around the name is not narrowing: "the file named X.pdf on matter
+    900417", "the document called X", "file X.pdf from the Y folder" (the
+    file's own ``folder``)."""
     hints = rec.get("hints") or {}
     if hints.get("dates") or hints.get("date") or hints.get("pages"):
         return False
@@ -103,22 +126,50 @@ def names_whole(rec: dict[str, Any], label: Any) -> bool:
     if _PAGE_RANGE.search(raw):  # "page 3 of", "pages 12-14": a part, never the whole
         return False
     counts = set(_PAGE_COUNT.findall(raw))  # "the 17-page declaration"
-    asked = tokens(rec.get("asked")) - STOP - CREDENTIALS
+    asked = tokens(_MATTER_REF.sub(" ", raw)) - STOP - CREDENTIALS
     want = tokens(label) - STOP - CREDENTIALS - {"pdf"}
     if not want or not want <= asked:
         return False
-    extra = asked - want - _WHOLE_EXTRA
+    framed = tokens(folder) - STOP - CREDENTIALS if names_folder(rec, folder) else set()
+    extra = asked - want - _WHOLE_EXTRA - _FRAMING - framed
     if extra and (extra - {t for t in extra if t.isdigit() and t in counts} or not asked & {"page", "pages"}):
         return False
     return True
 
 
+#: The kinds of matter file a record can be found in: a PDF, and an Outlook
+#: email, which the job turns into a PDF of its own (``emails.py``, 2026-11-24:
+#: an attorney's parent statements sat in 262 emails on the matter).
+EXTENSIONS = frozenset({"pdf", "msg"})
+
+
+def extension(row: dict[str, Any]) -> str:
+    return str(row.get("fileExtension") or "").strip().lower().lstrip(".")
+
+
+def _stem(token: str) -> str:
+    """A word without a plural ``s``, so "statements" meets "statement"."""
+    return token[:-1] if len(token) > 3 and token.endswith("s") and not token.endswith("ss") else token
+
+
+def text_matches(text: Any, rec: dict[str, Any]) -> int:
+    """How many of the record's words a text carries (an email's subject and
+    body, or a file's name), when it carries every one of them (plurals aside),
+    else 0. Code, no model: the candidates the page finder is then paid to read."""
+    provider, asked, dates = _words(rec)
+    want = {_stem(t) for t in provider | asked}
+    have = {_stem(t) for t in tokens(text)}
+    if not want or not want <= have:
+        return 0
+    return len(want) + len(dates & tokens(text))
+
+
 def rank(rows: list[dict[str, Any]], rec: dict[str, Any], top: int = TOP) -> list[tuple[str, int]]:
-    """``[(file_id, score)]`` for the matter's PDFs that score above 0, best
-    first (smaller file, then id, breaking a tie), at most ``top``."""
+    """``[(file_id, score)]`` for the matter's PDFs and emails that score above
+    0, best first (smaller file, then id, breaking a tie), at most ``top``."""
     scored = []
     for row in rows:
-        if str(row.get("fileExtension") or "").strip().lower().lstrip(".") != "pdf" or not row.get("id"):
+        if extension(row) not in EXTENSIONS or not row.get("id"):
             continue
         s = score(row.get("name"), rec)
         if s > 0:
@@ -126,4 +177,18 @@ def rank(rows: list[dict[str, Any]], rec: dict[str, Any], top: int = TOP) -> lis
     return [(fid, -neg) for neg, _size, fid in sorted(scored)[:top]]
 
 
-__all__ = ["CREDENTIALS", "STOP", "TOP", "date_tokens", "is_pdf", "names_whole", "rank", "score", "tokens"]
+__all__ = [
+    "CREDENTIALS",
+    "EXTENSIONS",
+    "STOP",
+    "TOP",
+    "date_tokens",
+    "extension",
+    "is_pdf",
+    "names_folder",
+    "names_whole",
+    "rank",
+    "score",
+    "text_matches",
+    "tokens",
+]

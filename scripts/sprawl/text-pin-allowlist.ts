@@ -345,7 +345,7 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
   'tests/output-class-specs.test.ts':
     'Model-read rule: one write key space, no write control in the portal view, no fabricated provenance.',
   'tests/matter-records-procedure.test.ts':
-    'Model-read rule: records queued not done in the turn; files to staff only; matter number never a Smokeball id (ADR 0102).',
+    'Model-read rule: records queued not done in the turn, any ask for documents from the file named or by kind, never files listed in the turn (2026-11-24); files to staff only; matter number never a Smokeball id (ADR 0102).',
   'tests/medchron-skill-hold-routing.test.ts':
     'Model-read rule: DELIVER binds by job id; nothing sent on a refused bind or held job; no partial to the attorney.',
   'tests/medchron-skill-update-into-delivered.test.ts':

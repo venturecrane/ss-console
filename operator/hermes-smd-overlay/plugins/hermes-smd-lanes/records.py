@@ -1,6 +1,7 @@
 """The agent-facing tool for a matter-records request (ADR 0102 amendment 4).
 
-A staff member emails the Operator for named records on a matter. The turn
+A staff member emails the Operator for documents from a matter's file, named
+or by kind (2026-11-24: "every parent statement in the file, attached"). The turn
 does not find, read, cut or attach anything: it queues a ``records`` job and
 relays the broker's acknowledgement. The runner parses the request once, finds
 each record in each file once, cuts the pages, renders the facts from
@@ -128,7 +129,10 @@ def records_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) -> 
 
 TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     "records_job_submit": (
-        "Queue a matter-records request for the person whose email opened this turn. Never find, "
+        "Queue a matter-records request for the person whose email opened this turn: any ask for "
+        "documents from one matter's file, named or by kind (every parent statement, all the "
+        "adjuster's emails), PDFs or saved emails. Never search, list, read or name the matter's "
+        "files in the turn, and never find, "
         "read, cut, attach or describe records in the turn: this queues a job that finds the "
         "records on the Machine and sends them in this thread once SMD has reviewed them. Pass the "
         "matter number exactly as the email writes it (matter_number) when it gives one, and "

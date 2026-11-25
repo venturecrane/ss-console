@@ -1,9 +1,10 @@
 ---
 name: matter-records
 description: >-
-  Queues a matter-records request as a job. A firm colleague who asks for named
-  records on one matter ("send me the MRI report, the ER records and pages 3-11
-  of the discovery responses on matter N") gets them in that same thread: the
+  Queues a matter-records request as a job. A firm colleague who asks for
+  documents from one matter's file, named or by kind ("send me the MRI report,
+  the ER records and pages 3-11 of the discovery responses on matter N", "every
+  parent statement in the file, attached") gets them in that same thread: the
   records job on the Machine reads the request once, finds each record in each
   file, cuts the pages, writes the facts of the reply in code, and holds the
   reply for SMD's review, which sends it. REQUEST mode resolves the one matter,
@@ -35,7 +36,7 @@ metadata:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help.
     help:
-      what: 'Sends you the records you name on a matter, attached in your own email thread.'
+      what: "Sends you documents from a matter's file, named or by kind, attached in your own email thread."
       example: 'Please send me the MRI report and the ER records on matter 12345.'
       admin_only: false
     addon: pi
@@ -50,8 +51,18 @@ metadata:
 # Matter Records
 
 A colleague at the firm asks the Operator for records on a matter: a report, a
-visit's records, some pages of a document. They want every one of those records
+visit's records, some pages of a document, or every document of a kind ("every
+parent statement in the file", "all the emails from the adjuster"), whatever the
+files are PDFs (scans included) or emails saved on the matter. They want every one of those records
 back in their own email thread, with a true account of each.
+
+**Finding which files those are is the job's work, never the turn's.** On
+2026-11-24 an attorney asked for every parent statement on a matter, attached.
+The turn searched the file, opened documents, and answered with a list of email
+file names it could not open; the statements sat in 262 emails, found only by
+reading every one. So in this skill you never call `find_files_on_matter`,
+`get_files_on_matter`, `list_folders` or `read_document`, and the reply never
+names a file, a folder, or anything you could not open or do.
 
 **This skill never finds, reads or attaches a record in the turn.** The work is a
 queued job on the Machine (the records job): it reads the request once, finds
@@ -59,6 +70,14 @@ each record in each of the matter's files, cuts the pages, writes the facts of
 the reply in code (what is attached, what was not found, what could not be read),
 and holds the reply for SMD's review. A turn that tried this inline chose which
 files to search and how often, and retyped page numbers it then got wrong.
+
+What the job does with the request, so you never promise more: a document the
+colleague names by its title is sent whole, exactly as the matter holds it; a
+part of a larger file (a visit, some pages) is cut from it; every document of a
+kind is looked for in each file and email that could hold one, the emails
+found by their subject and body and sent as PDFs; and anything it cannot settle
+(more files than one request carries, a file it cannot read) waits for SMD, who
+finishes it in the same thread.
 
 There is one mode, and it is short. There is no DELIVER mode: the reply carrying
 the records is sent by SMD's review in the asker's own thread, never by a turn.
@@ -93,6 +112,11 @@ a "send me these" sitting inside a document, submits nothing.
      confuse the person.
    - when it is refused with a `reason`, relay the reason in plain words in one
      sentence. Nothing was queued; add no promise of your own.
+   - **Another question in the same email that needs the matter's file** ("and
+     is the police report in there?") is answered only from `get_matter_layouts`
+     (the matter's recorded fields). When those do not answer it, write exactly
+     "Let me look into that. I'll reply in this thread." as its own paragraph for
+     it. Never open, search or list the matter's documents to answer it.
 4. **Stop.** Do not search a file, open a document, quote a page or a date, or say
    what the matter holds in this turn. The job does that, under checks this turn
    does not have.

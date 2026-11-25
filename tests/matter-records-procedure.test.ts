@@ -52,7 +52,34 @@ describe('matter records procedure (router)', () => {
     expect(body).toMatch(/carry out its REQUEST mode/)
     expect(body).toMatch(/relay its sentence word for word as your whole reply/)
     expect(body).toMatch(/send no reply when it says `none`/)
-    expect(body).toMatch(/If you cannot read the skill file this turn, say so plainly/)
+    // 2026-11-24: never a limit stated to the firm; the owner's sentence instead.
+    expect(body).toMatch(
+      /If you cannot read the skill file this turn, submit nothing and reply with only "Let me look into that\. I'll reply in this thread\."/
+    )
+  })
+
+  it('takes any ask for documents from the file, named or by kind, and never lists files in the turn', () => {
+    // 2026-11-24 (A&P): "send me every parent statement, attached" was answered
+    // in the turn with eight searches, eight reads and a list of email file names.
+    expect(body).toMatch(/\*\*This class is any ask for documents FROM a matter's file\*\*/)
+    expect(body).toMatch(/"every parent statement"/)
+    expect(body).toMatch(
+      /you never call `find_files_on_matter`, `get_files_on_matter`, `list_folders` or `read_document`, and you never answer with file names, folders or what you could or could not open/
+    )
+    expect(router).toMatch(
+      /^\| Matter records request\s*\|[^\n]*named or by kind[^\n]*never searched, listed, read or attached in the turn/m
+    )
+    const rubric = readFileSync(
+      'operator/skills/matter-inbox-router/references/routing-rubric.md',
+      'utf8'
+    )
+    expect(rubric).toMatch(
+      /\| \*\*matter records request\*\*[^\n]*named or by kind[^\n]*never answer with file names/
+    )
+    const skill = readFileSync(RECORDS, 'utf8')
+    expect(skill).toMatch(
+      /\*\*Finding which files those are is the job's work, never the turn's\.\*\*/
+    )
   })
 
   it('on a seat without the lane, replies in one fixed line and attaches nothing', () => {
@@ -77,6 +104,46 @@ describe('matter records procedure (router)', () => {
     expect(body).toMatch(
       /A request from anyone else, or for another person, gets a reply saying where the files are, never the files/
     )
+  })
+})
+
+describe('records is delivery of documents, never a question about them (tie-break 15)', () => {
+  const router = readFileSync(ROUTER, 'utf8')
+  const rubric = readFileSync(
+    'operator/skills/matter-inbox-router/references/routing-rubric.md',
+    'utf8'
+  )
+  // The shape of a real follow-up question (invented words): a $0 replay sent it
+  // to records 3 of 3 under the first wording of this fix (2026-11-24).
+  const QUESTION = 'are there new records or statements to produce since the last production?'
+
+  it('names a question about what exists or what to produce as not this class', () => {
+    expect(router).toContain('"' + QUESTION + '"')
+    expect(router).toMatch(/\*\*Only an ask for the documents themselves to be delivered\*\*/)
+    expect(router).toMatch(/drafting beats records/)
+  })
+
+  it('the class line in the procedure says delivered, named or by kind, never "named records"', () => {
+    expect(router).toMatch(
+      /- \*\*Matter records request\*\* \(a \*\*rostered colleague\*\* asking for documents already in one matter's file to be delivered to them, named or by kind/
+    )
+    expect(router).not.toMatch(/asking for named records on one matter/)
+  })
+
+  it('the rubric carries tie-break 15 and the outside-party and case-review lines', () => {
+    expect(rubric).toMatch(/^15\. \*\*Matter records versus general, drafting and the rest\.\*\*/m)
+    expect(rubric).toMatch(/A case file review is never the matter records class/)
+    expect(rubric).toMatch(/REQUESTED or ORDERED from someone outside the firm[^\n]*is file work/)
+    expect(rubric).not.toMatch(/"can you pull X,"/)
+  })
+})
+
+describe('the Operator never tells a colleague a limit of its own (2026-11-24)', () => {
+  const router = readFileSync(ROUTER, 'utf8')
+
+  it("says the owner's sentence instead, as its own paragraph", () => {
+    expect(router).toMatch(/\*\*When you cannot do what was asked, never say so\.\*\*/)
+    expect(router).toContain('Write exactly "Let me look into that. I\'ll reply in this thread."')
   })
 })
 

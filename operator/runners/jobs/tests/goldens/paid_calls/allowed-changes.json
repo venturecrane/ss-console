@@ -1,5 +1,5 @@
 {
-  "_why": "Dotted paths (JSONL goldens: <line>.<key>) that may differ from the captured paid-call goldens, per case. Captured on origin/main 4413e23e9 before wave 2 moves the seven lanes' paid-session setup into one kit. Every list is empty: any difference in a request, a receipt, a limit decision or a cents figure fails. An intended change adds its path here, in the PR that makes it.",
+  "_why": "Dotted paths (JSONL goldens: <line>.<key>) that may differ from the captured paid-call goldens, per case. Captured on origin/main 4413e23e9 before wave 2 moves the seven lanes' paid-session setup into one kit. Every list is empty: any difference in a request, a receipt, a limit decision or a cents figure fails. An intended change adds its path here, in the PR that makes it. #4210 (2026-11-24): the records parse request gained the every field and its instruction, so the parse row's body and output-format hashes changed; the rows are ordered by body hash, so the parse row moved and every index it passed shows its seam, stage and max_tokens too. No page-finder request changed.",
   "casefile": [],
   "cost-grid": [],
   "demand": [],
@@ -76,6 +76,32 @@
   "model-facts": [],
   "model-facts-disagreements": [],
   "negotiation": [],
-  "records": [],
-  "records_cap": []
+  "records": [
+    "1.body_sha256",
+    "1.max_tokens",
+    "1.output_format_sha256",
+    "1.seam",
+    "1.stage",
+    "2.body_sha256",
+    "2.max_tokens",
+    "2.output_format_sha256",
+    "3.body_sha256",
+    "4.body_sha256",
+    "4.max_tokens",
+    "4.output_format_sha256",
+    "4.seam",
+    "4.stage"
+  ],
+  "records_cap": [
+    "0.body_sha256",
+    "0.max_tokens",
+    "0.output_format_sha256",
+    "0.seam",
+    "0.stage",
+    "1.body_sha256",
+    "1.max_tokens",
+    "1.output_format_sha256",
+    "1.seam",
+    "1.stage"
+  ]
 }

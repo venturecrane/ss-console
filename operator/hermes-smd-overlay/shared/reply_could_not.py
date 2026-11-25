@@ -68,7 +68,30 @@ CODES = frozenset(
         "cannot_complete",
         "not_permitted",
         "none_available",
+        "product_limit",
+        "looking_into",
     }
+)
+
+#: The one sentence the Operator says when it cannot do what was asked
+#: (2026-11-24, the owner's rule): it never states a limit of its own to the
+#: person; it owns the follow-up, and SMD does the work. A reply carrying it is
+#: stamped ``looking_into``, so the request reads NOT FULFILLED and pages SMD
+#: exactly as a decline did (``shared.heartbeat``, ``shared.request_cards``).
+LOOK_INTO = "Let me look into that. I'll reply in this thread."
+
+#: The codes the reply relay HOLDS a reply for (:func:`stated_limit`): a limit
+#: of the Operator's own, or that it cannot attach, send or open something
+#: (review of #4210). ``cannot_find``, ``none_available``, ``cannot_complete``
+#: and ``not_permitted`` stay metadata only: "I can't find a file named X on
+#: matter Y" and "we were unable to locate the defendant" are answers, and the
+#: request card still reads them NOT FULFILLED.
+HOLD_CODES = frozenset({"product_limit", "cannot_attach", "cannot_access"})
+#: A sentence that reports what someone else said or wrote ("the clinic said
+#: it cannot send the records", "Dr. Roe wrote: we cannot provide ...").
+_REPORTED_RE = re.compile(
+    r"\b(?:said|says|told|tells|wrote|writes|replied|replies|responded|stated|states|"
+    r"according\s+to|per\s+(?:the|their|his|her))\b|[\"“]"
 )
 
 #: The audit metadata key the reply plugin writes the code under.
@@ -197,6 +220,35 @@ _NOT_PERMITTED_RE = re.compile(
     rf"{_SUBJECT}(?:'m|'re|\s+am|\s+are)\s+not\s+(?:permitted|allowed|authorized|authorised)\s+to\b"
 )
 
+#: A limit of the Operator's own said as a product fact rather than in the
+#: first person (2026-11-24, A&P: "my document reader cannot open that format
+#: ... This is a limit of how I read files in Smokeball"), which the
+#: first-person rule above does not see.
+_PRODUCT_LIMIT_RE = re.compile(
+    r"\b(?:my|our)\s+(?:[a-z-]+\s+){0,3}?"
+    r"(?:tool|tools|reader|system|setup|access|email|mailbox|connection|software)\s+"
+    r"(?:cannot|can't|can\s+not|could\s+not|couldn't|is\s+unable\s+to|isn't\s+able\s+to"
+    r"|does\s+not|doesn't|won't|will\s+not)\s+"
+    r"(?:open|read|attach|send|access|handle|support|carry|reach)\b"
+    r"|\ba\s+limit(?:ation)?\s+(?:of|in)\s+(?:how|what)\s+(?:i|we)\b"
+    r"|\b(?:that|this|the)\s+(?:file\s+)?format\s+(?:is\s+not|isn't)\s+(?:supported|readable)\b"
+    rf"|{_SUBJECT}(?:'m|'re|\s+am|\s+are)\s+not\s+(?:set\s+up|equipped|built)\s+to\b"
+    rf"|{_SUBJECT}\s+(?:do\s+not|don't)\s+have\s+(?:a\s+)?(?:way|tool|the\s+ability)\s+to\b"
+    # A render or filing of our own that failed, told to the person
+    # (2026-11-24: "the Word version timed out twice and was not filed").
+    r"|\b(?:word|docx)\s+(?:version|file|document|copy|draft)\b[^.?!\n]{0,60}?"
+    r"\b(?:timed\s+out|failed|did\s+not\s+(?:render|generate|finish|go\s+through)"
+    r"|(?:was\s+not|wasn't|could\s+not\s+be|couldn't\s+be)\s+(?:filed|created|generated|rendered|saved))\b"
+    r"|\b(?:it|the\s+(?:render|rendering|upload|conversion|tool|filing))\s+timed\s+out\b"
+    # Work handed back to the person: pasting or retyping our output.
+    r"|\b(?:needs?|will\s+need|would\s+need|has|have)\s+to\s+be\s+(?:pasted|retyped|re-typed|copied)\s+in(?:to)?\b"
+    r"|\byou(?:'ll|\s+will|\s+would|'d)?\s+(?:need|have|want)\s+to\s+(?:copy\s+and\s+)?(?:paste|retype|re-type)\b"
+    r"|\b(?:please|you\s+can|you\s+could)\s+(?:copy\s+and\s+)?(?:paste|retype|re-type)\b"
+)
+
+#: The owner's sentence (:data:`LOOK_INTO`), or the same promise in its words.
+_LOOKING_INTO_RE = re.compile(r"\blet\s+me\s+look\s+into\s+(?:that|this|it)\b")
+
 _NONE_OF_RE = re.compile(
     r"\bnone\s+of\s+(?:the|those|these|them|your)\b[^.?!\n]{0,100}?"
     r"\b(?:could\s+be|can\s+be|were|are|was|is)\s+(?:found|located|attached|available|accessible)\b"
@@ -241,34 +293,87 @@ def _sentence_before(text: str, start: int) -> str:
     return head[breaks[-1].end() :] if breaks else head
 
 
-def classify(text: object) -> str | None:
-    """The closed code for a reply that told the person the Operator could not
-    do what they asked, or ``None``. Never raises; non-text is ``None``."""
+def _hits(text: object) -> list[tuple[int, str, str]]:
+    """Every rule's first match in a reply's own lines, as ``(start, code,
+    the words matched)``, in order of where it starts."""
     if not isinstance(text, str) or not text.strip():
-        return None
+        return []
     own = _own_text(text)
-    hits: list[tuple[int, str]] = []
+    hits: list[tuple[int, str, str]] = []
     for match in _FIRST_PERSON_RE.finditer(own):
         if _HYPOTHETICAL_RE.search(_sentence_before(own, match.start())):
             continue
         verb = match.group("verb")
         if verb == "find" and _CLEAN_RESULT_RE.match(own, match.end()):
             continue
-        hits.append((match.start(), _VERB_CODES[verb]))
+        hits.append((match.start(), _VERB_CODES[verb], match.group(0)))
         break
     for pattern, code in (
         (_NO_ACCESS_RE, "cannot_access"),
         (_NOT_PERMITTED_RE, "not_permitted"),
         (_NONE_OF_RE, "none_available"),
+        (_PRODUCT_LIMIT_RE, "product_limit"),
+        (_LOOKING_INTO_RE, "looking_into"),
     ):
         for match in pattern.finditer(own):
-            if _HYPOTHETICAL_RE.search(_sentence_before(own, match.start())):
+            if code != "looking_into" and _HYPOTHETICAL_RE.search(
+                _sentence_before(own, match.start())
+            ):
                 continue
-            hits.append((match.start(), code))
+            hits.append((match.start(), code, match.group(0)))
             break
-    if not hits:
-        return None
-    return min(hits)[1]
+    return sorted(hits)
+
+
+def classify(text: object) -> str | None:
+    """The closed code for a reply that told the person the Operator could not
+    do what they asked, or ``None``. Never raises; non-text is ``None``."""
+    hits = _hits(text)
+    return hits[0][1] if hits else None
+
+
+def stated_limit(text: object) -> str:
+    """The words with which a reply STATES a limit of the Operator's own, or
+    ``""``. The reply relay holds such a reply so the redraft says
+    :data:`LOOK_INTO` instead. Only :data:`HOLD_CODES`, every match read (not
+    only the first), and never:
+
+    * a "we" that is the firm: a first-person "we cannot attach / open" is the
+      firm's act as often as the Operator's ("we cannot produce those until the
+      protective order issues"), so only "I", "my", "our <tool>" and a stated
+      limit of how the Operator works hold;
+    * a sentence that reports what someone else said or wrote."""
+    if not isinstance(text, str) or not text.strip():
+        return ""
+    own = _own_text(text)
+    for match in _FIRST_PERSON_RE.finditer(own):
+        codes = {_VERB_CODES[match.group("verb")]}
+        joined = _JOINED_VERB_RE.match(own, match.end())  # "find or attach"
+        if joined:
+            codes.add(_VERB_CODES[joined.group("verb")])
+        if codes & HOLD_CODES and match.group(0).startswith("i") and _plain(own, match.start()):
+            return (match.group(0) + (joined.group(0) if joined else "")).strip()
+    for pattern, code in ((_NO_ACCESS_RE, "cannot_access"), (_PRODUCT_LIMIT_RE, "product_limit")):
+        for match in pattern.finditer(own):
+            if code == "cannot_access" and not match.group(0).startswith("i"):
+                continue
+            if _plain(own, match.start()):
+                return match.group(0).strip()
+    return ""
+
+
+#: A second delivery verb joined to the first ("I couldn't find or attach").
+_JOINED_VERB_RE = re.compile(rf"\s+(?:or|and|nor)\s+(?P<verb>{_VERB_RE})\b")
+
+
+def _plain(own: str, start: int) -> bool:
+    """The match's own sentence is the Operator speaking: no hypothetical, and
+    nothing reported from someone else."""
+    before = _sentence_before(own, start)
+    after = own[start:]
+    end = _SENTENCE_BREAK_RE.search(after)
+    sentence = before + (after[: end.start()] if end else after)
+    return not _HYPOTHETICAL_RE.search(before) and not _REPORTED_RE.search(sentence)
 
 
 def metadata(text: object) -> dict[str, str]:
