@@ -372,9 +372,11 @@ def test_a_shared_frame_is_recorded_in_the_library_resolution(tmp_path, monkeypa
     for variant in ("requests_for_production", "requests_for_admission"):
         F.at_gate(run, Unit("", "", variant, None, run.data), DRAFT)
     rec = json.loads((run.data / "library-resolution.json").read_text())
-    assert rec["frame_shared"] == {
+    assert rec["frame"] == {
         "frame_from": "special_interrogatories",
         "used_for": ["requests_for_admission", "requests_for_production"],
+        # this job carries no authored attorney block, so no signer: the draft's own closing stays
+        "closing_from": "draft",
     }
 
 
@@ -655,3 +657,71 @@ def test_the_template_name_and_the_counts_are_gone_from_the_application_properti
         app = z.read("docProps/app.xml").decode()
     for tag in ("Template", "Pages", "Words", "Characters", "Lines", "Paragraphs"):
         assert f"<{tag}>" not in app, tag
+
+
+# ---- the fourth rerun, 2026-11-25: the responses' signature blocks ----
+
+
+def test_every_firm_attorney_in_the_signature_block_is_kept_and_the_first_signs():
+    signature = ("ALEX J. QUENTWORTH", "BRIA M. TOLLIVANT, Esq.")
+    paper = _paper(signature=signature)
+    made = FM.make_frame("discovery_response", paper, IDENTITY, BLOCKS)
+    closing = _closing(made)
+    at = closing.index("[[v.signer]]")
+    assert closing[at + 1] == "BRIA M. TOLLIVANT, Esq." and "QUENTWORTH" not in _all_text(made.data)
+    assert made.counts["closing_refused"] == 0
+    _clean(made)
+
+
+def test_an_attorneys_for_line_that_does_not_mark_cleanly_keeps_its_role():
+    closing = (
+        "DATED: November 3, 2026",
+        FIRM,
+        "By: ______________",
+        "Attorney 1, Esq.",
+        f"Attorneys for Plaintiffs, {CLIENT} and CASS QUILLMORE",
+    )
+    made = FM.make_frame("discovery_response", _paper_with(closing=closing), IDENTITY, BLOCKS)
+    assert _closing(made)[4] == "Attorneys for Plaintiffs, [[v.responding_name]]"
+    assert "QUILLMORE" not in _all_text(made.data)
+    closing = (*closing[:4], "Attorneys for Plaintiff, the Quillmore Family Trust")
+    made = FM.make_frame("discovery_response", _paper_with(closing=closing), IDENTITY, BLOCKS)
+    assert _closing(made)[4] == "Attorneys for Plaintiff" and made.counts["closing_refused"] == 0
+    _clean(made)
+
+
+def _no_closing() -> bytes:
+    d = docx.Document(io.BytesIO(_paper()))
+    paras = d.paragraphs
+    start = next(i for i, p in enumerate(paras) if p.text.startswith("DATED"))
+    end = next(i for i, p in enumerate(paras) if p.text == "PROOF OF SERVICE")
+    for p in paras[start:end]:
+        p._element.getparent().remove(p._element)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def test_a_frame_with_no_closing_is_stocked_and_the_draft_keeps_its_own(tmp_path, monkeypatch):
+    from jobs.drafting.finish import Unit
+
+    made, answer = ST.made_for("discovery_response", _no_closing(), IDENTITY, BLOCKS)
+    assert made is not None and answer["closing"] == "none" and made.counts["kept_closing"] == 0
+    run = _real_run(tmp_path, monkeypatch, made.data)
+    out = F.at_gate(run, Unit("", "", "special_interrogatories", None, run.data), DRAFT)
+    assert "hereby responds" in out and "The model's own signature block." in out
+    assert "The model's own verification." in out
+    rec = json.loads((run.data / "library-resolution.json").read_text())
+    assert rec["frame"]["closing_from"] == "draft"
+
+
+def test_a_paper_whose_front_keeps_nothing_is_refused():
+    gone = '"INCIDENT" means the collision of March 3, 2025 on Example Road.'
+    d = docx.Document(io.BytesIO(_paper(prelim=gone)))
+    for p in list(d.paragraphs):
+        if p.text in ("PRELIMINARY STATEMENT", "GENERAL OBJECTIONS", OBJECTION):
+            p._element.getparent().remove(p._element)
+    buf = io.BytesIO()
+    d.save(buf)
+    none, answer = ST.made_for("discovery_response", buf.getvalue(), IDENTITY, BLOCKS)
+    assert none is None and answer["code"] == "standard_wording_not_kept"

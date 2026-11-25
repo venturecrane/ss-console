@@ -53,6 +53,39 @@ def dated_value(value: str) -> bool:
     return all(w in _MONTHS for w in words)
 
 
+#: A person's name as a signature block prints it: two to five capitalised
+#: words, initials allowed, "Esq." or a bar number after it.
+PERSON_LINE = re.compile(
+    r"^(?:[A-Z][\w.'’-]*,?\s+){1,4}[A-Z][\w.'’-]*,?"
+    r"(?:\s*(?:Esq\.?|\(?(?:SBN|State\s+Bar\s+No\.?)\s*[\d#:\s]*\)?))?$"
+)
+#: The line that ends a signature block: "Attorneys for Plaintiff, …".
+ATTORNEYS_FOR = re.compile(r"(?i)^attorneys?\s+for\b")
+
+
+def firm_attorneys(lines: list[str], identity_only: Callable[[str], bool]) -> tuple[list[str], set[int]]:
+    """(the lines, the indexes of the firm's own attorneys in them). Every
+    person-name line between the firm's line or "By:" and "Attorneys for" is
+    one of the firm's attorneys, never a case fact (2026-11-25: every response
+    paper stopped on its second attorney's name). The first is the signer,
+    ``[[v.signer]]``, when no line of the block already is; the others are kept
+    as the firm wrote them."""
+    out = list(lines)
+    firm: set[int] = set()
+    start: int | None = None
+    for i, line in enumerate(out):
+        if start is None and (BY_BLANK.match(line) or BY_NAME.match(line) or identity_only(line)):
+            start = i
+        elif ATTORNEYS_FOR.match(line) and start is not None:
+            names = [j for j in range(start + 1, i) if PERSON_LINE.match(out[j]) and not ATTORNEYS_FOR.match(out[j])]
+            if names and not any("[[v.signer]]" in out[j] for j in range(start, i)):
+                out[names[0]] = "[[v.signer]]"
+                names = names[1:]
+            firm |= set(names)
+            start = None
+    return out, firm
+
+
 def signer_lines(lines: list[str], identity_only: Callable[[str], bool]) -> list[str]:
     """The closing's lines with the signing attorney's name a marked place: the
     name after "By:" on its own line, or the first line with letters after a
@@ -75,4 +108,13 @@ def signer_lines(lines: list[str], identity_only: Callable[[str], bool]) -> list
     return out
 
 
-__all__ = ["ATTORNEY_LINE", "DATED", "closing_lines", "dated_value", "signer_lines"]
+__all__ = [
+    "ATTORNEYS_FOR",
+    "ATTORNEY_LINE",
+    "DATED",
+    "PERSON_LINE",
+    "closing_lines",
+    "dated_value",
+    "firm_attorneys",
+    "signer_lines",
+]

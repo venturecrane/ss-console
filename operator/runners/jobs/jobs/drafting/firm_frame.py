@@ -50,6 +50,11 @@ FRONT, CLOSING = "front", "closing"
 LEAD = re.compile(r"^\[\[frame\.(front|closing)\.(\d+)(\.head|\.hole)?\]\]")
 #: A paragraph of the firm's paper that held a case fact: dropped, its place kept.
 HOLE = ""
+FRONT_NAME = "opening (preliminary statement, objections, definitions)"
+#: A frame with no closing (every line held a case fact) is still a frame: the
+#: draft keeps its own closing, the signature block the job renders from the
+#: firm's attorney roster, and the record says ``closing_from: draft``.
+CLOSING_NAME = "closing (signature, verification)"
 SET_TYPE = re.compile(r"^\[\[frame\.set_type\.([a-z_]+)\]\]\s*$")
 VALUE = re.compile(r"\[\[v\.([a-z_]+)\]\]")
 #: The kind-of-set places (``library_setup/frame_facts.type_values``): filled
@@ -280,10 +285,7 @@ def apply(doc: str, frame: Frame, values: dict[str, str], variant: str | None = 
     if frame.set_type and kind and kind != frame.set_type:
         notes.append(f"the firm's standard wording is from its {frame.set_type} paper, worded for this {kind} set")
     out = list(lines)
-    named = {
-        FRONT: "opening (preliminary statement, objections, definitions)",
-        CLOSING: "closing (signature, verification)",
-    }
+    named = {FRONT: FRONT_NAME, CLOSING: CLOSING_NAME}
     for region, (a, b) in ((CLOSING, where.closing), (FRONT, where.front)):  # the later block first: indices hold
         if not frame.blocks[region]:
             continue
@@ -310,19 +312,20 @@ def draft_values(doc: str, date: str, signer: str) -> dict[str, str]:
     return {**found, "date": date, "signer": signer}
 
 
-def _record_shared(data: Any, frame_from: str, used_for: str) -> None:
-    """The library-resolution record says the frame served another kind of set."""
+def _record(data: Any, frame_from: str, used_for: str, closing_from: str) -> None:
+    """The library-resolution record says which kind of set's frame served
+    which kinds, and whether the closing was the frame's or the draft's own."""
     import json
     from pathlib import Path
 
-    from operator_connector_sdk.library.caller import FRAME_SHARED, RECORD_NAME, add_to_record
+    from operator_connector_sdk.library.caller import FRAME, RECORD_NAME, add_to_record
 
     try:
-        had = json.loads((Path(data) / RECORD_NAME).read_text(encoding="utf-8")).get(FRAME_SHARED) or {}
+        had = json.loads((Path(data) / RECORD_NAME).read_text(encoding="utf-8")).get(FRAME) or {}
     except (OSError, ValueError, AttributeError):
         had = {}
-    kinds = sorted({*had.get("used_for", []), used_for})
-    add_to_record(data, FRAME_SHARED, {"frame_from": frame_from, "used_for": kinds})
+    kinds = sorted({*had.get("used_for", []), *([used_for] if used_for else [])})
+    add_to_record(data, FRAME, {"frame_from": frame_from, "used_for": kinds, "closing_from": closing_from})
 
 
 def at_gate(run: Any, unit: Any, md: str) -> str:
@@ -338,8 +341,8 @@ def at_gate(run: Any, unit: Any, md: str) -> str:
     body, notes = render.split_notes(md)
     lines = run._block_lines()
     body, said = apply(body, frame, draft_values(body, run._long_date(), lines[0] if lines else ""), unit.variant)
-    if unit.variant and frame.set_type and unit.variant != frame.set_type:
-        _record_shared(run.data, frame.set_type, unit.variant)
+    closing_from = "frame" if any(n.startswith(f"the {CLOSING_NAME} is") for n in said) else "draft"
+    _record(run.data, frame.set_type, unit.variant or "", closing_from)
     notes = "\n".join([notes, *(f"- {n}" for n in said)]).strip()
     return run._join(body, notes)
 

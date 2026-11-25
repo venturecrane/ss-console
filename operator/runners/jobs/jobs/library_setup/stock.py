@@ -14,9 +14,10 @@ words must never become the firm's standard), makes the file with
 facts taken out), and runs the root writer's own no-client-text check on the
 result (``establish_intake/blank_form.py``) before it writes anything. It writes
 ``DIR/library-file.docx`` and ``DIR/library-file.json`` and prints counts and
-codes, never a word of the paper. A block of the paper that kept a possible case
-fact is dropped; the file is refused unless both blocks were kept, or
-``--allow-partial`` says to stock what was kept.
+codes, never a word of the paper. A paragraph of the paper that kept a possible
+case fact is dropped; the file is refused only when nothing of its front was
+kept (``--allow-partial`` overrides). A frame whose closing came out empty is
+stocked with its front alone (``closing: none``): drafts keep their own closing.
 """
 
 from __future__ import annotations
@@ -52,17 +53,23 @@ def made_for(
         made = make_frame(kind, blob, identity, blocks)
     except Unusable as exc:
         return None, {"status": "refused", "code": exc.code}
-    kept = {r: made.counts.get(f"kept_{r}", 0) for r in ("front", "closing")}
-    if not all(kept.values()) and not allow_partial:
+    if not made.counts.get("kept_front", 0) and not allow_partial:
         return None, {"status": "refused", "code": "standard_wording_not_kept", "counts": made.counts}
+    answer = {
+        "status": "made",
+        "set_type": made.set_type,
+        "counts": made.counts,
+        # A frame with no closing: drafts keep their own (the roster's signature block).
+        "closing": "kept" if made.counts.get("kept_closing", 0) else "none",
+    }
     try:
         from establish_intake import blank_form
     except ImportError:
-        return made, {"status": "made", "set_type": made.set_type, "counts": made.counts, "check": "root_writer"}
+        return made, {**answer, "check": "root_writer"}
     checked = blank_form.check(made.data, made.fixed_strings)
     if not checked.ok:
         return None, {"status": "refused", "code": "no_client_text_check", "problems": len(checked.problems)}
-    return made, {"status": "made", "set_type": made.set_type, "counts": made.counts, "check": "passed"}
+    return made, {**answer, "check": "passed"}
 
 
 def write(out: Path, made: Any, kind: str, source_file_id: str, version: str, attorney: str | None) -> None:

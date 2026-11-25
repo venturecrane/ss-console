@@ -177,8 +177,9 @@ def blank_regions(
     counts: dict[str, int] = {}
     front = [_fold(raw.replace("\t", " ")) for raw in lines[slice(*where.front)]]
     signed = L.signer_lines(L.closing_lines(lines[slice(*where.closing)]), facts.identity_only)
-    for region, texts in ((F.FRONT, front), (F.CLOSING, signed)):
-        kept, why = _judge(facts, [t for t in texts if t], region == F.CLOSING)
+    signed, firm = L.firm_attorneys(signed, facts.identity_only)
+    for region, texts in ((F.FRONT, [t for t in front if t]), (F.CLOSING, signed)):
+        kept, why = _judge(facts, texts, region == F.CLOSING, frozenset(firm) if region == F.CLOSING else frozenset())
         dropped = sum(why.values())
         counts[f"{region}_paragraphs"] = sum(1 for t, _h in kept if t != HOLE) + dropped
         counts[f"{region}_refused"] = dropped
@@ -187,19 +188,43 @@ def blank_regions(
     return out, where.set_type, counts
 
 
-def _judge(facts: Facts, texts: list[str], closing: bool) -> tuple[list[tuple[str, bool]], dict[str, int]]:
+def _attorneys_for(blanked: str, facts: Facts) -> str:
+    """An "Attorneys for" line that did not come out clean, as the firm's
+    words: "Attorneys for <role>, [[v.<party>]]" when that marks cleanly, else
+    "Attorneys for <role>" alone; "" when it names no role."""
+    lead = re.match(r"(?i)^(attorneys?\s+for)\s+(?:the\s+)?(\w+(?:[- ]\w+)?)", blanked)
+    if not lead or lead.group(2).lower().rstrip("s") not in {"plaintiff", "defendant", "cross-complainant"}:
+        return ""
+    base = f"{lead.group(1)} {lead.group(2)}"
+    mark = F.VALUE.search(blanked)
+    with_party = f"{base}, {mark.group(0)}" if mark else ""
+    if with_party and not K.case_fact(with_party, facts.allowed, facts.identity):
+        return with_party
+    return base
+
+
+def _judge(
+    facts: Facts, texts: list[str], closing: bool, firm: frozenset[int] = frozenset()
+) -> tuple[list[tuple[str, bool]], dict[str, int]]:
     """Each paragraph kept (marked) or dropped alone, with the reason codes of
     the drops. In the front a dropped paragraph leaves one hole per run, a kept
     paragraph whose sentence runs on into a dropped one goes with it (a hole
     never cuts a sentence). A numbered list that loses an item keeps its other
     items: ``firm_frame`` numbers every list afresh when it lays the frame, the
-    draft's own definitions in the hole included, so a gap never shows."""
+    draft's own definitions in the hole included, so a gap never shows. In the
+    closing, ``firm`` names the lines that are the firm's own attorneys (kept as
+    written), and an "Attorneys for" line that is not clean keeps its role."""
     kept: list[tuple[str, bool]] = []
     why: dict[str, int] = {}
-    for text in texts:
+    for i, text in enumerate(texts):
+        if i in firm:
+            kept.append((text, False))
+            continue
         blanked = facts.blank(text, closing)
         reason = "year" if closing and _YEAR.search(F.VALUE.sub(" ", blanked)) else ""
         reason = reason or K.case_fact(blanked, facts.allowed, facts.identity)
+        if reason and closing and L.ATTORNEYS_FOR.match(blanked) and _attorneys_for(blanked, facts):
+            blanked, reason = _attorneys_for(blanked, facts), ""
         if not reason:
             kept.append((blanked, _is_head(blanked)))
             continue
