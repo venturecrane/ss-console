@@ -56,6 +56,7 @@ from bin.lib import work_health_page_store as page_store_wh
 from bin.lib import work_health_proof as proof_wh
 from bin.lib import work_health_runs as runs_wh
 from bin.lib import work_health_sources as src
+from bin.lib import work_health_waiting as waiting
 from bin.lib import seat_config
 
 EXIT_OK = 0
@@ -326,11 +327,11 @@ def _operator_items(
     has_smokeball, authored = seat_shape(config)
     why = probe_not_scheduled_why(has_smokeball, authored, deployed)
     closed = wh.load_closed()
-    items = wh.request_items(slug, rows, cfg, now, closed)
-    items += src.could_not_items(slug, rows, cfg, now, closed)
-    items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
     # Owed work with no lookback (the broker's open read); None falls back to the window.
     open_owed = owed_wh.read_open_owed(slug)
+    items = wh.request_items(slug, rows, cfg, now, closed)
+    items += src.could_not_items(slug, rows, cfg, now, closed, owed_wh.owed_refs(open_owed))
+    items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
     owed_jobs = owed_wh.owed_jobs_kwargs(open_owed, proof_wh.delivery_proof_items)
     items += proof_wh.delivery_proof_items(slug, rows, cfg, now, closed, **owed_jobs)
     items += owed_wh.smd_owed_items(slug, rows, cfg, now, closed, open_owed)
@@ -413,14 +414,14 @@ def live_seats(console: Console, wanted: list[str]) -> list[str]:
     return sorted(authored)
 
 
-def send(subject: str, text: str, run_key: str) -> Optional[str]:
+def send(subject: str, text: str, run_key: str, to: Optional[str] = None) -> Optional[str]:
     key = os.environ.get("RESEND_API_KEY")
     if not key:
         return "RESEND_API_KEY is not set"
     body = json.dumps(
         {
             "from": os.environ.get("ALERT_FROM_EMAIL") or DEFAULT_FROM,
-            "to": [os.environ.get("ALERT_TO_EMAIL") or DEFAULT_TO],
+            "to": [to or os.environ.get("ALERT_TO_EMAIL") or DEFAULT_TO],
             "subject": subject,
             "text": text,
         }
@@ -622,8 +623,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         resolved=resolved,
         test_seats=footnoted_seats(seats),
     )
+    # A firm person still waiting two hours after the reply: the Captain hears
+    # of it once per item (2026-11-25). Sent before the state is written, so a
+    # reminder is recorded only once it went.
+    test_seats = footnoted_seats(seats)
+    reminded, remind_error = waiting.run(items, previous, now, test_seats, args.dry_run, send)
     if args.state_out:
-        Path(args.state_out).write_text(json.dumps(plan.state, indent=1, sort_keys=True), encoding="utf-8")
+        state = {**plan.state, waiting.REMINDED: reminded}
+        Path(args.state_out).write_text(json.dumps(state, indent=1, sort_keys=True), encoding="utf-8")
     # Counts only: this line lands in a PUBLIC repository's Actions log, and the
     # email text names matters. The text goes to team@ and nowhere else.
     kinds: dict[str, int] = {}
@@ -632,9 +639,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"evaluated {len(seats)} seat(s): {len(items)} item(s), {len(plan.new)} new; send={plan.send}; {kinds}")
     # A test seat's problems stay on the triage agent's list and are not emailed
     # (workers/fleet-alerts/src/mail-policy.ts is the same rule for alerts).
-    test_seats = footnoted_seats(seats)
     pages = [it for it in items if it.page and it.seat not in test_seats]
-    page_error = None if args.dry_run else send_pages(pages, now)
+    page_error = (None if args.dry_run else send_pages(pages, now)) or remind_error
     if pages:
         print(f"pages: {len(pages)} email(s){' (dry run)' if args.dry_run else ''}")
     if not plan.send or args.pages_only:

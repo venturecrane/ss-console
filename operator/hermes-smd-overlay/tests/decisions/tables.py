@@ -392,6 +392,7 @@ SELECTION: tuple[str, ...] = (
     "tests/test_reply.py",
     "tests/test_reply_binding.py",
     "tests/test_reply_held_notice.py",
+    "tests/test_reply_waiting_owed.py",
     "tests/test_reply_text_delivery.py",
     "tests/test_reply_text_delivery_concurrency.py",
     "tests/test_search_egress.py",

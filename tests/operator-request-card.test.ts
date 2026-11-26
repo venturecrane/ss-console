@@ -220,12 +220,10 @@ describe('a reply that declined (0146, 2026-11-01)', () => {
   // ashton-price: an attorney asked for five records, the Operator replied in a
   // minute that it could not find or attach any, every tool call was ok, and
   // the card read "replied in 1m, refused 0 failed 0".
-  it('reads NOT FULFILLED in the subject and leads the status with what the reply said', () => {
+  it('leads the subject with the client waiting and the status with what the reply said', () => {
     const card = parsed({ could_not: 'cannot_find', minutes: 1 })
     expect(card.couldNot).toBe('cannot_find')
-    expect(cardSubject(SLUG, card)).toBe(
-      `[SMD Ops] ${SLUG}: answered in 1m, NOT FULFILLED: ${WHO}: ${SUBJECT}`
-    )
+    expect(cardSubject(SLUG, card)).toBe(`Client waiting: ${SLUG}: ${WHO} asked: ${SUBJECT}`)
     const text = cardText(SLUG, card)
     expect(text).toContain(
       'WHAT HAPPENED: The Operator answered in 1 minute and told them it could not find what they asked for.'
@@ -249,7 +247,8 @@ describe('a reply that declined (0146, 2026-11-01)', () => {
       kind: 'followup',
       could_not: 'none_available',
     })
-    expect(cardSubject(SLUG, followup)).toContain(': later reply, NOT FULFILLED: ')
+    expect(cardSubject(SLUG, followup)).toMatch(/^Client waiting: card-co: /)
+    expect(cardText(SLUG, followup)).toContain('NOT FULFILLED: the reply told the requester')
     const r = parseRequestCard(
       body({ card_key: `${HASH}:no_reply`, kind: 'no_reply', could_not: 'cannot_find' })
     )
@@ -623,6 +622,46 @@ describe('POST /api/internal/operator-request-card', () => {
       })
       expect(await (await post(notice)).json()).toEqual({ ok: true })
       expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('a reply that left the client waiting also goes to the Captain (2026-11-25)', async () => {
+      // FALSIFIER: send to [ALERT_TO_EMAIL] alone (the code before this fix) and
+      // the Captain is not a recipient: the looking-into reply sat 19 hours.
+      await setKind('customer')
+      await post(body({ could_not: 'looking_into' }))
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const sent = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))
+      expect(sent.to).toEqual(['team@smd.services', 'scott@smd.services'])
+      expect(String(sent.subject)).toMatch(/^Client waiting: card-co: Pat Paralegal/)
+      expect(String(sent.subject)).toContain(SUBJECT)
+    })
+
+    it('the Captain address honours its override', async () => {
+      Object.assign(testEnv, { CAPTAIN_ALERT_EMAIL: 'ops-lead@smd.services' })
+      await post(body({ could_not: 'cannot_attach' }))
+      const sent = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))
+      expect(sent.to).toEqual(['team@smd.services', 'ops-lead@smd.services'])
+    })
+
+    it('an answer, a NO REPLY alarm and a reply to SMD itself go to team@ only', async () => {
+      await setKind('customer')
+      await post(body())
+      await post(
+        body({ card_key: `${HASH}:no_reply`, kind: 'no_reply', minutes: 31, reply_opening: null })
+      )
+      await post(
+        body({
+          card_key: `${'f'.repeat(64)}:replied`,
+          who: 'Ops <team@smd.services>',
+          could_not: 'looking_into',
+        })
+      )
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+      for (const call of fetchMock.mock.calls as [string, RequestInit][]) {
+        const sent = JSON.parse(String(call[1].body))
+        expect(sent.to).toEqual(['team@smd.services'])
+        expect(String(sent.subject)).toMatch(/^\[SMD Ops\] /)
+      }
     })
 
     it('still emails the NO REPLY alarm', async () => {

@@ -110,6 +110,7 @@ from shared import (
     seat_layout,
     send_policy,
     silence,
+    smd_owed,
     space,
     spec_gate,
     tool_gate,
@@ -484,6 +485,10 @@ def _emit_reply_event(
     A caller with better evidence (the send path, which has the verdict's own
     resolved matters) passes it explicitly and wins.
     """
+    # A sent reply stamped ``could_not`` left the person waiting: the broker
+    # records the owed answer before anything else, D1 or not (2026-11-25: a
+    # "Let me look into that" reply wrote none and sat 19 hours).
+    smd_owed.owe_reply(action_type, metadata)
     if _D1_CLIENT is None or _CUSTOMER_SLUG is None:
         return
     try:
@@ -680,9 +685,7 @@ def _advertising_violations(
         rules=outcome.rule_summary(),
         session_id=session_id,
     )
-    if not outcome.blocking:
-        return None
-    return outcome.rule_summary(), outcome.describe()
+    return (outcome.rule_summary(), outcome.describe()) if outcome.blocking else None
 
 
 #: :func:`_shared_reply_people` result for a shared turn this transport cannot answer.
