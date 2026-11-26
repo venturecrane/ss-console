@@ -157,6 +157,15 @@ SENTENCES: dict[str, dict[str, str]] = {
             "change: {why}."
         ),
         "revise_held": "The changes to the document for matter {number} are not all made yet.",
+        # A propounded revision (revise/propounded_run.py): one line per filed set, written by the runner.
+        "revise_sets_lead": (
+            "The sets for matter {number} are filed as new versions of the same files in the same folder, each "
+            "named exactly as filed, the earlier versions kept in each file's version history:"
+        ),
+        "revise_sets_unchanged": (
+            "No new version of the sets for matter {number} was filed, because no filed set would change: {why}."
+        ),
+        "revise_sets_held": "The changes to the sets for matter {number} are not all made yet.",
         "outside": OUTSIDE,
     },
 }
@@ -190,6 +199,9 @@ _VARIANT = "the file does not say whether this is a pre-suit or a litigation dem
 #: The runner's reason when a revision would change nothing (drafting/revise/run.py
 #: ``_hold_if_unchanged``). What follows it is the runner's own item-by-item why.
 _UNCHANGED = "revise_unchanged: no new version was filed, because nothing in the brief would change: "
+#: The same for a propounded revision (drafting/revise/propounded_run.py ``_edit``).
+_SETS_UNCHANGED = "revise_unchanged: no new versions were filed, because no filed set would change: "
+_SETS = "discovery_set"
 
 
 def _line_start(phrase: str | None) -> str | None:
@@ -362,6 +374,17 @@ def _revise_held(row: dict[str, Any], reason: str) -> str:
     """A held revision: a filed document exists, so "not drafted yet" would be
     false. The changes it holds for are the attorney's own, named by the runner."""
     number = _number(row)
+    if row.get("document_class") == _SETS:
+        if reason.startswith(_SETS_UNCHANGED):
+            said = _s(
+                "drafting",
+                "revise_sets_unchanged",
+                number=number,
+                why=_text(reason[len(_SETS_UNCHANGED) :].rstrip(". ")),
+            )
+            if said:
+                return said
+        return paragraph(_s("drafting", "revise_sets_held", number=number), _s("drafting", "held_ours"))
     if reason.startswith(_UNCHANGED):
         why = _text(reason[len(_UNCHANGED) :].rstrip(". "))
         said = _s("drafting", "revise_unchanged", number=number, why=why)
@@ -379,6 +402,11 @@ def _revise_delivered(row: dict[str, Any], files: list[Any], delivery: dict[str,
     were filed."""
     named = [f'"{n}"' for role in ("draft", "attorney_notes") for n in names(files, role)]
     number = _number(row)
+    sets = [t for t in (_text(x) for x in delivery.get("set_lines") or []) if t]
+    if sets and row.get("document_class") == _SETS:
+        lead = _s("drafting", "revise_sets_lead", number=number)
+        if lead:
+            return compose(lines(lead, *sets), _not_covered(delivery), _s("drafting", "outside") or "")
     notes = bool(names(files, "attorney_notes"))
     lead, bare = ("revise_lead", "revise_lead_bare") if notes else ("revise_doc_lead", "revise_doc_lead_bare")
     return compose(

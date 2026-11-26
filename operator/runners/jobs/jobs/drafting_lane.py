@@ -342,6 +342,10 @@ class DraftingLane(Daemon):
             if v.get("served_sets"):
                 # A response job's served sets, filed or being prepared by us (drafting/served.py).
                 fields["delivery"]["served_sets"] = list(v["served_sets"])
+            set_lines = (v.get("proof") or {}).get("set_lines")
+            if isinstance(set_lines, list) and set_lines:
+                # A propounded revision's one line per set (revise/propounded_run.py): the reply lists them.
+                fields["delivery"]["set_lines"] = [str(x) for x in set_lines]
             edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
             if edit is not None:
                 fields["delivery"]["library_edit"] = edit

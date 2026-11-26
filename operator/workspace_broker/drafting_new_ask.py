@@ -8,11 +8,14 @@ is a new job, and must never be held for SMD or carried into a draft already
 running. Read by code from the request's own words, never by the model:
 
 * a CUE: also / additional / new / another / more, a few words before a kind of
-  document (sets, discovery, interrogatories, RFAs, RFPs, requests), in a
-  sentence that does not ask for a change (need, should, revise, fix, ...);
+  document (sets, discovery, interrogatories, RFAs, RFPs, requests);
 * or a PARTY named after a kind of document and "to", "directed to" or "for"
   ("sets of discovery to the school district") whose words appear neither in
-  the earlier job's request nor in its filed files' names.
+  the earlier job's request nor in its filed files' names;
+
+each in a sentence that does not ask for a change (need, should, revise, fix,
+cut, trim, remove, define, ...): "cut the special interrogatories to the most
+important 120125" names no party.
 
 Either is a new ask. Anything else is about what was filed.
 """
@@ -26,7 +29,11 @@ from typing import Any
 
 _DOC = r"(?:sets?|discovery|interrogator(?:y|ies)|rfas?|rfps?|requests?|special\s+rogs?)"
 _CUE = re.compile(rf"\b(?:also|additional|new|another|more)\b(?:\W+\w+){{0,6}}?\W+{_DOC}\b", re.I)
-_CHANGE = re.compile(r"\b(?:needs?|should|revise|change|fix|update|edit|correct|follow[\s-]?ups?)\b", re.I)
+_CHANGE = re.compile(
+    r"\b(?:needs?|should|revise|change|fix|update|edit|correct|follow[\s-]?ups?|cut|trim|reduce|remove|delete|"
+    r"drop|limit|shorten|narrow|define)\b",
+    re.I,
+)
 _PARTY = re.compile(
     rf"\b{_DOC}\W+(?:directed\s+to|to|for)\s+(?!production\b|admission\b|inspection\b)([^.;:!?\n]{{1,160}})", re.I
 )
@@ -84,7 +91,11 @@ def asks_new(text: str, prior_rows: list[dict[str, Any]]) -> bool:
     for row in prior_rows:
         known |= known_words(row)
     for sentence in _SENTENCE.findall(str(text)):
-        if _CUE.search(sentence) and not _CHANGE.search(sentence):
+        if _CHANGE.search(sentence):
+            # A change to what was filed ("cut the special interrogatories to the
+            # most important 120125", 2026-11-24): never a new ask, whatever follows "to".
+            continue
+        if _CUE.search(sentence):
             return True
         for m in _PARTY.finditer(sentence):
             party = _words(_PARTY_END.split(m.group(1), maxsplit=1)[0])

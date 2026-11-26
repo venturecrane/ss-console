@@ -41,6 +41,7 @@ PLAN = "propounded-plan.json"
 ANSWERS = "propounded-answers.json"
 RESULT = "result.json"
 REVISED = "revised.md"
+_NEWER = "Revised on the version as the firm last saved it, not as delivered."
 
 
 class PropoundedSetRun(ReviseSetRun):
@@ -178,21 +179,43 @@ class PropoundedSetRun(ReviseSetRun):
             )
 
     # ---- the reply and the notes ----------------------------------------------------------
-    def reply_lines(self) -> list[str]:
-        """What changed in each file and what was left and why, written by code."""
+    def _outcomes(self) -> list[tuple[str, dict[str, Any], ps.Result | None, str]]:
+        """Each filed set's (name, base, result, why it was left untouched): a
+        result for a set in scope, else the reason it was left as filed."""
         scoped = {k for ks in self._json(PLAN)["scope"] for k in ks} if (self.data / PLAN).is_file() else set()
-        out: list[str] = []
+        out: list[tuple[str, dict[str, Any], ps.Result | None, str]] = []
         for k, u in enumerate(self.units):
             base, raw = self._ujson(k, "base.json") or {}, self._ujson(k, RESULT)
             if raw is not None:
                 res = ps.Result("", int(raw["before"]), int(raw["after"]), list(raw["lines"]), list(raw["left"]))
-                out += ps.summary(u["name"], res, base["set_type"])
-                if res.changed and base.get("newer_than_delivery"):
-                    out.append("- Revised on the version as the firm last saved it, not as delivered.")
+                out.append((u["name"], base, res, ""))
             elif base and not base.get("supported", True):
-                out.append(f"- {u['name']}: left as filed; form interrogatories are not edited by this revision.")
+                out.append((u["name"], base, None, "form interrogatories are not edited by this revision"))
             elif k not in scoped:
-                out.append(f"- {u['name']}: left as filed; the email does not ask to change it.")
+                out.append((u["name"], base, None, "the email does not ask to change it"))
+        return out
+
+    def reply_lines(self) -> list[str]:
+        """What changed in each file and what was left and why, written by code."""
+        out: list[str] = []
+        for name, base, res, why in self._outcomes():
+            if res is None:
+                out.append(f"- {name}: left as filed; {why}.")
+                continue
+            out += ps.summary(name, res, base["set_type"])
+            if res.changed and base.get("newer_than_delivery"):
+                out.append(f"- {_NEWER}")
+        return out
+
+    def set_lines(self) -> list[str]:
+        """The reply's one line per filed set, written by code: what changed, or why it was left."""
+        out: list[str] = []
+        for name, base, res, why in self._outcomes():
+            if res is None:
+                out.append(f'"{name}": left as filed; {why}.')
+                continue
+            extra = _NEWER if res.changed and base.get("newer_than_delivery") else ""
+            out.append(ps.one_line(name, res, base["set_type"], extra))
         return out
 
     def _write_notes(self) -> None:
@@ -235,6 +258,7 @@ class PropoundedSetRun(ReviseSetRun):
         v = super()._file()
         if v.proof is not None:
             v.proof["changes"] = self.reply_lines()
+            v.proof["set_lines"] = self.set_lines()  # the reply's one line per set (``drafting_lane``)
         return v
 
     # ---- the walk -------------------------------------------------------------------------------

@@ -8,10 +8,18 @@ delivered job (``revise_of``: the ops workspace's rehearsal). A thread that
 could not be read refuses: queuing a fresh draft on a guess is the $56 re-read
 of 2026-11-04.
 
-A discovery response revises EVERY document its request filed, one unit per
-file id (``drafting_revise_units``, 2026-11-21); any other class revises its
-one filed draft, and a delivery of several drafts of another class drafts
-afresh, as before, except propounded discovery (below).
+A discovery response, and a propounded set (below), revises EVERY document its
+request filed, one unit per file id (``drafting_revise_units``, 2026-11-21);
+any other class revises its one filed draft, and a delivery of several drafts
+of another class drafts afresh, as before.
+
+A REPLY ON FILED PROPOUNDED SETS REVISES THEM (2026-11-26). A delivered
+propounded-discovery job (``discovery_set``), the Operator's own or one SMD
+recorded as delivered by hand (``jobs.drafting.deliver_by_smd``, its
+``DELIVERY_PROVEN`` row), is revised whole like a response: every set the
+thread's deliveries filed, by file id, to the propounded runner
+(``revise/propounded_run.py``). ``prior_several_drafts`` remains only for a
+delivery of more sets than one revision takes.
 
 SMD'S HAND, NOT A FRESH DRAFT (2026-11-24). Two replies on one day in the thread
 of propounded special interrogatories SMD had filed by hand (the Operator's own
@@ -20,10 +28,9 @@ found no delivered draft in the thread and went on as fresh requests: one pulled
 502 files to draft the sets again, the next had its words carried only into that
 running redraft, and the filed sets the attorney was reading were never touched.
 So a reply in the thread of a FAILED job of its class on the matter, with nothing
-delivered there, is held for SMD (``prior_filed_by_smd``), and so is a reply to a
-propounded-discovery delivery of several sets (``prior_several_drafts``: the
-revise runner edits one filed draft, and redrafting every set is not what a
-change asks for). Both are SMD's causes: recorded as owed in the same step, the
+delivered there, is held for SMD (``prior_filed_by_smd``), and so was a reply to a
+propounded-discovery delivery of several sets (``prior_several_drafts``, until
+the propounded runner took them, above). Both are SMD's causes: recorded as owed in the same step, the
 requester given the one sentence SMD's own work gets. SMD revises the filed
 documents, or records the hand filing (``jobs.drafting.deliver_by_smd``) so the
 next reply in the thread revises them in place.
@@ -62,8 +69,6 @@ def _unanswered() -> RouteRefused:
 #: A reply SMD takes by hand (both are in ``drafting_verbs.REFUSAL_OUR_CODES``).
 FILED_BY_SMD = "prior_filed_by_smd"
 SEVERAL_DRAFTS = "prior_several_drafts"
-#: The class whose delivery files one draft per propounded set.
-PROPOUNDED_CLASS = "discovery_set"
 #: The failed jobs of a class on a matter read for a thread match, newest first.
 _FAILED_SQL = (
     "SELECT * FROM drafting_jobs WHERE matter_id=? AND document_class=? AND state='failed' "
@@ -125,7 +130,7 @@ def route(
 ) -> dict[str, Any] | RouteRefused | None:
     """The runner's ``revise`` block, None for a fresh draft, or a refusal.
     ``lookup`` gives the mailbox's conversation-id lookup as it stands now."""
-    whole_set = envelope["document_class"] == revise_units.SET_CLASS
+    whole_set = envelope["document_class"] in revise_units.SET_CLASSES
     delivered = db.delivered_on_matter(
         envelope["matter"]["id"], envelope["document_class"], revise_units.MAX_JOBS if whole_set else 10
     )
@@ -167,7 +172,14 @@ def route(
             # redraft; an unfiled failure asked again drafts afresh.
             return _filed_by_smd(str(hand["id"])) if hand is not None and _smd_filed(db, hand) else None
     if whole_set:
-        return _route_set(db, delivered, prior, thread_of)
+        got = _route_set(db, delivered, prior, thread_of)
+        if isinstance(got, dict) and len(got["units"]) > revise_units.MAX_UNITS:
+            return RouteRefused(
+                f"this email asks about the {len(got['units'])} sets filed as job {prior['id']}, more than one "
+                f"revision takes ({revise_units.MAX_UNITS}), so SMD revises the sets; nothing was queued",
+                SEVERAL_DRAFTS,
+            )
+        return got
     files = db.proven_files(prior["id"])
     if not files or not prior.get("folder_id"):
         return RouteRefused(
@@ -177,15 +189,7 @@ def route(
         )
     if sum(1 for f in files if f.get("role") == "draft") != 1:
         # This runner edits ONE filed draft (revise/run.py). Several drafts in one
-        # delivery are a discovery response's sets, revised whole by _route_set.
-        # Several propounded sets have no revise runner: SMD's, never a redraft.
-        if envelope["document_class"] == PROPOUNDED_CLASS:
-            return RouteRefused(
-                f"this email asks about the {sum(1 for f in files if f.get('role') == 'draft')} propounded sets "
-                f"filed as job {prior['id']}; one revision edits one filed draft, so SMD revises the sets; "
-                "nothing was queued",
-                SEVERAL_DRAFTS,
-            )
+        # delivery of a set class are revised whole by _route_set, above.
         return None
     return {"prior_job_id": prior["id"], "folder_id": prior["folder_id"], "files": files}
 

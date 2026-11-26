@@ -309,3 +309,34 @@ def test_a_revision_that_would_change_nothing_says_why_and_never_not_drafted() -
 def test_any_other_held_revision_is_not_called_undrafted_and_relays_no_reason() -> None:
     (text,) = fixed_wording.render("drafting_job", _revision(state="held", reason="destination_mismatch: wrong matter"))
     assert text == "The changes to the document for matter 900201 are not all made yet. Nothing is needed from you."
+
+
+# -- a revision of filed propounded sets (revise/propounded_run.py, 2026-11-26) -----------
+
+
+def test_a_delivered_set_revision_lists_one_line_per_set_and_asks_nothing() -> None:
+    """FALSIFIER: render it as the brief's revision, and the attorney reads that
+    "the document" was filed and that notes list his changes, with no notes filed."""
+    lines = [
+        '"Special Interrogatories, Set One.docx" (193 special interrogatories, now 120): Removed former Nos. 4, 9.',
+        '"Requests for Admission, Set One.docx": It does not use "VEHICLE", so no definition was added to it.',
+    ]
+    delivery = {"files": [{"role": "draft", "name": "Special Interrogatories, Set One.docx"}], "set_lines": lines}
+    row = _revision(state="delivered", document_class="discovery_set", delivery_json=json.dumps(delivery))
+    (text,) = fixed_wording.render("drafting_job", row)
+    assert text.startswith("The sets for matter 900201 are filed as new versions of the same files")
+    assert "\n".join(lines) in text and "attorney notes" not in text and "?" not in text
+    assert text.endswith("Nothing has been sent to anyone outside the firm.")
+
+
+def test_a_set_revision_that_would_change_nothing_says_why_and_any_other_hold_says_not_yet() -> None:
+    reason = "revise_unchanged: no new versions were filed, because no filed set would change: the set already has 30"
+    held = _revision(state="held", document_class="discovery_set", reason=reason)
+    (text,) = fixed_wording.render("drafting_job", held)
+    assert text == (
+        "No new version of the sets for matter 900201 was filed, because no filed set would change: "
+        "the set already has 30."
+    )
+    held = _revision(state="held", document_class="discovery_set", reason="revise_declaration: the count crosses 35")
+    (text,) = fixed_wording.render("drafting_job", held)
+    assert text == "The changes to the sets for matter 900201 are not all made yet. Nothing is needed from you."

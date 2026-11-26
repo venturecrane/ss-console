@@ -304,6 +304,8 @@ def test_define_add_and_cut_are_made_in_the_filed_set_as_a_new_version(world) ->
     assert changes[0] == f"{NAMES[SROG]} (4 special interrogatories, now 3):"
     assert any("former No. 4 is now No. 2" in ln for ln in changes)
     assert v.proof["mode"] == "revise"
+    (line,) = v.proof["set_lines"]  # the reply's one line per set (drafting_lane carries it)
+    assert line.startswith(f'"{NAMES[SROG]}" (4 special interrogatories, now 3): Added the definition of "VEHICLE".')
 
 
 def test_a_resume_asks_the_model_nothing_twice(world) -> None:
@@ -419,6 +421,9 @@ def test_two_jobs_files_in_one_thread_are_each_filed_in_their_own_folder(world) 
     assert seat.sent == ["file-0002"]
     assert len(_labels(seat.files["file-0002"][-1])) == 6 and len(seat.files["file-0001"]) == 1
     assert any("left as filed; the email does not ask to change it" in ln for ln in v.proof["changes"])
+    assert len(v.proof["set_lines"]) == 2 and v.proof["set_lines"][0].endswith(
+        ": left as filed; the email does not ask to change it."
+    )
 
 
 def test_two_revise_jobs_on_the_same_file_each_revise_the_version_before_them(world) -> None:
@@ -603,3 +608,47 @@ def test_the_attorney_notes_get_a_new_version_naming_what_changed(world) -> None
     assert seat.sent == ["file-0001", "notes-0001"]
     text = " ".join(text_of(seat.files["notes-0001"][-1]))
     assert "Added 2 special interrogatories, Nos. 5, 6." in text and "Attorney notes for the special" in text
+
+
+SET_LINES_RUNNER = """
+import json, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+out = [{"unit": "drafting", "kind": "drafting", "outcome": "delivered", "stage": "file", "reason": None,
+        "dollars": 1.0, "document_class": "discovery_set", "folder_id": "folder-9",
+        "files": [{"name": "A.docx", "size": 10, "role": "draft"}],
+        "proof": {"readback": "confirmed", "files": [{"name": "A.docx", "file_id": "f1", "size": 10,
+                  "sha256": "a" * 64}], "review": "passed", "review_cents": 0,
+                  "set_lines": ['"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.']}}]
+(jd / 'verdict.json').write_text(json.dumps(out))
+print(json.dumps(out))
+"""
+
+
+def test_the_lane_records_a_propounded_revisions_one_line_per_set(tmp_path):
+    """FALSIFIER: leave ``set_lines`` in the proof, and the reply has nothing to
+    list: the attorney is told only that new versions were filed."""
+    import test_drafting_lane as dl
+
+    lane, client = dl._lane(tmp_path, script=SET_LINES_RUNNER)
+    dl._submit(lane, client)
+    assert lane.tick() == "delivered"
+    assert client.records[-1][2]["delivery"]["set_lines"] == [
+        '"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.'
+    ]
+
+
+def test_a_brokers_propounded_revise_block_loads_and_takes_the_propounded_runner():
+    """The broker's block (``drafting_revise_units.collect``) passes the job's own
+    check and picks the propounded runner. FALSIFIER: a key the job refuses, and
+    every routed reply fails at load."""
+    from jobs.drafting import job as drafting_job
+    from jobs.drafting.revise.propounded_run import PropoundedSetRun, runner_for
+
+    unit = {
+        "file_id": "file-set-0000", "name": "Special Interrogatories, Set One.docx", "size": 3000,
+        "sha256": "e" * 64, "set_type": "special_interrogatories", "prior_job_id": "01M5ABCDEFGHJKMNPQRSTVWXYZ",
+        "folder_id": "folder-sets-0001",
+    }  # fmt: skip
+    block = {"prior_job_id": unit["prior_job_id"], "folder_id": unit["folder_id"], "units": [unit]}
+    revise = drafting_job._revise(block)
+    assert runner_for(revise, "discovery_set") is PropoundedSetRun
