@@ -48,7 +48,7 @@ from typing import Any, Protocol, Sequence
 
 from .. import render, set_items
 from ..counts import STATUTORY_LIMIT
-from .propounded_define import capitalize, define, definition_ok, term_ok
+from .propounded_define import capitalize, declaration_span, define, definition_ok, term_ok
 from .propounded_numbers import DEFAULT_ADD, add_count, crosses, cut_drop, parse_number
 from .set_units import named_set_types
 
@@ -435,16 +435,7 @@ def decl_block(md: str, variant: str | None = None) -> tuple[int, int] | None:
     the set's last request (a caption that names the declaration is never it),
     to the proof of service or the end; None when the set carries none."""
     items = set_items.read(md, variant) if variant else []
-    after = items[-1].end if items else 0
-    pos = 0
-    start = None
-    for ln in md.splitlines(keepends=True):
-        if start is None and pos >= after and render.DECL_LINE.search(ln) and len(ln.strip()) <= 160:
-            start = pos
-        elif start is not None and render.POS_LINE.search(ln):
-            return start, pos
-        pos += len(ln)
-    return (start, len(md)) if start is not None else None
+    return declaration_span(md, items[-1].end if items else 0)
 
 
 # ---- the model ----------------------------------------------------------------------------------------

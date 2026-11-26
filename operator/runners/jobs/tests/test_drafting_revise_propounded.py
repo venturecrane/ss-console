@@ -685,7 +685,8 @@ def test_a_declaration_saying_the_count_four_times_with_its_item_list_is_rewritt
     out, line = pdc.declaration(firm_md(decl=decl), 40, 38, SROG)
     got = out[out.index("DECLARATION FOR") :]
     assert "40" not in got.replace("2030.050", "")
-    assert got.count("38") == 5 and "are Nos. 1-38, and Nos. 1-38 in all" in got
+    # D16c: the list written out stays written out; the range stays a range
+    assert got.count("38") == 5 and "36, 37 and 38, and Nos. 1-38 in all" in got
     assert line == "the declaration's count of this set is now 38 (was 40)"
     with pytest.raises(p.Held):
         pdc.declaration(firm_md(decl="This set of forty (40) interrogatories."), 40, 38, SROG)
@@ -797,9 +798,12 @@ def test_a_new_term_takes_the_sets_plural_form():
     """D13. FALSIFIER: always keep the email's "(S)", and a set that writes its
     definitions plain gains the one term in another form; always drop it, and a
     set that writes "(S)" loses it."""
-    assert pd.term_form(firm_md(), "ACCOMMODATION(S)") == "ACCOMMODATION"
+    assert pd.term_form(firm_md(), "ACCOMMODATION(S)") == ("ACCOMMODATION", "ACCOMMODATIONS")
     marked = firm_md().replace("“INCIDENT,”", "“INCIDENT(S),”")
-    assert pd.term_form(marked, "ACCOMMODATION(S)") == "ACCOMMODATION(S)"
+    assert pd.term_form(marked, "ACCOMMODATION(S)") == ("ACCOMMODATION(S)", None)
+    out, why = p.define(firm_md(), "ACCOMMODATION", '"ACCOMMODATION(S)" means any change.', "ACCOMMODATIONS")
+    assert why is None  # D16b: SMD's form, both quoted, the comma inside the last
+    assert "“ACCOMMODATION” or “ACCOMMODATIONS,” means any change." in out
 
 
 def test_new_requests_keep_the_models_lower_case_and_only_the_new_term_is_capitalised():
@@ -863,5 +867,31 @@ def test_a_five_list_declaration_follows_a_follow_up_a_cut_and_the_renumbering()
     assert "(B) Nos. 16, 18-20 concern" in got
     assert "(C) Nos. 21 through 27 concern" in got  # former 21 cut, the rest one down
     assert "(D) Nos. 28-37 concern" in got
-    assert "(E) Nos. 38 concern" in got  # former 40 cut, former 39 now 38
+    assert "(E) No. 38 concerns costs" in got  # D15: former 40 cut, former 39 now 38, one number
     assert "Removed former Nos. 16, 21, 40." in res.lines
+
+
+def test_a_list_left_with_one_number_is_written_in_the_singular_and_back():
+    """D15. FALSIFIER: carry the numbers alone, and the declaration reads "Nos. 19
+    of this set ask"; or "No. 4 asks" once a follow-up joins it."""
+    decl = "This set of 40 is warranted. (A) Nos. 19 and 20 of this set ask about records. (B) No. 4 asks about costs."
+    md = firm_md(texts=[f"Text {n}." for n in range(1, 41)], decl=decl)
+    o = _Follow([(4, "Follow four.")], [21, 39, 40])  # former 20, 38 and 39, numbered after the follow-up
+    ops = [p.Op("add", "add follow-up questions", (), "", "", ""), p.Op("cut", "cut by 3", (), "", "", "by 3")]
+    got = ps.revise_unit(md, unit(md), ops, o).md
+    got = got[got.index("DECLARATION FOR") :]
+    assert "(A) No. 20 of this set asks about records." in got
+    assert "(B) Nos. 4 and 5 ask about costs." in got
+
+
+def test_the_new_term_is_capitalised_in_other_definitions_and_the_declaration():
+    """D16a. FALSIFIER: start after the Definitions, and "accommodation" stays lower
+    case inside another definition and the declaration."""
+    md = firm_md(
+        texts=["Identify each accommodation.", "B.", "C.", "D.", "E."],
+        decl='Each accommodation request is warranted, as "accommodation" in Example v. Accommodation Co.',
+    ).replace("to state the full name.", "to state the full name and any accommodation.")
+    out = p.capitalize(md, ["ACCOMMODATION"])
+    assert "the full name and any ACCOMMODATION." in out
+    assert "Each ACCOMMODATION request is warranted" in out
+    assert '"accommodation" in Example v. Accommodation Co.' in out  # never a quotation or a case name

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 
-from .. import sets
+from .. import render, sets
 
 #: One definition's opening: indent, number, the markup and quotes around its
 #: term, the comma or period inside the closing quote.
@@ -121,22 +121,27 @@ def definition_ok(term: str, text: str) -> str | None:
     return f'"{_key(term).upper()}" {m.group(2)}'
 
 
-def _opening(row: re.Match[str], term: str, number: int | None) -> str:
-    """A new definition's opening in its neighbour's form."""
+def _opening(row: re.Match[str], term: str, number: int | None, plural: str | None = None) -> str:
+    """A new definition's opening in its neighbour's form; with ``plural``,
+    both forms quoted ("“X” or “XS,” means"), the comma after the last."""
     num = f"{number}{row.group(3)}" if number is not None else ""
     mark, close = row.group(4) or "", row.group(9) or ""
-    return f"{row.group(1)}{num}{mark}{row.group(5)}{term}{row.group(7)}{row.group(8)}{close}"
+    q, c = row.group(5), row.group(8)
+    first = f"{mark}{q}{term}{c}{close} or " if plural else ""
+    return f"{row.group(1)}{num}{first}{mark}{q}{plural or term}{row.group(7)}{c}{close}"
 
 
-def term_form(md: str, term: str) -> str:
-    """The new term in the set's own plural form: the email's "(S)" kept when
-    the set writes a plural mark on a definition, or has none to follow, and
-    dropped when its definitions are written plain ("DOCUMENT", "DOCUMENTS")."""
+def term_form(md: str, term: str) -> tuple[str, str | None]:
+    """The new term in the set's own plural form, as (term, its plural to
+    quote beside it or None): the email's "(S)" kept when the set writes a
+    plural mark on a definition, or has none to follow; when its definitions
+    are written plain, SMD's form, "“ACCOMMODATION” or “ACCOMMODATIONS”"."""
     term = _key(term).upper()
     rows = defined(md)
-    if not _PLURAL.search(term) or not rows or any(_PLURAL.search(r) for r in rows):
-        return term
-    return base(term)
+    mark = _PLURAL.search(term)
+    if not mark or not rows or any(_PLURAL.search(r) for r in rows):
+        return term, None
+    return base(term), base(term) + mark.group(0)[1:-1]
 
 
 def _alphabetical(rows: list[re.Match[str]]) -> bool:
@@ -144,7 +149,7 @@ def _alphabetical(rows: list[re.Match[str]]) -> bool:
     return keys == sorted(keys)
 
 
-def define(md: str, term: str, text: str) -> tuple[str, str | None]:
+def define(md: str, term: str, text: str, plural: str | None = None) -> tuple[str, str | None]:
     """The definition placed alphabetically among the set's definitions when
     they are in alphabetical order, else after the last one, in their form (numbered, and the ones after it numbered on, only when they
     are numbered): (the document, None) or (the document unchanged, why)."""
@@ -162,6 +167,7 @@ def define(md: str, term: str, text: str) -> tuple[str, str | None]:
     if nums and nums != list(range(nums[0], nums[0] + len(nums))):
         return md, f'the definition of "{term}" was not added: its definitions are not numbered in order'
     rest = re.sub(r"^\"[^\"]*\"\s*", "", definition_ok(term, text) or text)
+    rest = re.sub(r"^or\s+[\"“][^\"”]*[\"”]\s*[,.]?\s*", "", rest) if plural else rest  # the model's plural
     order = term.replace("(", "").casefold()
     at = len(rows)
     if _alphabetical(rows):
@@ -170,7 +176,7 @@ def define(md: str, term: str, text: str) -> tuple[str, str | None]:
     out = md
     for i in range(len(rows) - 1, at - 1, -1) if nums else []:  # from the end, so earlier offsets hold
         out = out[: rows[i].start(2)] + str(nums[i] + 1) + out[rows[i].end(2) :]
-    para = f"{_opening(row, term, nums[0] + at if nums else None).lstrip()} {rest}"
+    para = f"{_opening(row, term, nums[0] + at if nums else None, plural).lstrip()} {rest}"
     if at < len(rows):
         p = rows[at].start()
         out = out[:p] + row.group(1) + para + "\n\n" + out[p:]
@@ -200,23 +206,44 @@ def _caps(seg: str, terms: list[str], others: list[str]) -> str:
 
 
 def capitalize(md: str, terms: list[str]) -> str:
-    """Every use of ``terms`` (and their plurals) after the Definitions, to the
-    signature, in capitals: never inside a quotation, a case name or another
-    defined term that holds the word."""
+    """Every use of ``terms`` (and their plurals) in capitals: in the other
+    definitions, the requests to the signature, and the declaration's
+    sentences; never inside a quotation (a definition's own quoted term), a
+    case name or another defined term that holds the word."""
     span = defs_region(md)
     if span is None or not terms:
         return md
-    at = span[1]
-    sig = _SIGNATURE.search(md, at)
+    at = span[0]
+    sig = _SIGNATURE.search(md, span[1])
     end = sig.start() if sig else len(md)
     terms = sorted({base(t) for t in terms}, key=len, reverse=True)
     others = [t for t in defined(md) if base(t) not in terms and any(w in base(t) for w in terms)]
-    return md[:at] + sets._outside(md[at:end], lambda s: _caps(s, terms, others)) + md[end:]
+
+    def caps(seg: str) -> str:
+        return sets._outside(seg, lambda x: _caps(x, terms, others))
+
+    out = md[:at] + caps(md[at:end])
+    a, b = declaration_span(md, end) or (len(md), len(md))
+    return out + md[end:a] + caps(md[a:b]) + md[b:]
+
+
+def declaration_span(md: str, after: int) -> tuple[int, int] | None:
+    """The declaration for additional discovery after ``after``: its title
+    line to the proof of service or the end; None when there is none."""
+    pos, start = 0, None
+    for ln in md.splitlines(keepends=True):
+        if start is None and pos >= after and render.DECL_LINE.search(ln) and len(ln.strip()) <= 160:
+            start = pos
+        elif start is not None and render.POS_LINE.search(ln):
+            return start, pos
+        pos += len(ln)
+    return (start, len(md)) if start is not None else None
 
 
 __all__ = [
     "base",
     "capitalize",
+    "declaration_span",
     "define",
     "defined",
     "definition_ok",

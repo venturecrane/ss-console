@@ -66,12 +66,12 @@ def _define(md: str, ops: list[Op], oracle: Oracle, res: Result) -> tuple[str, l
     left as filed (``revise_all`` holds when no set uses it)."""
     terms: list[str] = []
     for op in (o for o in ops if o.op == "define"):
-        term = term_form(md, op.term)
+        term, plural = term_form(md, op.term)
         if not spelled_in(term, md):
             res.left.append(f'it does not use "{term}", so no definition was added to it')
             res.unused.append(op.quote)
             continue
-        new, why = define(md, term, oracle.definition(term, op.quote))
+        new, why = define(md, term, oracle.definition(term, op.quote), plural)
         if why:
             res.left.append(why)
             continue
