@@ -155,7 +155,8 @@ def test_a_second_revision_in_flight_still_holds_the_next(tmp_path) -> None:
     _delivered(broker, writer, drafts=1)
     assert call(broker, "drafting_job_submit", envelope=_sets(COMMENT))["mode"] == "revise"
     again = call(broker, "drafting_job_submit", envelope=_sets(LATER))
-    assert again["accepted"] is False and again["code"] == "underway"
+    # Owed by SMD, never "underway": the running revision reads only its own email (2026-11-26).
+    assert again["accepted"] is False and again["code"] == "revision_underway" and again["smd_told"] is True
 
 
 def _add(broker, job_id, ref, thread, **over):

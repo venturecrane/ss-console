@@ -316,17 +316,35 @@ def test_any_other_held_revision_is_not_called_undrafted_and_relays_no_reason() 
 
 def test_a_delivered_set_revision_lists_one_line_per_set_and_asks_nothing() -> None:
     """FALSIFIER: render it as the brief's revision, and the attorney reads that
-    "the document" was filed and that notes list his changes, with no notes filed."""
-    lines = [
-        '"Special Interrogatories, Set One.docx" (193 special interrogatories, now 120): Removed former Nos. 4, 9.',
-        '"Requests for Admission, Set One.docx": It does not use "VEHICLE", so no definition was added to it.',
-    ]
-    delivery = {"files": [{"role": "draft", "name": "Special Interrogatories, Set One.docx"}], "set_lines": lines}
+    "the document" was filed and that notes list his changes, with no notes filed.
+    A set left as filed is listed apart, never under the sets that were refiled."""
+    changed = ['"Special Interrogatories, Set One.docx" (193 special interrogatories, now 120): Removed former No. 4.']
+    left = ['"Requests for Admission, Set One.docx": It does not use "VEHICLE", so no definition was added to it.']
+    delivery = {
+        "files": [{"role": "draft", "name": "Special Interrogatories, Set One.docx"}],
+        "set_lines": changed,
+        "sets_left": left,
+    }
     row = _revision(state="delivered", document_class="discovery_set", delivery_json=json.dumps(delivery))
     (text,) = fixed_wording.render("drafting_job", row)
-    assert text.startswith("The sets for matter 900201 are filed as new versions of the same files")
-    assert "\n".join(lines) in text and "attorney notes" not in text and "?" not in text
+    assert text.startswith("These sets for matter 900201 were changed and filed as new versions of the same files")
+    lead, rest = text.split("\n\n", 1)
+    assert lead.endswith(changed[0]) and "Admission" not in lead
+    assert rest.startswith("Left as filed:\n" + left[0])
+    assert "attorney notes" not in text and "?" not in text
     assert text.endswith("Nothing has been sent to anyone outside the firm.")
+
+
+def test_a_set_revision_that_refiled_its_notes_names_them() -> None:
+    files = [
+        {"role": "draft", "name": "Special Interrogatories.docx"},
+        {"role": "attorney_notes", "name": "Notes.docx"},
+    ]
+    delivery = {"files": files, "set_lines": ['"Special Interrogatories.docx": Added the definition of "VEHICLE".']}
+    row = _revision(state="delivered", document_class="discovery_set", delivery_json=json.dumps(delivery))
+    (text,) = fixed_wording.render("drafting_job", row)
+    assert 'The attorney notes are filed as a new version too: "Notes.docx".' in text
+    assert "Left as filed" not in text
 
 
 def test_a_set_revision_that_would_change_nothing_says_why_and_any_other_hold_says_not_yet() -> None:

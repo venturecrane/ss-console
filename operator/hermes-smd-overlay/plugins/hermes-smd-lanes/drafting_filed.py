@@ -34,9 +34,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-#: ss-console ``drafting_route.FILED_BY_SMD`` / ``SEVERAL_DRAFTS``: SMD revises
-#: the filed documents by hand.
-HAND_CODES = frozenset({"prior_filed_by_smd", "prior_several_drafts"})
+#: ss-console ``drafting_route.FILED_BY_SMD`` / ``SEVERAL_DRAFTS`` and
+#: ``drafting_verbs.REVISION_UNDERWAY`` / ``PARTLY_FILED``: SMD makes the change
+#: to the filed documents (after a revision still running, or by resuming one).
+HAND_CODES = frozenset(
+    {"prior_filed_by_smd", "prior_several_drafts", "revision_underway", "revision_partly_filed"}
+)
 #: What the Operator says when the follow-up is SMD's: it owns it, names no one.
 LOOK_INTO_SAY = "Let me look into that. I'll reply in this thread."
 #: An addition's results after which the email was about the running draft too.

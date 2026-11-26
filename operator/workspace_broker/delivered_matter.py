@@ -159,9 +159,11 @@ SENTENCES: dict[str, dict[str, str]] = {
         "revise_held": "The changes to the document for matter {number} are not all made yet.",
         # A propounded revision (revise/propounded_run.py): one line per filed set, written by the runner.
         "revise_sets_lead": (
-            "The sets for matter {number} are filed as new versions of the same files in the same folder, each "
-            "named exactly as filed, the earlier versions kept in each file's version history:"
+            "These sets for matter {number} were changed and filed as new versions of the same files in the same "
+            "folder, each named exactly as filed, the earlier versions kept in each file's version history:"
         ),
+        "revise_sets_left": "Left as filed:",
+        "revise_sets_notes": "The attorney notes are filed as a new version too: {files}.",
         "revise_sets_unchanged": (
             "No new version of the sets for matter {number} was filed, because no filed set would change: {why}."
         ),
@@ -370,6 +372,20 @@ def _caption(delivery: dict[str, Any]) -> str:
     )
 
 
+def _revise_sets(number: str | None, sets: list[str], files: list[Any], delivery: dict[str, Any]) -> str:
+    """A propounded revision: the sets changed, each with its line, then those
+    left as filed with why, then any notes file filed as a new version."""
+    left = [t for t in (_text(x) for x in delivery.get("sets_left") or []) if t]
+    notes = and_list([f'"{n}"' for n in names(files, "attorney_notes")])
+    return compose(
+        lines(_s("drafting", "revise_sets_lead", number=number) or "", *sets),
+        lines(_s("drafting", "revise_sets_left") or "", *left) if left else "",
+        (_s("drafting", "revise_sets_notes", files=notes) or "") if notes else "",
+        _not_covered(delivery) or "",
+        _s("drafting", "outside") or "",
+    )
+
+
 def _revise_held(row: dict[str, Any], reason: str) -> str:
     """A held revision: a filed document exists, so "not drafted yet" would be
     false. The changes it holds for are the attorney's own, named by the runner."""
@@ -404,9 +420,7 @@ def _revise_delivered(row: dict[str, Any], files: list[Any], delivery: dict[str,
     number = _number(row)
     sets = [t for t in (_text(x) for x in delivery.get("set_lines") or []) if t]
     if sets and row.get("document_class") == _SETS:
-        lead = _s("drafting", "revise_sets_lead", number=number)
-        if lead:
-            return compose(lines(lead, *sets), _not_covered(delivery), _s("drafting", "outside") or "")
+        return _revise_sets(number, sets, files, delivery)
     notes = bool(names(files, "attorney_notes"))
     lead, bare = ("revise_lead", "revise_lead_bare") if notes else ("revise_doc_lead", "revise_doc_lead_bare")
     return compose(

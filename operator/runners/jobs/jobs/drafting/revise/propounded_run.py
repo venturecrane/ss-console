@@ -207,16 +207,19 @@ class PropoundedSetRun(ReviseSetRun):
                 out.append(f"- {_NEWER}")
         return out
 
-    def set_lines(self) -> list[str]:
-        """The reply's one line per filed set, written by code: what changed, or why it was left."""
-        out: list[str] = []
+    def set_lines(self) -> tuple[list[str], list[str]]:
+        """The reply's lines, written by code: one per set filed as a new version
+        (what changed), and one per set left as filed (why)."""
+        changed: list[str] = []
+        left: list[str] = []
         for name, base, res, why in self._outcomes():
-            if res is None:
-                out.append(f'"{name}": left as filed; {why}.')
+            if res is not None and res.changed:
+                extra = _NEWER if base.get("newer_than_delivery") else ""
+                changed.append(ps.one_line(name, res, base["set_type"], extra))
                 continue
-            extra = _NEWER if res.changed and base.get("newer_than_delivery") else ""
-            out.append(ps.one_line(name, res, base["set_type"], extra))
-        return out
+            reasons = ps.sentences(res.left) if res is not None else []
+            left.append(f'"{name}": ' + (" ".join(reasons) or f"{(why or 'nothing in the email changes it')}."))
+        return changed, left
 
     def _write_notes(self) -> None:
         lines = ["# Your changes, made in the filed sets", "", *self.reply_lines()]
@@ -258,7 +261,8 @@ class PropoundedSetRun(ReviseSetRun):
         v = super()._file()
         if v.proof is not None:
             v.proof["changes"] = self.reply_lines()
-            v.proof["set_lines"] = self.set_lines()  # the reply's one line per set (``drafting_lane``)
+            # The reply's one line per set (``drafting_lane`` carries both lists).
+            v.proof["set_lines"], v.proof["sets_left"] = self.set_lines()
         return v
 
     # ---- the walk -------------------------------------------------------------------------------

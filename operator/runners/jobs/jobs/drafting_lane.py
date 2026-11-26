@@ -86,6 +86,15 @@ RELEASES = "drafting-ledger-releases.jsonl"
 FORM_RELEASES = "form_interrogatories"
 
 
+def _uploads_started(path: Path) -> bool:
+    """A revision's ``versions.json`` (``revise/versions.py``) records a new version sent."""
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(state, dict) and any(isinstance(r, dict) and r.get("sent") for r in state.values())
+
+
 def releases(run_dir: Path, cls: str = "") -> list[str]:
     """The job ids of every released held job of ``cls`` that filed, once each:
     ``""`` a ledger brief (a line with no class), else the set type it names."""
@@ -342,13 +351,18 @@ class DraftingLane(Daemon):
             if v.get("served_sets"):
                 # A response job's served sets, filed or being prepared by us (drafting/served.py).
                 fields["delivery"]["served_sets"] = list(v["served_sets"])
-            set_lines = (v.get("proof") or {}).get("set_lines")
-            if isinstance(set_lines, list) and set_lines:
-                # A propounded revision's one line per set (revise/propounded_run.py): the reply lists them.
-                fields["delivery"]["set_lines"] = [str(x) for x in set_lines]
+            for key in ("set_lines", "sets_left"):
+                # A propounded revision's one line per set, changed or left (revise/propounded_run.py).
+                got = (v.get("proof") or {}).get(key)
+                if isinstance(got, list) and got:
+                    fields["delivery"][key] = [str(x) for x in got]
             edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
             if edit is not None:
                 fields["delivery"]["library_edit"] = edit
+        if state != "delivered" and _uploads_started(self.job_dir(job_id) / "data" / "versions.json"):
+            # A revision that ended after sending a new version: the broker never
+            # starts the same email again (it is resumed), ``drafting_ledger.uploads_started``.
+            fields["delivery"] = {"uploads_started": True}
         fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         if self.DRAFTING_STEPS:
             # Its stage timings and expected finish outlive the run dir (``drafting/progress.py``).

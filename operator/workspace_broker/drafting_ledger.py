@@ -190,11 +190,26 @@ class SubmitRefused(ValueError):
     """A valid request the ledger will not queue NOW. ``job_id`` names the job
     it collided with, when there is one."""
 
-    def __init__(self, message: str, job_id: str | None = None, *, underway: bool = False) -> None:
+    def __init__(
+        self, message: str, job_id: str | None = None, *, underway: bool = False, partly_filed: bool = False
+    ) -> None:
         super().__init__(message)
         self.job_id = job_id
         #: The collision is a draft still running on the matter, not this same email.
         self.underway = underway
+        #: The collision is this email's own revision, failed after it filed some
+        #: new versions: a fresh job would make the same changes again.
+        self.partly_filed = partly_filed
+
+
+def uploads_started(delivery_json: str | None) -> bool:
+    """A failed revision's report says it had sent a new version of a filed
+    file (the lane's ``uploads_started``, read from the job's ``versions.json``)."""
+    try:
+        report = json.loads(delivery_json) if delivery_json else {}
+    except ValueError:
+        return False
+    return isinstance(report, dict) and report.get("uploads_started") is True
 
 
 def digest(obj: Any) -> str:
@@ -483,6 +498,22 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
             if dup is not None:
                 conn.rollback()
                 raise SubmitRefused(f"that request email already queued drafting job {dup['id']}", dup["id"])
+            # A revision of this email that failed after filing some new versions:
+            # it is resumed (SMD's), never started again, or the same added
+            # requests land twice and the same cut takes twice as many.
+            for row in conn.execute(
+                "SELECT id, delivery_json FROM drafting_jobs WHERE request_ref=? AND document_class=? "
+                "AND state='failed' AND revise_of IS NOT NULL ORDER BY created_at DESC",
+                (env["request_ref"], klass),
+            ).fetchall():
+                if uploads_started(row["delivery_json"]):
+                    conn.rollback()
+                    raise SubmitRefused(
+                        f"that request email's revision, job {row['id']}, failed after filing some new versions; "
+                        "it is resumed, never started again",
+                        row["id"],
+                        partly_filed=True,
+                    )
             # A revision of filed documents is not a second draft: a fresh draft of
             # the same class running on the matter does not hold it back (the
             # attorney's change to the delivered sets would otherwise land only in

@@ -305,6 +305,7 @@ def test_define_add_and_cut_are_made_in_the_filed_set_as_a_new_version(world) ->
     assert any("former No. 4 is now No. 2" in ln for ln in changes)
     assert v.proof["mode"] == "revise"
     (line,) = v.proof["set_lines"]  # the reply's one line per set (drafting_lane carries it)
+    assert v.proof["sets_left"] == []
     assert line.startswith(f'"{NAMES[SROG]}" (4 special interrogatories, now 3): Added the definition of "VEHICLE".')
 
 
@@ -421,9 +422,9 @@ def test_two_jobs_files_in_one_thread_are_each_filed_in_their_own_folder(world) 
     assert seat.sent == ["file-0002"]
     assert len(_labels(seat.files["file-0002"][-1])) == 6 and len(seat.files["file-0001"]) == 1
     assert any("left as filed; the email does not ask to change it" in ln for ln in v.proof["changes"])
-    assert len(v.proof["set_lines"]) == 2 and v.proof["set_lines"][0].endswith(
-        ": left as filed; the email does not ask to change it."
-    )
+    assert len(v.proof["set_lines"]) == 1 and v.proof["sets_left"] == [
+        f'"{NAMES[SROG]}": the email does not ask to change it.'
+    ]
 
 
 def test_two_revise_jobs_on_the_same_file_each_revise_the_version_before_them(world) -> None:
@@ -618,7 +619,8 @@ out = [{"unit": "drafting", "kind": "drafting", "outcome": "delivered", "stage":
         "files": [{"name": "A.docx", "size": 10, "role": "draft"}],
         "proof": {"readback": "confirmed", "files": [{"name": "A.docx", "file_id": "f1", "size": 10,
                   "sha256": "a" * 64}], "review": "passed", "review_cents": 0,
-                  "set_lines": ['"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.']}}]
+                  "set_lines": ['"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.'],
+                  "sets_left": ['"B.docx": the email does not ask to change it.']}}]
 (jd / 'verdict.json').write_text(json.dumps(out))
 print(json.dumps(out))
 """
@@ -632,9 +634,10 @@ def test_the_lane_records_a_propounded_revisions_one_line_per_set(tmp_path):
     lane, client = dl._lane(tmp_path, script=SET_LINES_RUNNER)
     dl._submit(lane, client)
     assert lane.tick() == "delivered"
-    assert client.records[-1][2]["delivery"]["set_lines"] == [
-        '"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.'
-    ]
+    delivery = client.records[-1][2]["delivery"]
+    assert delivery["set_lines"] == ['"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.']
+    assert delivery["sets_left"] == ['"B.docx": the email does not ask to change it.']
+    assert "uploads_started" not in delivery
 
 
 def test_a_brokers_propounded_revise_block_loads_and_takes_the_propounded_runner():
@@ -652,3 +655,27 @@ def test_a_brokers_propounded_revise_block_loads_and_takes_the_propounded_runner
     block = {"prior_job_id": unit["prior_job_id"], "folder_id": unit["folder_id"], "units": [unit]}
     revise = drafting_job._revise(block)
     assert runner_for(revise, "discovery_set") is PropoundedSetRun
+
+
+PARTWAY_RUNNER = """
+import json, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+(jd / "data").mkdir(exist_ok=True)
+(jd / "data" / "versions.json").write_text(json.dumps({"draft:0": {"sent": True}, "draft:1": {}}))
+out = [{"unit": "drafting", "kind": "drafting", "outcome": "failed", "stage": "file",
+        "reason": "filing_failed: the second set did not read back", "dollars": 0.4,
+        "document_class": "discovery_set", "files": []}]
+(jd / 'verdict.json').write_text(json.dumps(out))
+print(json.dumps(out))
+"""
+
+
+def test_a_revision_that_failed_after_sending_a_version_says_so_to_the_broker(tmp_path):
+    """FALSIFIER: record the failure without ``uploads_started``, and the broker
+    lets the same email start a second job that makes the same edits again."""
+    import test_drafting_lane as dl
+
+    lane, client = dl._lane(tmp_path, script=PARTWAY_RUNNER)
+    dl._submit(lane, client)
+    assert lane.tick() == "failed"
+    assert client.records[-1][2]["delivery"]["uploads_started"] is True

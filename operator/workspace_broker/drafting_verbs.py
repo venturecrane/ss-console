@@ -149,6 +149,13 @@ def enabled_classes_of(settings: dict[str, Any] | None) -> frozenset[str]:
     return frozenset(c.strip() for c in value if isinstance(c, str) and c.strip() in DOCUMENT_CLASSES)
 
 
+#: A change email that met a revision of the same filed documents still running
+#: (2026-11-26): that run reads only its own email, so this one is SMD's to make
+#: after it, owed, never "underway" (nothing would carry it in).
+REVISION_UNDERWAY = "revision_underway"
+#: The same email's revision failed after filing some new versions: SMD resumes
+#: it; a fresh job would make the same edits twice.
+PARTLY_FILED = "revision_partly_filed"
 #: The closed ``code`` each submit refusal carries beside its ``reason``, so the
 #: overlay answers the firm from a code, never from the reason's prose. The
 #: firm's own causes (the overlay words each one plainly for the requester):
@@ -173,11 +180,13 @@ REFUSAL_OUR_CODES = frozenset(
         "request_graph_unresolved",
         FILED_BY_SMD,
         SEVERAL_DRAFTS,
+        REVISION_UNDERWAY,
+        PARTLY_FILED,
     }
 )
 #: SMD's hand work on filed documents (``drafting_route``): the refusal's sentence,
 #: which names job ids only, rides on the owed item so SMD sees which job.
-REFUSAL_HAND_CODES = frozenset({FILED_BY_SMD, SEVERAL_DRAFTS})
+REFUSAL_HAND_CODES = frozenset({FILED_BY_SMD, SEVERAL_DRAFTS, REVISION_UNDERWAY, PARTLY_FILED})
 #: The same request email already queued a job: not a refusal of the request.
 REFUSAL_DUPLICATE_CODE = "already_queued"
 REFUSAL_CODES = REFUSAL_FIRM_CODES | REFUSAL_OUR_CODES | {REFUSAL_DUPLICATE_CODE}
@@ -460,15 +469,27 @@ class DraftingVerbs:
                 envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from, revise=revise
             )
         except SubmitRefused as exc:
-            return self._ledger_refused(refused, exc)
+            return self._ledger_refused(refused, exc, revising=revise is not None)
         # A job for the same email and class answers an owed item recorded for it.
         smd_owed.close_for_job(self._db._db_path, envelope["request_ref"], klass, envelope["matter"]["number"], job_id)
         out = self._accepted(job_id, envelope, state["remaining"], revise)
         return {**out, **also} if revise is not None else out
 
-    def _ledger_refused(self, refused: Callable[..., dict[str, Any]], exc: SubmitRefused) -> dict[str, Any]:
+    def _ledger_refused(
+        self, refused: Callable[..., dict[str, Any]], exc: SubmitRefused, *, revising: bool = False
+    ) -> dict[str, Any]:
         """The ledger's own refusal, decided in its write transaction."""
         extra: dict[str, Any] = {"job_id": exc.job_id} if exc.job_id else {}
+        if exc.partly_filed:
+            return refused(f"{exc}; nothing new was queued", PARTLY_FILED)
+        if exc.underway and revising:
+            # The twin is a revision (the ledger holds a revision back only for
+            # another revision): this change is SMD's to make after it, owed.
+            return refused(
+                f"a revision of the same filed documents is still running as job {exc.job_id}, so SMD makes this "
+                "email's change after it; nothing new was queued",
+                REVISION_UNDERWAY,
+            )
         if exc.underway:
             code = "underway"
             extra["underway"] = True

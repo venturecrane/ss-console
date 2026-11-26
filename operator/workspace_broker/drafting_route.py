@@ -217,7 +217,8 @@ def _route_set(
     if block is None:
         return RouteRefused(
             f"the draft filed as job {bad} cannot be identified on the matter by file id, so the filed "
-            "responses cannot be revised in place; nothing was queued",
+            f"{'sets' if prior.get('document_class') == 'discovery_set' else 'responses'} cannot be revised in "
+            "place; nothing was queued",
             "prior_unidentified",
         )
     if holders:

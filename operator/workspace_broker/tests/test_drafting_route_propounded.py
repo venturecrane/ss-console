@@ -24,6 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_drafting_filed_by_smd import _failed, _sets, _seat
 from test_drafting_verbs import call
 
+from workspace_broker import smd_owed
+from workspace_broker.drafting_new_ask import asks_new
+
 ASKED = "<asked-sets@mail.firm.example>"
 DEFINE = "<define-term@mail.firm.example>"
 FOLLOW = "<follow-ups@mail.firm.example>"
@@ -97,16 +100,21 @@ def test_each_reply_on_the_filed_sets_reaches_the_propounded_runner_with_every_s
     assert all(u["prior_job_id"] == prior and u["sha256"] == "e" * 64 for u in revise["units"])
 
 
-def test_the_second_email_while_the_cut_is_being_made_holds(tmp_path) -> None:
+def test_the_second_email_while_the_cut_is_being_made_is_owed_by_smd(tmp_path) -> None:
     """An unfinished revision in the thread holds the next email ("Sorry, I meant
-    120-125"): it is carried to the running job, never a second revision of the
-    same files. FALSIFIER: drop the in-flight check and two runs write one file."""
-    broker, _db, _queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    120-125"): never a second revision of the same files, and never "underway"
+    (the running revision reads only its own email, so nothing carries it in).
+    It is work SMD owes, recorded in the same step. FALSIFIER: answer it
+    ``underway`` and the change is dropped with the attorney told it will be made."""
+    broker, db, _queue, writer = _seat(tmp_path, THREADS.__getitem__)
     _delivered(broker, writer)
     first = call(broker, "drafting_job_submit", envelope=_sets(CUT, REPLIES[2][1]))
     assert first["mode"] == "revise"
     again = call(broker, "drafting_job_submit", envelope=_sets(SORRY, "Sorry, I meant 120-125."))
-    assert again["accepted"] is False and again["code"] == "underway"
+    assert again["accepted"] is False and again["code"] == "revision_underway"
+    assert again["smd_told"] is True and "underway" not in again and first["job_id"] in again["reason"]
+    owed = smd_owed.open_items(db)["owed"]
+    assert [(o["request_ref"], o["refusal_code"]) for o in owed] == [(SORRY, "revision_underway")]
 
 
 def test_the_next_reply_revises_the_newest_filing_of_each_set(tmp_path) -> None:
@@ -156,11 +164,87 @@ def test_a_request_in_another_thread_still_drafts(tmp_path) -> None:
     assert out["accepted"] and out["mode"] == "draft"
 
 
-def test_a_cut_to_a_number_is_a_change_never_a_new_party() -> None:
+def test_the_same_email_after_its_revision_failed_partway_is_never_started_again(tmp_path) -> None:
+    """A revision that failed after filing some new versions, asked again by the
+    same email, would add the same requests twice and cut twice as many. It is
+    resumed (SMD's), owed. FALSIFIER: let a failed job free its email, as a draft
+    does, and a second job re-applies the edits to the revised files."""
+    broker, db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    prior = _delivered(broker, writer)
+    job = call(broker, "drafting_job_submit", envelope=_sets(*REPLIES[2]))["job_id"]
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
+    fields = {"cents": 40, "reason": "filing_failed: x", "delivery": {"uploads_started": True}}
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=job, state="failed", fields=fields)
+    again = call(broker, "drafting_job_submit", envelope=_sets(*REPLIES[2]))
+    assert again["accepted"] is False and again["code"] == "revision_partly_filed" and again["smd_told"] is True
+    assert job in again["reason"] and not [p for p in queue.glob("*.json") if job not in p.name and p.stem != prior]
+    assert [o["refusal_code"] for o in smd_owed.open_items(db)["owed"]] == ["revision_partly_filed"]
+
+
+def test_the_same_email_after_its_revision_failed_before_filing_revises_afresh(tmp_path) -> None:
+    broker, _db, _queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    _delivered(broker, writer)
+    job = call(broker, "drafting_job_submit", envelope=_sets(*REPLIES[2]))["job_id"]
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=job, state="failed", fields={"cents": 0, "reason": "x"})
+    again = call(broker, "drafting_job_submit", envelope=_sets(*REPLIES[2]))
+    assert again["accepted"] and again["mode"] == "revise" and again["job_id"] != job
+
+
+def test_unidentified_filed_sets_are_called_sets(tmp_path) -> None:
+    """FALSIFIER: the response wording, and the owed note calls propounded sets "responses"."""
+    broker, _db, _queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    jid = call(broker, "drafting_job_submit", envelope=_sets(ASKED))["job_id"]
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="running", fields={})
+    files = [{"name": n, "size": 3000 + i, "role": "draft"} for i, n in enumerate(NAMES)]
+    fields = {"cents": 300, "folder_id": "folder-sets-0001", "delivery": {"files": files, "cents": 300}}
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="delivered", fields=fields)  # no proof
+    out = call(broker, "drafting_job_submit", envelope=_sets(*REPLIES[0]))
+    assert out["code"] == "prior_unidentified" and "filed sets cannot be revised" in out["reason"]
+
+
+#: Prior request: special interrogatories to a named defendant (invented).
+ACME = [{"request_words": "Draft special interrogatories to defendant Acme Corp.", "delivery_json": None}]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We need sets of discovery to the school district.",
+        "We also need RFPs to the hospital.",
+        "Should we also send RFPs to the hospital?",
+        "Please prepare RFAs to the County that should track the ones to Acme.",
+        "Please prepare RFAs to the City, limit them to 35",
+        "Also prepare new sets to the district, and cut the specials to 35.",
+    ],
+)
+def test_a_new_party_is_a_new_ask_even_beside_a_change(text) -> None:
+    """FALSIFIER (review of #4252): skip the party check in any sentence with a
+    change word ("need", "should", "cut"), and each of these files nothing new."""
+    assert asks_new(text, ACME) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        REPLIES[2][1],
+        "Sorry, I meant 120-125.",
+        "Cut the special interrogatories to 120-125.",
+        "Trim the requests to 35.",
+        "Reduce the interrogatories to the top 20.",
+        "Cut the requests to thirty-five.",
+    ],
+)
+def test_a_cut_to_a_number_is_a_change_never_a_new_party(text) -> None:
     """FALSIFIER: read "to the most important 120125" as a party, and the cut
     drafts every set afresh from the file."""
-    from workspace_broker.drafting_new_ask import asks_new
+    assert asks_new(text, ACME) is False
 
-    prior = [{"request_words": "Draft special interrogatories to Example Corp.", "delivery_json": None}]
-    assert asks_new(REPLIES[2][1], prior) is False
-    assert asks_new("Please also prepare interrogatories to Example LLC.", prior) is True
+
+def test_a_new_party_in_a_response_thread_still_drafts(tmp_path) -> None:
+    """The discovery-response threads use the same reading: a new party there
+    drafts afresh too (``drafting_route`` calls one ``asks_new`` for every class)."""
+    broker, _db, _queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    _delivered(broker, writer)
+    out = call(broker, "drafting_job_submit", envelope=_sets(FOLLOW, "We also need RFPs to the hospital."))
+    assert out["accepted"] and out["mode"] == "draft"

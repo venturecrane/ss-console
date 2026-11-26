@@ -89,7 +89,10 @@ def _submit(mod) -> dict:
     return json.loads(mod.drafting_job_submit(args, session_id=SESSION))
 
 
-@pytest.mark.parametrize("code", ["prior_filed_by_smd", "prior_several_drafts"])
+@pytest.mark.parametrize(
+    "code",
+    ["prior_filed_by_smd", "prior_several_drafts", "revision_underway", "revision_partly_filed"],
+)
 def test_a_hold_for_smds_hand_says_the_operator_owns_the_follow_up(lanes, code) -> None:
     """FALSIFIER: drop ``hand_say`` from ``refusal_say`` and the reply is the
     fresh-draft acknowledgment, a promise of a new draft nobody is making."""
