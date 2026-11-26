@@ -259,6 +259,7 @@ def test_objection_sentences_do_not_end_inside_a_citation() -> None:
     assert "(Evid. Code, § 954)" in got and "(Code Civ. Proc., § 2018.030)." in got
     assert "Note" not in got
 
+
 # ---- the third rehearsal, 2026-11-25: "expressly asserts" after an adopted work product objection ----
 
 EXPRESS = "Responding Party expressly asserts the attorney work product doctrine as to this {item}."
