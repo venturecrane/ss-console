@@ -1,0 +1,48 @@
+#!/bin/bash
+# ops-rule-parity <client> <prompts path>...: is every firm rule in SMD's
+# hand-drafting prompts also in the client's seat rule store, with a document
+# kind, and is every rule the seat owes SMD recorded?
+#   ops-rule-parity ap ~/dev/engagements/operator/customers/ashton-price/drafting/prompts
+#
+# Why (Captain's go, 2026-11-23): a firm rule SMD pasted into a drafting prompt
+# is applied by SMD's hand and by no job on the seat. operator/bin/rule-store-parity.py
+# says why in full and does both halves.
+#
+# The seat half travels like ops-requests' digest: piped through the client's
+# ops workspace (which holds the seat login) to the seat, run there as the
+# hermes user, read-only. It returns ids, document kinds, times and hashes,
+# never rule text. The comparison runs here, against the engagements checkout
+# you name (read it at origin/main: the shared checkout can be stale).
+#
+# Exit: 0 no gap; 1 a gap, each listed; 3 a read failed (RULE PARITY CHECK
+# FAILED on the last line). Never 0 without both reads.
+set -uo pipefail
+usage='usage: ops-rule-parity <client> <prompts dir or file>...'
+[ $# -ge 2 ] || { echo "$usage"; exit 2; }
+client="$1"; shift
+reg="$HOME/.claude/smd-ops-workspaces.json"
+app=$(jq -r --arg a "$client" '.workspaces | to_entries[] | select(.key==$a or (.value.aliases // [] | index($a))) | .value.app' "$reg" 2>/dev/null | head -1)
+[ -n "$app" ] || { echo "no workspace called $client"; exit 3; }
+here="$(cd "$(dirname "$0")" && pwd)"
+check="$here/../../bin/rule-store-parity.py"
+[ -s "$check" ] || { echo "RULE PARITY CHECK FAILED: $check is missing (run this from an ss-console checkout)"; exit 3; }
+OPS_WAKE_ONLY=1 "$here/ops" "$client" >/dev/null || { echo "RULE PARITY CHECK FAILED: could not start or reach $app."; exit 3; }
+
+py=$(base64 < "$check" | tr -d '\n')
+out=$(printf '%s\n' \
+  'set -u; set -a; . "$HOME/.ops-secrets"; set +a' \
+  '[ -n "${OPS_SEAT_APP:-}" ] || { echo "RULE PARITY CHECK FAILED: this workspace names no seat (OPS_SEAT_APP)"; exit 1; }' \
+  "printf %s '$py' | base64 -d | fly ssh console -a \"\$OPS_SEAT_APP\" --pty=false -C \"runuser -u hermes -- python3 - --seat-snapshot\" 2>&1" |
+  fly ssh console -a "$app" -u ops --pty=false -C "bash -s" 2>/dev/null | tr -d '\r')
+snap=$(mktemp)
+trap 'rm -f "$snap"' EXIT
+printf '%s\n' "$out" | grep '^SNAPSHOT ' | tail -1 >"$snap"
+if [ ! -s "$snap" ]; then
+  printf '%s\n' "$out" | grep -v '^Connecting to '
+  echo "RULE PARITY CHECK FAILED: the seat read did not finish. This is NOT a clean result."
+  exit 3
+fi
+python3 -I "$check" --snapshot "$snap" --seat "$client" --prompts "$@"
+code=$?
+[ "$code" = 3 ] && echo "RULE PARITY CHECK FAILED: see the line above."
+exit "$code"
