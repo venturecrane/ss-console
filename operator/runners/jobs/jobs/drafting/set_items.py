@@ -44,7 +44,10 @@ def _label(variant: str) -> re.Pattern[str]:
 #: What may follow a label's number on its own line: closing marks, then text
 #: only after a colon or period.
 _ALONE = re.compile(r"^[\s*_)\]]*[:.]?[\s*_]*$")
-_INLINE = re.compile(r"^[\s*_)\]]*[:.][\s*_]*\S")
+#: A bold label's closing marks ("**SPECIAL INTERROGATORY NO. 4:**") are not
+#: text: before 2026-11-25 the second "*" read as the request's words, so a
+#: set's last request ended at its label and a top-up went between the two.
+_INLINE = re.compile(r"^[\s*_)\]]*[:.][\s*_]*[^\s*_]")
 _HEAD = re.compile(r"^\s*(#{1,6}\s|\*\*[^*]+\*\*\s*$|dated\s*:)", re.I)
 
 
@@ -125,15 +128,16 @@ class Renumbered:
         return self.before != self.after
 
 
-def renumber(doc: str, variant: str) -> Renumbered:
-    """Number the set's labels from its first label, one by one, and its own
-    references to them to match. Idempotent: a set already in order comes back
-    unchanged."""
+def renumber(doc: str, variant: str, start: int | None = None) -> Renumbered:
+    """Number the set's labels from its first label (or from ``start``: a set
+    whose first request was cut keeps the number it began at), one by one, and
+    its own references to them to match. Idempotent: a set already in order
+    comes back unchanged."""
     items = read(doc, variant)
     before = [it.number for it in items]
     if not items:
         return Renumbered(doc, [], [], {}, [])
-    first = before[0]
+    first = before[0] if start is None else start
     after = list(range(first, first + len(items)))
     if before == after:
         return Renumbered(doc, before, after, {}, [])
