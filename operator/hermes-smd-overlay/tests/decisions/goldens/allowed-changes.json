@@ -1,5 +1,5 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges. This change (2026-11-24): the relay holds a reply that states a limit of the Operator's own (limit_named, turn_says.limit_hold), so the new limit_named case and every pair and raise with it hold where the base sent; test_reply's decline test now redrafts to the owner's sentence before it sends, and test_matter_file_reply's outsider redraft says that sentence instead of a decline.",
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges. This change (2026-11-24): the relay holds a reply that states a limit of the Operator's own (limit_named, turn_says.limit_hold), so the new limit_named case and every pair and raise with it hold where the base sent; test_reply's decline test now redrafts to the owner's sentence before it sends, and test_matter_file_reply's outsider redraft says that sentence instead of a decline. This change (2026-11-25): tests/test_reply_waiting_owed.py joins the replayed tests (a reply stamped could_not writes an owed item); its golden is new, and no other decision moves.",
   "existing/test_champion_audience": [],
   "existing/test_champion_wall": [],
   "synthetic/relay.guard": [
@@ -180,5 +180,8 @@
     "tests/test_reply.py::test_a_sent_reply_that_declines_carries_its_code_never_its_words.timeline.0.values.3",
     "tests/test_reply.py::test_a_sent_reply_that_declines_carries_its_code_never_its_words.timeline.0.values.4",
     "tests/test_reply.py::test_a_sent_reply_that_declines_carries_its_code_never_its_words.timeline.0.values.5"
+  ],
+  "existing/test_reply_waiting_owed": [
+    "<file>"
   ]
 }

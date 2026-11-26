@@ -74,6 +74,11 @@ _WHAT = {
     "rule_install_failed": (
         "A rule a firm person was told is recorded did not install at {at} ({detail}). Request email {ref}."
     ),
+    "reply_not_fulfilled": (
+        "A firm person's request was answered at {at} without what they asked ({detail}): the reply told them "
+        "the Operator could not do it, or that it would look into it and reply in the thread, so the answer is "
+        "owed. Request email {ref}."
+    ),
     "rule_needs_person": (
         "A rule a firm person stated was read back twice with no plain yes at {at} ({detail}); they were told it "
         "will be confirmed in the thread once in place. Request email {ref}."
@@ -104,6 +109,10 @@ _TODO = {
         "attorney only with --notify, once the files are on the matter). Close it in "
         "work-health-closed.yaml (job: {owed}) if it is answered another way."
     ),
+    "reply_not_fulfilled": (
+        "Do what they asked and answer in that thread through the SMD note lane, then close it in "
+        "work-health-closed.yaml (job: {owed})."
+    ),
     "help_question": (
         "Answer in that thread through the SMD note lane (it sends from the Operator's mailbox), then close it in "
         "work-health-closed.yaml (job: {owed})."
@@ -130,6 +139,13 @@ def read_open_owed(slug: str, client: Any = None) -> Optional[dict[str, list[dic
     owed = [r for r in page.get("entries") or [] if isinstance(r, dict)]
     jobs = [r for r in page.get("owed_jobs") or [] if isinstance(r, dict)]
     return {"owed": owed, "owed_jobs": jobs}
+
+
+def owed_refs(open_owed: Optional[dict]) -> frozenset[str]:
+    """The request emails of the seat's open owed items: a could-not reply to
+    one is listed as that owed item, not a second time as a could-not line."""
+    rows = (open_owed or {}).get("owed") or []
+    return frozenset(str(r.get("request_ref")) for r in rows if isinstance(r, dict) and r.get("request_ref"))
 
 
 def owed_jobs_kwargs(open_owed: Optional[dict], fn: Optional[Callable[..., Any]] = None) -> dict[str, Any]:
@@ -192,4 +208,4 @@ def smd_owed_items(
     ]
 
 
-__all__ = ["CODE", "owed_jobs_kwargs", "read_open_owed", "smd_owed_items"]
+__all__ = ["CODE", "owed_jobs_kwargs", "owed_refs", "read_open_owed", "smd_owed_items"]

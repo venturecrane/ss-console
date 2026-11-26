@@ -78,6 +78,12 @@ declare namespace Cloudflare {
      * never a client. [vars] in wrangler.toml; defaults to team@smd.services.
      */
     ALERT_TO_EMAIL?: string
+    /**
+     * Where a request card that left a client waiting (the reply told them the
+     * Operator could not do it, or would look into it) ALSO goes, beside
+     * ALERT_TO_EMAIL. Defaults to scott@smd.services. SMD only; never a client.
+     */
+    CAPTAIN_ALERT_EMAIL?: string
     /** Sender for Operator request cards. Matches workers/fleet-alerts. */
     ALERT_FROM_EMAIL?: string
     /**

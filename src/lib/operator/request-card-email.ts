@@ -87,7 +87,25 @@ function askedBy(card: RequestCard): string {
   return card.whoName ?? card.who
 }
 
+/**
+ * A card that says a firm person was left waiting: the reply told them the
+ * Operator could not do what they asked (any could-not code, including the
+ * "Let me look into that. I'll reply in this thread." promise). On 2026-11-25
+ * such a card reached team@ only, among the routine cards, and nobody acted for
+ * 19 hours; this card also goes to the Captain. A reply to SMD's own address is
+ * SMD writing in, not a client waiting.
+ */
+export function cardLeavesClientWaiting(card: RequestCard): boolean {
+  if (card.kind !== 'replied' && card.kind !== 'followup') return false
+  if (!card.couldNot) return false
+  return !/@smd\.services>?$/i.test(card.who.trim())
+}
+
 export function cardSubject(slug: string, card: RequestCard): string {
+  if (cardLeavesClientWaiting(card)) {
+    // Leads with the wait, so it stands apart from the routine cards in a list.
+    return `Client waiting: ${slug}: ${askedBy(card)} asked: ${subjectExcerpt(card.subject)}`
+  }
   return `[SMD Ops] ${slug}: ${cardHeadline(card)}: ${askedBy(card)}: ${subjectExcerpt(card.subject)}`
 }
 
@@ -429,10 +447,21 @@ export interface CardMailEnv {
   RESEND_API_KEY?: string
   ALERT_TO_EMAIL?: string
   ALERT_FROM_EMAIL?: string
+  /** Where a card that leaves a client waiting also goes; defaults to the Captain. */
+  CAPTAIN_ALERT_EMAIL?: string
 }
 
 const DEFAULT_TO = 'team@smd.services'
 const DEFAULT_FROM = 'SMD Services Ops <team@smd.services>'
+const DEFAULT_CAPTAIN = 'scott@smd.services'
+
+/** team@ for every card; the Captain as well when a client is left waiting. */
+export function cardRecipients(mailEnv: CardMailEnv, card: RequestCard): string[] {
+  const team = mailEnv.ALERT_TO_EMAIL || DEFAULT_TO
+  if (!cardLeavesClientWaiting(card)) return [team]
+  const captain = mailEnv.CAPTAIN_ALERT_EMAIL || DEFAULT_CAPTAIN
+  return captain === team ? [team] : [team, captain]
+}
 
 /**
  * Send one card. `Idempotency-Key` is `<slug>:<card_key>`, so two racing
@@ -456,7 +485,7 @@ export async function sendCardEmail(
       },
       body: JSON.stringify({
         from: mailEnv.ALERT_FROM_EMAIL || DEFAULT_FROM,
-        to: [mailEnv.ALERT_TO_EMAIL || DEFAULT_TO],
+        to: cardRecipients(mailEnv, card),
         subject: cardSubject(slug, card),
         text: cardText(slug, card),
       }),
