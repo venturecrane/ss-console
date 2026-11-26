@@ -262,6 +262,29 @@ def _tidy(block: str) -> str:
     return re.sub(r"\s+([.;,])", r"\1", " ".join(block.split()))
 
 
+def _firm_whole(own: str, book: Any, item: str) -> str:
+    """``own`` (the draft's adopted objection words) with each sentence the
+    firm's book states in full put back whole: a sentence whose words a book
+    entry contains, and the entry says more, becomes that entry. 2026-11-26,
+    rule-fix-7: 10 rows wrote the attorney-client objection's first sentence
+    only; the firm's entry carries its second."""
+    out: list[str] = []
+    for s in _sentences(own):
+        w = _words(s)
+        hits = []
+        if len(w.split()) >= 8:
+            hits = [k for k in book.entries if f" {w} " in f" {_words(book.text(k, item=item))} "]
+        said = s
+        if hits:
+            key, _how = choose(hits, s, book)
+            whole = book.text(key, item=item)
+            if len(_words(whole)) > len(w):
+                said = whole
+        if said not in out and not any(f" {_words(said)} " in f" {_words(o)} " for o in out):
+            out.append(said)
+    return " ".join(out)
+
+
 def _one(
     body: str, ground: str, book: Any, item: str, allowed: set[str], adopt_own: bool, whole: str
 ) -> tuple[str, Settled]:
@@ -281,7 +304,7 @@ def _one(
         return "", Settled("", stated[0] if stated else "", "", ground, ALREADY, tuple(keys))
     if not keys:
         if own:
-            return own, Settled("", "", "", ground, OWN)
+            return _firm_whole(own, book, item), Settled("", "", "", ground, OWN)
         why = NO_SENTENCE if adopt_own and not piped else PHRASE_MISSING
         return body, Settled("", "", why, ground)
     among = tuple(keys) if len(keys) > 1 else ()
@@ -332,6 +355,7 @@ def settle(
     whole = " " + " ".join(_words(_unmarked(b)) for b in blocks) + " "
     out: list[str] = []
     done: list[Settled] = []
+    pending: list[tuple[int, str]] = []  # (block the marker sat in, companion sentence)
     for b in blocks:
         cuts = _bodies(b)
         if not cuts:
@@ -343,16 +367,46 @@ def settle(
             done.append(Settled(number, how.key, how.left, how.ground, how.how, how.among))
             if how.left:
                 continue
-            if adopt_own:
-                text = " ".join(x for x in (text, *_companions(how, text, book, item, whole, set_type)) if x)
             new += [b[at:s], text]
             at = e
             whole += f"{_words(text)} "
+            if adopt_own:
+                for c in _companions(how, text, book, item, whole, set_type):
+                    pending.append((len(out), c))
+                    whole += f"{_words(c)} "
         new.append(b[at:])
         joined = _tidy("".join(new))
         if joined.strip(" .;,"):
             out.append(joined if joined != _tidy(b) else b)
+    for at_block, c in pending:
+        _place(out, at_block, c)
     return out, done
+
+
+def _place(out: list[str], at_block: int, said: str) -> None:
+    """Put a companion sentence right after the last sentence of the response
+    that states its ground, as the firm's finals order them; else at the end of
+    the paragraph its marker sat in. 2026-11-26, rule-fix-8: the work product
+    assertion came before the work product objection in six responses."""
+    groups = ground_groups(said)
+    spot = None
+    for i, para in enumerate(out):
+        cursor = 0
+        for sentence in _sentences(para):
+            found = para.find(sentence, cursor)
+            if found < 0:
+                continue
+            cursor = found + len(sentence)
+            if not EXPRESSLY.search(sentence) and ground_groups(sentence) & groups:
+                spot = (i, cursor)
+    if spot is None:
+        i = min(at_block, len(out) - 1)
+        if i < 0:
+            out.append(said)
+            return
+        spot = (i, len(out[i]))
+    i, cut = spot
+    out[i] = f"{out[i][:cut].rstrip()} {said} {out[i][cut:].lstrip()}".strip()
 
 
 __all__ = [

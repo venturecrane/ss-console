@@ -290,6 +290,30 @@ def test_an_express_assertion_serves_only_the_sets_its_entry_names() -> None:
     assert "expressly" not in srog[0]
 
 
+def test_adopted_own_words_the_firm_states_in_full_are_put_back_whole() -> None:
+    first = "Responding Party objects to this {item} to the extent it seeks information protected by the marital communications privilege."
+    second = "The privilege protects confidential communications between spouses during the marriage."
+    row = {"key": "obj_090", "kind": "objection", "text": f"{first} {second}", "names": [], "sets": [], "source": ""}
+    book = book_mod.parse(json.dumps([*ROWS, row]))
+    marker = "{{ATTORNEY: CANDIDATE OBJECTION: " + _fill(first) + " Note: confirm with the client.}}"
+    out, _done = M.settle("3", [marker], book, RFP, set(), adopt_own=True)
+    assert out == [f"{_fill(first)} {second}"]
+    short = "{{ATTORNEY: CANDIDATE OBJECTION: Responding Party objects to this request as vague.}}"
+    kept, _done = M.settle("3", [short], book, RFP, set(), adopt_own=True)
+    assert kept == ["Responding Party objects to this request as vague."]  # under 8 words: as written
+
+
+def test_an_express_assertion_follows_the_objection_it_asserts() -> None:
+    row = {"key": "stmt_041", "kind": "statement", "text": EXPRESS, "names": [], "sets": [], "source": ""}
+    express = book_mod.parse(json.dumps([*ROWS, row]))
+    blocks = [_marker("attorney-client and work product"), f"{_fill(WP_SHORT)} Responding Party will produce the file."]
+    out, _done = M.settle("3", blocks, express, RFP, set(), adopt_own=True)
+    said = _fill(EXPRESS)
+    para = next(p for p in out if "will produce" in p)
+    assert sum(p.count("expressly") for p in out) == 1
+    assert para.index(_fill(WP_SHORT)) < para.index(said) < para.index("will produce")
+
+
 def test_a_book_with_no_express_assertion_adds_nothing():
     out, _done = M.settle("3", [_marker("work product")], BOOK, RFP, set(), adopt_own=True)
     assert out == [_fill(WP_SHORT)]
