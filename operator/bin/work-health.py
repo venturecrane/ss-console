@@ -627,7 +627,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # of it once per item (2026-11-25). Sent before the state is written, so a
     # reminder is recorded only once it went.
     test_seats = footnoted_seats(seats)
-    reminded, remind_error = waiting.run(items, previous, now, test_seats, args.dry_run, send)
+    reminded, _remind_error = waiting.run(items, previous, now, test_seats, args.dry_run, send)
     if args.state_out:
         state = {**plan.state, waiting.REMINDED: reminded}
         Path(args.state_out).write_text(json.dumps(state, indent=1, sort_keys=True), encoding="utf-8")
@@ -640,7 +640,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # A test seat's problems stay on the triage agent's list and are not emailed
     # (workers/fleet-alerts/src/mail-policy.ts is the same rule for alerts).
     pages = [it for it in items if it.page and it.seat not in test_seats]
-    page_error = (None if args.dry_run else send_pages(pages, now)) or remind_error
+    page_error = None if args.dry_run else send_pages(pages, now)
     if pages:
         print(f"pages: {len(pages)} email(s){' (dry run)' if args.dry_run else ''}")
     if not plan.send or args.pages_only:

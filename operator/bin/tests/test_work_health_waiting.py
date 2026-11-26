@@ -8,12 +8,21 @@ from __future__ import annotations
 import json
 from datetime import timedelta
 
+import pytest
+
 from bin.lib import work_health_owed as owed_wh
 from bin.lib import work_health_sources as src
 from bin.lib import work_health_waiting as waiting
 from bin.tests.test_work_health import CFG, NOW, SEAT, VID, _inbound, _offline, _row, cli
 
-CAPTAIN = "scott@smd.services"
+CAPTAIN = waiting.DEFAULT_CAPTAIN
+
+
+@pytest.fixture(autouse=True)
+def _start_before_now(monkeypatch):
+    """The invented clock predates the reminder's real start; move the start
+    back so these tests see items as new. The start's own test resets it."""
+    monkeypatch.setattr(waiting, "START", NOW - timedelta(days=30))
 
 
 def _waiting_rows(minutes_after_reply: int) -> list[dict]:
@@ -75,8 +84,43 @@ def test_a_failed_send_is_not_recorded_and_is_tried_next_run(monkeypatch, tmp_pa
     rows = _offline(monkeypatch, tmp_path, _waiting_rows(130))
     monkeypatch.setattr(cli, "send", lambda subject, text, key, to=None: "resend HTTP 500" if to else None)
     out = tmp_path / "s.json"
-    assert _run(rows, state_out=out) == cli.EXIT_SEND_FAILED
+    # A reminder that failed to send never fails the run (it hid the hourly
+    # report, 2026-11-26); it is not recorded, so the next run tries again.
+    assert _run(rows, state_out=out) == 0
     assert json.loads(out.read_text())[waiting.REMINDED] == {}
+
+
+def test_a_repeat_the_sender_refuses_is_recorded_as_sent(monkeypatch, tmp_path):
+    """FALSIFIER: treat 409 as a failure and the reminder is retried forever."""
+    rows = _offline(monkeypatch, tmp_path, _waiting_rows(130))
+    monkeypatch.setattr(cli, "send", lambda subject, text, key, to=None: "resend HTTP 409" if to else None)
+    out = tmp_path / "s.json"
+    assert _run(rows, state_out=out) == 0
+    assert len(json.loads(out.read_text())[waiting.REMINDED]) == 1
+
+
+def test_an_item_from_before_the_reminder_started_is_never_reminded(monkeypatch, tmp_path):
+    """FALSIFIER: drop the START condition and the backlog is mailed (2026-11-26)."""
+    monkeypatch.setattr(waiting, "START", NOW)
+    rows = _offline(monkeypatch, tmp_path, _waiting_rows(130))
+    sent = _capture(monkeypatch)
+    assert _run(rows) == 0
+    assert [s for s in sent if s["key"].startswith("work-health-waiting:")] == []
+
+
+def test_a_run_sends_at_most_its_cap_and_stops_at_a_rate_limit():
+    from bin.lib.work_health import Item
+
+    items = [
+        Item(seat=SEAT, kind="could_not", key=f"k{i}", onset=NOW - timedelta(hours=3), what="w", todo="t", rank=1)
+        for i in range(5)
+    ]
+    calls: list[str] = []
+    reminded, _ = waiting.remind(items, {}, NOW, frozenset(), lambda s, t, k: calls.append(k))
+    assert len(calls) == waiting.PER_RUN and len(reminded) == waiting.PER_RUN
+    calls.clear()
+    reminded, err = waiting.remind(items, {}, NOW, frozenset(), lambda s, t, k: calls.append(k) or "resend HTTP 429")
+    assert len(calls) == 1 and reminded == {} and "429" in err
 
 
 def test_a_dry_run_sends_nothing(monkeypatch, tmp_path):
