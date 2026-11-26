@@ -117,3 +117,19 @@ closed:
     reason: >-
       The same email and rule as the row above (bab0105d); one rule, recorded
       once and confirmed in the thread by an SMD note.
+  - seat: ashton-price
+    job: 01M884ATMK58XDQMF57BWRFE5C
+    closed: '2026-11-26'
+    closed_by: SMD request session
+    reason: >-
+      A discovery-response ask refused as prior_filed_by_smd; answered by hand
+      in the same thread (job HAND-200618C and an SMD note), sent copies
+      confirmed in the mailbox's sent items.
+  - seat: ashton-price
+    job: 01M8859Y5Z6EY19D7QW78BF698
+    closed: '2026-11-26'
+    closed_by: SMD request session
+    reason: >-
+      The second discovery-response ask in the same thread, refused as
+      prior_filed_by_smd; answered by hand (job HAND-200618D), sent copy
+      confirmed in the mailbox's sent items.
