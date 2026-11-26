@@ -41,6 +41,13 @@ AFTER = timedelta(hours=2)
 HORIZON = timedelta(hours=72)
 #: The state file's key for the reminders sent.
 REMINDED = "reminded"
+#: Items older than this are never reminded: the reminder shipped at this time
+#: (PR #4247), and its first runs mailed the 72-hour backlog of items SMD had
+#: already answered by hand (2026-11-26). Only replies after it are reminded.
+START = datetime(2026, 11, 26, 20, 9, 42, tzinfo=timezone.utc)
+#: At most this many reminders per run, so a burst never trips the sender's
+#: rate limit; the rest go on the next run.
+PER_RUN = 3
 #: Where the reminder goes when CAPTAIN_ALERT_EMAIL is not set.
 DEFAULT_CAPTAIN = "scott@smd.services"
 
@@ -68,6 +75,7 @@ def due(items: list[Item], reminded: dict[str, str], now: datetime, test_seats: 
         for it in items
         if it.kind in WAITING_KINDS
         and it.seat not in test_seats
+        and it.onset >= START
         and AFTER <= now - it.onset <= HORIZON
         and state_key(it.key) not in reminded
     ]
@@ -104,11 +112,15 @@ def remind(
     added, and the first send error."""
     out = dict(reminded)
     first_error = None
-    for it in due(items, reminded, now, test_seats):
+    for it in due(items, reminded, now, test_seats)[:PER_RUN]:
         key = state_key(it.key)
         error = send(subject(it, now), text(it, now), f"work-health-waiting:{key}")
-        if error:
+        if error and "409" not in error:
+            # A 409 is the sender refusing a repeat of the same idempotency key:
+            # that reminder already went, so it is recorded as sent below.
             first_error = first_error or error
+            if "429" in error:
+                break
             continue
         out[key] = now.astimezone(timezone.utc).isoformat()
     return out, first_error
@@ -125,7 +137,8 @@ def run(
     """The run's reminders: carry the previous run's, and (unless ``dry_run``)
     send each due one to the Captain through ``send(subject, text, run_key,
     to=...)``, the work-health sender. Returns the reminders to save and the
-    first send error, which fails the run as a page's would."""
+    first send error. The error is logged and never fails the run: a reminder
+    not sent is tried again next run, and failing the run hid the hourly report."""
     reminded = carried(previous, now)
     if dry_run:
         print(f"waiting reminders due: {len(due(items, reminded, now, test_seats))} (dry run)")
@@ -137,4 +150,4 @@ def run(
     return reminded, error
 
 
-__all__ = ["AFTER", "DEFAULT_CAPTAIN", "HORIZON", "REMINDED", "WAITING_KINDS", "carried", "due", "remind", "run"]
+__all__ = ["AFTER", "DEFAULT_CAPTAIN", "HORIZON", "PER_RUN", "START", "REMINDED", "WAITING_KINDS", "carried", "due", "remind", "run"]
