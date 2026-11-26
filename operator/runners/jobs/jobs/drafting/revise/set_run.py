@@ -132,19 +132,23 @@ class ReviseSetRun(ReviseRun):
                 + (f" ({len(cannot)} rule(s) state what to do without the words)" if cannot else "")
             )
 
-    def _base_unit(self, k: int) -> None:
+    def _fetch(self, k: int) -> str:
+        """Unit ``k``'s file as it is now, to ``filed.docx``: the version pinned."""
         u = self.units[k]
-        d = self._udir(k)
         for _ in range(2):  # the version read on both sides of the download is the one pinned
             before = self._version(u["file_id"])
             url = matter_pull.mint_one(self.seat, self.job.file_to_id, u["file_id"]).get("url")
             if not url:
                 raise DraftingFailed(f"stage_unfinished: revise-base: no download could be minted for {u['name']}")
-            matter_pull.fetch_one(self.seat, url, d / "filed.docx", None)
+            matter_pull.fetch_one(self.seat, url, self._udir(k) / "filed.docx", None)
             if before and before == self._version(u["file_id"]):
-                break
-        else:
-            raise DraftingFailed(f"stage_unfinished: revise-base: {u['name']} kept changing while it was read")
+                return before
+        raise DraftingFailed(f"stage_unfinished: revise-base: {u['name']} kept changing while it was read")
+
+    def _base_unit(self, k: int) -> None:
+        u = self.units[k]
+        d = self._udir(k)
+        before = self._fetch(k)
         try:
             md, doc = su.read_base(d / "filed.docx", d, self._hint(k))
         except su.BaseUnproven as exc:

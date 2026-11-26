@@ -91,6 +91,10 @@ ENDINGS: dict[str, Ending] = {
     "revise_unchecked": _f(),
     "revise_layout_lost": _f(),
     "revise_unchanged": _held(),
+    # A propounded set's revision SMD finishes: held, the firm asked nothing (no client loops).
+    "revise_scope_unclear": Ending("smd", ("held",), False, "none"),
+    "revise_declaration": Ending("smd", ("held",), False, "none"),
+    "revise_set_unsupported": Ending("smd", ("held",), False, "none"),
     "firm_base_unfit": _f(),
     "firm_base_lost": _f(),
     "party_unknown": _f(),

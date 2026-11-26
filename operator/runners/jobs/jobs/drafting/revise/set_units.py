@@ -143,13 +143,18 @@ def revise_one(
     if outside or not set(numbers) <= allowed:
         raise Refused("revise_layout_lost", f"words outside the responses the rules name changed ({numbers})")
     if fmt is not None:
-        paper = str(lay.read(filed)["paper"])
-        before = {finding_kind(f) for f in format_check.check(filed, cls, fmt, paper=paper).fails}
-        new_fails = [f for f in format_check.check(out, cls, fmt, paper=paper).fails if finding_kind(f) not in before]
+        new_fails = new_findings(filed, out, cls, fmt)
         if new_fails:
             raise Refused("format_check", "the revision brings in: " + "; ".join(new_fails)[:300])
     rec.update(changed=numbers, out=str(out), touched=len(ed.touched))
     return rec
+
+
+def new_findings(filed: Path, out: Path, cls: str, fmt: dict[str, Any]) -> list[str]:
+    """The format findings ``out`` has of a kind ``filed`` did not (``finding_kind``)."""
+    paper = str(lay.read(filed)["paper"])
+    before = {finding_kind(f) for f in format_check.check(filed, cls, fmt, paper=paper).fails}
+    return [f for f in format_check.check(out, cls, fmt, paper=paper).fails if finding_kind(f) not in before]
 
 
 _COUNT = re.compile(r"\d+(?:\.\d+)?")

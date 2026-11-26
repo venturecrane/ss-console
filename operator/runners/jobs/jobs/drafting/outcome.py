@@ -62,6 +62,13 @@ REASON_CODES = (
     "revise_layout_lost",
     # Revise mode (revise/run.py): nothing in the brief would change: held, no version filed, the attorney told why.
     "revise_unchanged",
+    # A propounded set's revision (revise/propounded_run.py), each held for SMD, nothing filed and the
+    # attorney asked nothing (no client loops): the sets or party the email names match no filed set, or a
+    # number code cannot read; the count crosses 35 or the declaration's count is not there exactly once;
+    # the email asks what is none of define, add or cut (a question, a rewording).
+    "revise_scope_unclear",
+    "revise_declaration",
+    "revise_set_unsupported",
     # A brief in the firm's own file (brief_base.py): the draft has what the base cannot place.
     "firm_base_unfit",
     # A brief in the firm's own file (firmbase): more than its slots differ: failed, nothing filed.
