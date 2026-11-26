@@ -550,7 +550,7 @@ def _is_smd_address(value: object) -> bool:
 
 
 def could_not_items(
-    seat: str, rows: list[dict], cfg: Config, now: datetime, closed: Optional[set[tuple[str, str]]] = None
+    seat: str, rows: list[dict], cfg: Config, now: datetime, closed: Optional[set] = None, owed: frozenset = frozenset()
 ) -> list[Item]:
     """A firm person's request whose reply told them the Operator could not do
     it (REPLY_SENT stamped ``could_not``, overlay ``shared/reply_could_not``):
@@ -559,7 +559,11 @@ def could_not_items(
     DOES NOT CLEAR IT (2026-11-19): the could-not reply is itself a reply, and
     the seat's next answer to anyone says nothing about this person. Work SMD
     owes after an our-side stop is NOT this line: the broker records it, and
-    ``work_health_owed.smd_owed_items`` lists it (owner's ruling, 2026-11-19)."""
+    ``work_health_owed.smd_owed_items`` lists it (owner's ruling, 2026-11-19).
+    Since 2026-11-25 the reply plugin records such a reply as an owed item
+    (``reply_not_fulfilled``); a request in ``owed`` (the request emails of
+    the seat's open owed items) is listed there, once, and not here. This line
+    stays the fallback for a reply whose owed record did not land."""
     first_seen: dict[str, datetime] = {}
     declined: dict[str, tuple[datetime, str]] = {}
     for ts, row in stamped(rows):
@@ -578,7 +582,7 @@ def could_not_items(
     out: list[Item] = []
     for vid, (said_at, code) in declined.items():
         received = first_seen.get(vid)
-        if received is None or received < horizon:
+        if received is None or received < horizon or vid in owed:
             continue
         card = card_id(vid)
         if closed and (seat, card) in closed:

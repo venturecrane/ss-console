@@ -32,7 +32,9 @@ change by hand; the ended job is kept as ``{"job_id": ...}`` in
 ``envelope_json``, never shown to the firm, and delivering that job closes the
 item), ``rule_install_failed`` (the broker's own, from ``own_rule_verbs``),
 and ``help_question`` / ``rule_not_recorded`` (the agent's, through
-``smd_owed_record``, keyed on the email that asked).
+``smd_owed_record``, keyed on the email that asked), and
+``reply_not_fulfilled`` (the reply plugin's, through ``smd_owed_record``: a
+reply stamped ``could_not``, recorded once per email, :func:`owe_not_fulfilled`).
 """
 
 from __future__ import annotations
@@ -67,8 +69,15 @@ KIND_NOT_RECORDED = "rule_not_recorded"
 KIND_INSTALL = "rule_install_failed"
 #: A rule read back twice with no plain yes, handed to SMD (the broker's own).
 KIND_NEEDS_PERSON = "rule_needs_person"
+#: A reply went out that did not give the person what they asked: it told them
+#: the Operator could not do it, or "Let me look into that. I'll reply in this
+#: thread." (the reply plugin's ``could_not`` stamp). Recorded by the reply
+#: plugin in the step the reply is audited, unless an item is already open for
+#: the same email (2026-11-25: a looking-into reply wrote no item and sat 19
+#: hours). ``refusal_code`` carries the could-not code.
+KIND_NOT_FULFILLED = "reply_not_fulfilled"
 #: The kinds the agent may record (the others are the broker's own).
-AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE, KIND_NOT_RECORDED})
+AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE, KIND_NOT_RECORDED, KIND_NOT_FULFILLED})
 _LANE = {
     KIND_DRAFTING: "drafting",
     KIND_ADDITION: "drafting",
@@ -77,9 +86,13 @@ _LANE = {
     KIND_INSTALL: "operator",
     KIND_NEEDS_PERSON: "operator",
     KIND_NOT_RECORDED: "operator",
+    KIND_NOT_FULFILLED: "operator",
 }
+#: A could-not code as the reply plugin stamps it (``shared/reply_could_not.CODES``).
+_CODE = re.compile(r"^[a-z_]{1,40}$")
 DETAIL_MAX = 300
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
+_TRANSPORT_ID = re.compile(r"^\S{3,600}$")
 
 CREATE_SQL = (
     "CREATE TABLE IF NOT EXISTS smd_owed ("
@@ -389,12 +402,49 @@ def record_verb(
     if kind not in AGENT_KINDS:
         raise ValueError(f"kind must be one of {sorted(AGENT_KINDS)}")
     ref = str(request.get("request_ref") or "")
-    if not _MESSAGE_ID.match(ref):
-        raise ValueError("request_ref must be the asking email's message id")
     ledger = broker.ledger
     append = ledger.append if ledger is not None else None
+    if kind == KIND_NOT_FULFILLED:
+        # The reply row's ``in_reply_to``: the transport's own id of the email
+        # answered, which on some transports is not an RFC 5322 id.
+        if not _TRANSPORT_ID.match(ref):
+            raise ValueError("request_ref must be the answered email's id")
+        return {"ok": True, "smd_told": owe_not_fulfilled(broker.audit_db_path, append, ref, request.get("code"))}
+    if not _MESSAGE_ID.match(ref):
+        raise ValueError("request_ref must be the asking email's message id")
     told = record(broker.audit_db_path, append, kind, ref, str(request.get("detail") or ""))
     return {"ok": True, "smd_told": told}
+
+
+def owe_not_fulfilled(
+    db_path: str | None, append: Callable[[dict[str, Any]], Any] | None, request_ref: str, code: Any
+) -> bool:
+    """Record a reply that left the person waiting, once per email: when any
+    item is already open for the same email (a help question, a rule, an
+    earlier could-not reply) the person is already owed, and True is answered
+    without a second row. Never raises."""
+    found = str(code or "")
+    if not _CODE.match(found):
+        found = "other"
+    if db_path and _open_for(db_path, request_ref):
+        return True
+    detail = f"the reply did not give them what they asked ({found})"
+    return record(db_path, append, KIND_NOT_FULFILLED, request_ref, detail, refusal_code=found)
+
+
+def _open_for(db_path: str, request_ref: str) -> bool:
+    try:
+        conn = _connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM smd_owed WHERE request_ref=? AND closed_at IS NULL LIMIT 1", (request_ref,)
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        logger.exception("smd_owed: the open items for a request could not be read")
+        return False  # recorded again rather than lost
+    return row is not None
 
 
 def open_verb(

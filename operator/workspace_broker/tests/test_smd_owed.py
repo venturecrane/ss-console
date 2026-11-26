@@ -118,6 +118,56 @@ def test_the_agent_records_a_help_question_keyed_on_its_email(owed_seat) -> None
     }
 
 
+def test_a_reply_that_left_the_person_waiting_is_owed_once_per_email(owed_seat) -> None:
+    """2026-11-25: a "Let me look into that" reply wrote no owed item and sat 19
+    hours. FALSIFIER: drop the reply_not_fulfilled branch and the verb refuses
+    the kind (no row); drop the open-item check and the second reply to the
+    same email writes a second row."""
+    broker, db, _yaml, _q = owed_seat
+    out = call(
+        broker,
+        "smd_owed_record",
+        pid=1,
+        uid=AGENT_UID,
+        kind="reply_not_fulfilled",
+        request_ref=REQUEST,
+        code="looking_into",
+    )
+    assert out == {"ok": True, "smd_told": True}
+    (row,) = _open(db)
+    assert (row["kind"], row["request_ref"], row["refusal_code"]) == ("reply_not_fulfilled", REQUEST, "looking_into")
+    (alert,) = _alerts(db)
+    assert alert["kind"] == "reply_not_fulfilled" and alert["job_id"] == row["id"]
+    again = call(
+        broker,
+        "smd_owed_record",
+        pid=1,
+        uid=AGENT_UID,
+        kind="reply_not_fulfilled",
+        request_ref=REQUEST,
+        code="cannot_find",
+    )
+    assert again["smd_told"] is True and len(_open(db)) == 1 and len(_alerts(db)) == 1
+
+
+def test_a_reply_not_fulfilled_after_an_open_help_question_adds_nothing(owed_seat) -> None:
+    broker, db, _yaml, _q = owed_seat
+    call(broker, "smd_owed_record", pid=1, uid=AGENT_UID, kind="help_question", request_ref=ASKING)
+    out = call(
+        broker,
+        "smd_owed_record",
+        pid=1,
+        uid=AGENT_UID,
+        kind="reply_not_fulfilled",
+        request_ref=ASKING,
+        code="Bad Code!",
+    )
+    assert out["smd_told"] is True and [r["kind"] for r in _open(db)] == ["help_question"]
+    # A code outside the stamp's shape is kept as "other", never as given.
+    assert smd_owed.owe_not_fulfilled(db, broker.ledger.append, REQUEST, "Bad Code!")
+    assert {r["refusal_code"] for r in _open(db) if r["request_ref"] == REQUEST} == {"other"}
+
+
 def test_a_rule_not_recorded_is_the_agents_and_an_install_failure_is_the_brokers(owed_seat) -> None:
     """2026-11-20: the person is told "is not recorded yet. I'm looking into
     it" only once this row exists; an install that fails after "recorded" is

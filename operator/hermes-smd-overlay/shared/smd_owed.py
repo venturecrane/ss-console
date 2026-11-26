@@ -29,6 +29,8 @@ KIND_HELP = "help_question"
 KIND_RULE = "rule_stated"  # rules_by_hand, the stopgap of 2026-11-20
 #: A confirmed own rule the seat could not record (rule confirmation by reply).
 KIND_NOT_RECORDED = "rule_not_recorded"
+#: A reply that did not give the person what they asked (stamped ``could_not``).
+KIND_NOT_FULFILLED = "reply_not_fulfilled"
 
 
 def _request(payload: dict[str, Any]) -> dict[str, Any]:
@@ -59,6 +61,45 @@ def record(kind: str, request_ref: Any, detail: str = "", send: Any = None) -> b
     return told
 
 
+def owe_reply(action_type: str, metadata: Any, send: Any = None) -> bool:
+    """A sent reply (``action_type`` ``REPLY_SENT``; any other row owes nothing) that told a firm person the Operator could not do what they
+    asked, or "Let me look into that. I'll reply in this thread."
+    (``reply_could_not``'s ``could_not`` stamp on the REPLY_SENT row): SMD owes
+    the answer, so the broker records it as owed work in the same step, once per
+    email (2026-11-25: such a reply wrote no owed item, reached team@ only as a
+    request card, and sat 19 hours). The hourly triage lists it, and reminds the
+    Captain at two hours, until SMD closes it. True only when the broker said it
+    is recorded; False for a reply that owes nothing. Never raises."""
+    if action_type != "REPLY_SENT" or not isinstance(metadata, dict):
+        return False
+    code, ref = metadata.get("could_not"), str(metadata.get("in_reply_to") or "").strip()
+    if not isinstance(code, str) or not code or not ref:
+        return False
+    try:
+        from shared.heartbeat import _is_smd_address
+
+        if _is_smd_address(metadata.get("recipient")):
+            return False  # SMD writing in to the seat is not a firm person waiting
+        answer = (send or _request)(
+            {
+                "action": VERB,
+                "kind": KIND_NOT_FULFILLED,
+                "request_ref": ref,
+                "code": code,
+                "detail": f"reply stamped {code}",
+            }
+        )
+    except Exception:  # noqa: BLE001 - the reply is already out; a failed record is logged, never raised
+        logger.warning(
+            "smd_owed: the waiting reply to %s was not recorded", ref[-16:], exc_info=True
+        )
+        return False
+    told = isinstance(answer, dict) and answer.get("ok") is True and answer.get("smd_told") is True
+    if not told:
+        logger.warning("smd_owed: the broker did not record the waiting reply to %s", ref[-16:])
+    return told
+
+
 def open_page(send: Any = None) -> dict[str, Any]:
     """The seat's ``smd_owed`` runtime read: every open owed item and every
     delivered drafting job with a served set still owed, with no lookback
@@ -81,4 +122,13 @@ def open_page(send: Any = None) -> dict[str, Any]:
     }
 
 
-__all__ = ["KIND_HELP", "KIND_NOT_RECORDED", "KIND_RULE", "VERB", "open_page", "record"]
+__all__ = [
+    "KIND_HELP",
+    "KIND_NOT_FULFILLED",
+    "KIND_NOT_RECORDED",
+    "KIND_RULE",
+    "VERB",
+    "open_page",
+    "owe_reply",
+    "record",
+]
