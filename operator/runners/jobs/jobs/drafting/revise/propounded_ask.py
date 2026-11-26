@@ -11,11 +11,13 @@ each request once and leaves enough that no kept request cites.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from .. import set_items
 from ..verify.items import parse_json
-from .propounded import Held, Op, Refused, Unit, check_numbers, check_plan, cut, definition_ok, scope
+from .set_units import named_set_types
+from .propounded import FOLLOW_UP, Held, Op, Refused, Unit, check_numbers, check_plan, cut, definition_ok, scope
 
 STAGE_PLAN, STAGE_DEFINE, STAGE_ADD, STAGE_CUT = "revise-plan", "revise-define", "revise-add", "revise-cut"
 MAX_TOKENS = 4_000
@@ -32,7 +34,8 @@ Return JSON only:
           "quote": ""}],
  "other": [{"quote": ""}]}
 
-- "define": add a defined term. "term": the term exactly as the email writes it.
+- "define": add a defined term. "term": the term in capitals, spelled correctly, keeping a plural "(S)" as the
+  email writes it.
 - "add": write more requests. "number_quote": the email's words with how many ("five more", "add 10"), or "".
 - "cut": remove requests. "number_quote": the email's words with the number, INCLUDING "to" or "by"
   ("down to 120-125", "cut by 10"). Never a number the email does not say.
@@ -84,9 +87,23 @@ def settle_plan(email: str, sets: list[Unit], ask: Ask) -> tuple[list[Op], list[
             "revise_set_unsupported",
             f"the email asks what is not adding a definition, adding requests or removing them ({said})",
         )
-    scoped = [scope(op, sets, email) for op in ops]
+    scoped: list[list[int]] = []
+    for op in ops:
+        scoped.append(_inherited(op, ops[: len(scoped)], scoped) or scope(op, sets, email))
     check_numbers(ops, scoped, sets)
     return ops, scoped
+
+
+def _inherited(op: Op, before: list[Op], scoped: list[list[int]]) -> list[int] | None:
+    """A cut or an add whose words name no set and no party (a second email's
+    bare "120-125") takes the sets of the last ask of its kind before it that
+    named its sets: the asks are read per job, not per email."""
+    if op.op == "define" or named_set_types(op.quote) or op.party_quote:
+        return None
+    for prior, ks in zip(reversed(before), reversed(scoped)):
+        if prior.op == op.op and (named_set_types(prior.quote) or prior.party_quote):
+            return list(ks)
+    return None
 
 
 DEFINE_SYSTEM = """You write one definition for a set of discovery requests the attorney's firm is serving.
@@ -95,6 +112,11 @@ double quotes, in the plain style of a California discovery definition. Nothing 
 ADD_SYSTEM = """You write new requests for a set of discovery the attorney's firm is serving, in the set's own style,
 using its defined terms in capitals. Each request is one paragraph, with no label and no number, and repeats no
 request the set already has. Return JSON only: {"items": ["...", ...]} with at most the number asked."""
+FOLLOW_SYSTEM = """You write follow-up requests for a set of discovery the attorney's firm is serving, in the set's own
+style, using its defined terms in capitals. A follow-up asks what the request it follows leaves open (the facts,
+the witnesses, the documents behind an answer). Choose the requests that need one; give each follow-up the number
+of the request it follows. Each is one paragraph, with no label and no number. Return JSON only:
+{"items": [{"after": <request number>, "text": "..."}, ...]}."""
 CUT_SYSTEM = """You rank the requests of a discovery set the attorney's firm is serving, from least important to the
 case to most important, so the least important can be removed. Return JSON only: {"ranking": [numbers...]} with
 EVERY request number of the set, least important first."""
@@ -130,26 +152,74 @@ def ask_additions(md: str, variant: str, n: int, quote: str, ask: Ask) -> list[s
     raise Refused("revise_unchecked", f"the new {set_items.NAMES[variant][1]} were refused by code after the retry")
 
 
-def check_ranking(raw: Any, md: str, variant: str, n: int, protected: set[int]) -> tuple[list[int], list[str]]:
+FOLLOW_TOKENS = 16_000
+
+
+def _children(families: Mapping[int, list[int]]) -> set[int]:
+    return {c for cs in families.values() for c in cs}
+
+
+def check_follow_ups(raw: Any, md: str, variant: str, n: int | None) -> tuple[list[tuple[int, str]], list[str]]:
+    """Follow-ups each keyed to a request the set has; at most ``n`` (or one
+    per request when the email names no number)."""
+    nums = {it.number for it in set_items.read(md, variant)}
+    got = raw.get("items") if isinstance(raw, dict) else None
+    rows = [x for x in got if isinstance(x, dict)] if isinstance(got, list) else []
+    pairs = [
+        (x["after"], " ".join(x["text"].split()))
+        for x in rows
+        if isinstance(x.get("after"), int)
+        and x["after"] in nums
+        and isinstance(x.get("text"), str)
+        and x["text"].strip()
+    ]
+    if not pairs or len(pairs) != len(got or []):
+        return [], ['the answer is {"items": [{"after": a request number of the set, "text": "..."}]}, at least one']
+    return pairs[: len(nums) if n is None else n], []
+
+
+def ask_follow_ups(md: str, variant: str, n: int | None, quote: str, ask: Ask) -> list[tuple[int, str]]:
+    problems: list[str] | None = None
+    for _ in range(2):
+        most = f"\nWRITE AT MOST: {n}" if n else ""
+        user = f'THE ASK: "{quote}"{most}\n\nTHE SET:\n{md}' + _retry(problems)
+        raw = parse_json(ask(STAGE_ADD, FOLLOW_SYSTEM, user, FOLLOW_TOKENS))
+        got, problems = check_follow_ups(raw, md, variant, n)
+        if not problems:
+            return got
+    raise Refused(
+        "revise_unchecked", f"the follow-up {set_items.NAMES[variant][1]} were refused by code after the retry"
+    )
+
+
+def check_ranking(
+    raw: Any, md: str, variant: str, n: int, protected: set[int], families: Mapping[int, list[int]] | None = None
+) -> tuple[list[int], list[str]]:
     nums = {it.number for it in set_items.read(md, variant)}
     got = raw.get("ranking") if isinstance(raw, dict) else None
     if not isinstance(got, list) or not all(isinstance(x, int) and not isinstance(x, bool) for x in got):
         return [], ['the answer is {"ranking": [request numbers]}']
     if len(set(got)) != len(got) or not set(got) <= nums:
         return [], [f"the ranking names each of the set's numbers ({min(nums)} to {max(nums)}) once"]
-    _md, dropped = cut(md, variant, got, n, protected)
+    _md, dropped = cut(md, variant, got, n, protected, families)
     if len(dropped) < n:
         return [], [f"the ranking leaves fewer than {n} requests that can be removed (no kept request may cite one)"]
     return got, []
 
 
-def ask_ranking(md: str, variant: str, n: int, protected: set[int], ask: Ask) -> list[int]:
+def ask_ranking(
+    md: str, variant: str, n: int, protected: set[int], ask: Ask, families: Mapping[int, list[int]] | None = None
+) -> list[int]:
     problems: list[str] | None = None
     for _ in range(2):
         keep = f"\nNEVER FIRST (cited by other requests): {sorted(protected)}" if protected else ""
+        if families:
+            keep += "\nA FOLLOW-UP GOES WITH THE REQUEST IT FOLLOWS; rank only these: " + str(
+                sorted(it.number for it in set_items.read(md, variant) if it.number not in _children(families))
+            )
         user = f"REMOVE: {n} of the set's {set_items.NAMES[variant][1]}{keep}\n\nTHE SET:\n{md}" + _retry(problems)
         got, problems = check_ranking(
-            parse_json(ask(STAGE_CUT, CUT_SYSTEM, user, MAX_TOKENS)), md, variant, n, protected
+            parse_json(ask(STAGE_CUT, CUT_SYSTEM, user, MAX_TOKENS)), md, variant, n, protected, families
         )
         if not problems:
             return got
@@ -186,11 +256,19 @@ class ModelOracle:
             return list(self.answers[key])
         return self._keep(key, ask_additions(md, variant, n, quote, self.ask))
 
-    def ranking(self, unit: str, md: str, variant: str, n: int, protected: set[int]) -> list[int]:
+    def follow_ups(self, unit: str, md: str, variant: str, n: int | None, quote: str) -> list[tuple[int, str]]:
+        key = f"follow-ups:{unit}"
+        if key in self.answers:
+            return [(int(a), str(t)) for a, t in self.answers[key]]
+        return self._keep(key, ask_follow_ups(md, variant, n, quote, self.ask))
+
+    def ranking(
+        self, unit: str, md: str, variant: str, n: int, protected: set[int], families: Mapping[int, list[int]]
+    ) -> list[int]:
         key = f"ranking:{unit}"
         if key in self.answers:
             return [int(x) for x in self.answers[key]]
-        return self._keep(key, ask_ranking(md, variant, n, protected, self.ask))
+        return self._keep(key, ask_ranking(md, variant, n, protected, self.ask, families))
 
 
 def plan_chars(email: str, mds: list[str]) -> int:
@@ -209,9 +287,13 @@ def edit_chars(email: str, mds: list[str], ops: list[Op], scoped: list[list[int]
     terms = {o.term.upper() for o in ops if o.op == "define"}
     define = len(terms) * (len(DEFINE_SYSTEM) + len(email) + OUTPUT_WEIGHT * 600)
     system = {"add": len(ADD_SYSTEM), "cut": len(CUT_SYSTEM)}
-    per = sum(
-        system[o.op] + len(mds[k]) + OUTPUT_WEIGHT * 3000 for o, ks in zip(ops, scoped) if o.op in system for k in ks
-    )
+
+    def one(o: Op, md: str) -> int:
+        if o.op == "add" and FOLLOW_UP.search(o.quote):  # follow-ups are written for the whole set
+            return len(FOLLOW_SYSTEM) + len(md) + OUTPUT_WEIGHT * max(3000, len(md) // 3)
+        return system[o.op] + len(md) + OUTPUT_WEIGHT * 3000
+
+    per = sum(one(o, mds[k]) for o, ks in zip(ops, scoped) if o.op in system for k in ks)
     return 2 * (define + per)
 
 
@@ -220,6 +302,8 @@ __all__ = [
     "ModelOracle",
     "ask_additions",
     "ask_definition",
+    "ask_follow_ups",
+    "check_follow_ups",
     "ask_plan",
     "ask_ranking",
     "check_ranking",

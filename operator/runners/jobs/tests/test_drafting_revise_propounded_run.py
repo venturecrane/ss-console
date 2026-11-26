@@ -135,11 +135,14 @@ class PropSeat:
 class ScriptClient:
     """The Anthropic client the doorway calls: each stage's answer picked by its system prompt."""
 
-    def __init__(self, plan: Any, definition: str = "", items: list[str] | None = None, ranking: Any = None):
+    def __init__(
+        self, plan: Any, definition: str = "", items: list[str] | None = None, ranking: Any = None, follow: Any = None
+    ):
         self.answers = {
             pa.PLAN_SYSTEM: plan,
             pa.DEFINE_SYSTEM: {"definition": definition},
             pa.ADD_SYSTEM: {"items": items or []},
+            pa.FOLLOW_SYSTEM: follow,
             pa.CUT_SYSTEM: ranking,
         }
         self.calls: list[str] = []
@@ -151,7 +154,12 @@ class ScriptClient:
         system = params["system"]
         system = system if isinstance(system, str) else system[0]["text"]
         key = next(s for s in self.answers if s in system)
-        stage = {pa.PLAN_SYSTEM: "plan", pa.DEFINE_SYSTEM: "define", pa.ADD_SYSTEM: "add"}.get(key, "cut")
+        stage = {
+            pa.PLAN_SYSTEM: "plan",
+            pa.DEFINE_SYSTEM: "define",
+            pa.ADD_SYSTEM: "add",
+            pa.FOLLOW_SYSTEM: "follow",
+        }.get(key, "cut")
         self.before(stage)
         self.calls.append(stage)
         got = self.answers[key]
@@ -291,7 +299,7 @@ def test_define_add_and_cut_are_made_in_the_filed_set_as_a_new_version(world) ->
     ]
     assert "Identify every passenger in the VEHICLE." in body
     assert "State fact number 2 about the INCIDENT." not in body
-    assert client.calls == ["plan", "define", "add", "cut"]
+    assert client.calls == ["plan", "add", "define", "cut"]
     changes = v.proof["changes"]
     assert changes[0] == f"{NAMES[SROG]} (4 special interrogatories, now 3):"
     assert any("former No. 4 is now No. 2" in ln for ln in changes)
@@ -449,6 +457,26 @@ def test_over_the_cap_fails_before_any_call(world, monkeypatch: pytest.MonkeyPat
     client = ScriptClient({"ops": [op("add", "add two more", "two more")], "other": []})
     v, _r = _run(world, seat, client, "Please add two more.")
     assert v.outcome == "failed" and client.calls == [] and seat.sent == []
+
+
+def test_follow_ups_are_filed_after_their_parents(world) -> None:
+    """D9 through the runner. FALSIFIER: an add that asks for follow-ups written
+    at the end, or not at all, and the attorney's reply is not delivered."""
+    seat = _one()
+    client = ScriptClient(
+        {"ops": [op("add", "Please add follow-up questions")], "other": []},
+        follow={
+            "items": [{"after": 2, "text": "Identify each witness to it."}, {"after": 2, "text": "And each document."}]
+        },
+    )
+    v, _r = _run(world, seat, client, "Please add follow-up questions.")
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert client.calls == ["plan", "follow"]
+    paras = text_of(seat.files["file-0001"][-1])
+    at = {t: i for i, t in enumerate(paras)}
+    assert len(_labels(seat.files["file-0001"][-1])) == 6
+    two, three = at["State fact number 2 about the INCIDENT."], at["State fact number 3 about the INCIDENT."]
+    assert two < at["Identify each witness to it."] < at["And each document."] < three
 
 
 def test_a_file_citing_a_renumbered_set_is_filed_again_in_the_same_job(world) -> None:
