@@ -208,6 +208,12 @@ def unparsed(doc: str, variant: str) -> list[str]:
     ]
 
 
+#: A request put in by a revision carries a number from here until ``renumber``
+#: gives it its place (revise/propounded.py follow-ups): never a number a set
+#: cites, and never named in ``numbers_note`` as "former".
+FRESH = 1_000_000
+
+
 @dataclass
 class Renumbered:
     doc: str
@@ -288,7 +294,9 @@ def numbers_note(r: Renumbered, variant: str) -> list[str]:
     if not r.changed:
         return []
     plural = NAMES[variant][1]
-    moved = [(b, a) for b, a in zip(r.before, r.after) if b != a]
+    moved = [(b, a) for b, a in zip(r.before, r.after) if b != a and b < FRESH]
+    if not moved:
+        return []
     head = ", ".join(f"former No. {b} is now No. {a}" for b, a in moved[:6])
     more = f", and {len(moved) - 6} more" if len(moved) > 6 else ""
     out = [f"Numbering: the {plural} were numbered again in order ({head}{more})"]

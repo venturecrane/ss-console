@@ -16,7 +16,8 @@ from typing import Any
 
 from .. import render, set_items
 from .propounded import ADD_TYPES, Held, Op, Oracle, Refused, Unit, add, add_count, capitalize, cut, cut_drop
-from .propounded import declaration, define, references
+from .propounded import FOLLOW_UP, declaration, define, follow_ups, references, verbatim
+from .propounded_define import spelled_in
 
 
 @dataclass
@@ -60,6 +61,12 @@ def _define(md: str, ops: list[Op], oracle: Oracle, res: Result) -> tuple[str, l
     terms: list[str] = []
     for op in (o for o in ops if o.op == "define"):
         term = op.term.upper()
+        if not verbatim(term, op.quote) and not spelled_in(term, md):
+            raise Held(
+                "revise_scope_unclear",
+                f'"{op.quote}": the term is spelled "{term}", which is not the email\'s spelling nor a word the set '
+                "uses; nothing was filed",
+            )
         new, why = define(md, term, oracle.definition(term, op.quote))
         if why:
             res.left.append(why)
@@ -75,7 +82,7 @@ def _add(md: str, unit: Unit, ops: list[Op], oracle: Oracle, res: Result) -> str
     v = unit.set_type
     plural, one = set_items.NAMES[v][1], set_items.NAMES[v][0]
     for i, op in enumerate(ops):
-        if op.op != "add":
+        if op.op != "add" or FOLLOW_UP.search(op.quote):
             continue
         if v not in ADD_TYPES:
             res.left.append(f'"{op.quote}": requests are added to special interrogatories only; left as written')
@@ -110,6 +117,21 @@ def _cut(md: str, unit: Unit, ops: list[Op], oracle: Oracle, protected: set[int]
     return md
 
 
+def _follow(md: str, unit: Unit, ops: list[Op], oracle: Oracle) -> str:
+    """Each follow-up ask: the model's follow-ups, each keyed to a request,
+    put directly after it (``follow_ups``); any number of them when the email
+    names none, the declaration's count holding a crossing."""
+    v = unit.set_type
+    for i, op in enumerate(ops):
+        if op.op != "add" or not FOLLOW_UP.search(op.quote):
+            continue
+        n = add_count(op.number_quote, set_items.count(md, v)) if op.number_quote else None
+        if n == 0:
+            continue
+        md, _k = follow_ups(md, v, oracle.follow_ups(f"{unit.name}#{i}", md, v, n, op.quote))
+    return md
+
+
 def _renumber(md: str, unit: Unit, start: int, res: Result) -> str:
     v = unit.set_type
     r = set_items.renumber(md, v, start, wide=True)
@@ -125,7 +147,15 @@ def _renumber(md: str, unit: Unit, start: int, res: Result) -> str:
             f"{unit.name} is renumbered and cites a request in a form code cannot read "
             f'("{set_items.unparsed(r.doc, v)[0]}"); nothing was filed',
         )
-    res.numbers = dict(zip(r.before, r.after))
+    pairs = list(zip(r.before, r.after)) if r.changed else [(n, n) for n in r.before]
+    res.numbers = {b: a for b, a in pairs if b < set_items.FRESH}
+    new = [a for b, a in pairs if b >= set_items.FRESH]
+    if new:
+        plural, one = set_items.NAMES[v][1], set_items.NAMES[v][0]
+        res.lines.append(
+            f"Added {len(new)} follow-up {plural if len(new) > 1 else one}, each after the one it follows "
+            f"({_span(new)})."
+        )
     res.lines += [f"{ln}." for ln in set_items.numbers_note(r, v)]
     return r.doc
 
@@ -133,7 +163,7 @@ def _renumber(md: str, unit: Unit, start: int, res: Result) -> str:
 def revise_unit(
     md: str, unit: Unit, ops: list[Op], oracle: Oracle, foreign: dict[int, list[str]] | None = None
 ) -> Result:
-    """``ops`` made in one filed set, in order: define, add, cut, renumber,
+    """``ops`` made in one filed set, in order: define, add, cut, follow-ups, renumber,
     capitals, the declaration's count. ``foreign``: this set's numbers other
     files cite, with their names; never cut (``revise_all`` rewrites them)."""
     v = unit.set_type
@@ -142,6 +172,7 @@ def revise_unit(
     md, terms = _define(md, ops, oracle, res)
     md = _add(md, unit, ops, oracle, res)
     md = _cut(md, unit, ops, oracle, set(foreign or {}), res)
+    md = _follow(md, unit, ops, oracle)  # after the cut: follow-ups for the requests the set keeps
     md = _renumber(md, unit, start, res)
     if terms:
         md = capitalize(md, terms)

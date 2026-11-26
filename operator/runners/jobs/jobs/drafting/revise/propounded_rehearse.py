@@ -31,7 +31,14 @@ from typing import Any
 
 from .. import set_items
 from ..replay import recorded
-from . import prior, propounded as pp, propounded_ask as pa, propounded_set as ps, set_units as su
+from . import (
+    prior,
+    propounded as pp,
+    propounded_define as pd,
+    propounded_ask as pa,
+    propounded_set as ps,
+    set_units as su,
+)
 from .set_rehearse import _ask, _rows
 
 DEFAULT_MODEL = "recorded"
@@ -50,8 +57,7 @@ def shape(md: str, variant: str) -> dict[str, Any]:
     """What a key is compared on: each request's number and words, the defined
     terms in order, and the declaration's words."""
     items = [(it.number, _norm(it.text(md))) for it in set_items.read(md, variant)]
-    got = pp._defs(md)
-    terms = [t for *_x, t in got[2]] if got else []
+    terms = pd.defined(md)
     span = pp.decl_block(md, variant)
     return {"items": items, "terms": terms, "declaration": _norm(md[span[0] : span[1]]) if span else ""}
 

@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from jobs.drafting import set_items
-from jobs.drafting.revise import propounded as p, propounded_ask as pa, propounded_set as ps
+from jobs.drafting.revise import propounded as p, propounded_ask as pa, propounded_define as pd, propounded_set as ps
 
 SROG = "special_interrogatories"
 RFA = "requests_for_admission"
@@ -110,7 +110,7 @@ def test_a_run_within_the_count_is_itself():
 
 
 def test_a_cut_reads_to_and_by_and_holds_a_bare_number():
-    assert p.cut_drop("down to 120-125", 150) == 25
+    assert p.cut_drop("down to 120-125", 150) == 30  # a range's low end: SMD cuts to 120 inside 120-125
     assert p.cut_drop("cut by 10", 40) == 10
     assert p.cut_drop("to 40", 40) == 0  # already there: nothing removed
     assert p.cut_drop("to 50", 40) is None  # a target over the count is not a cut: never a guess
@@ -394,10 +394,12 @@ def test_crossing_35_either_way_holds_for_smd(old, new):
     assert e.value.code == "revise_declaration"
 
 
-def test_an_old_count_not_in_the_declaration_exactly_once_holds():
-    twice = set_md(decl="I previously served 40. This set contains a total of 40 interrogatories.")
+def test_a_declaration_whose_statements_of_the_count_disagree_holds():
+    """FALSIFIER: rewrite the count where it says 40, and the list that already
+    says 1-38 now disagrees with it the other way."""
+    off = set_md(decl="This set contains a total of 40 interrogatories, Nos. 1-38.")
     with pytest.raises(p.Held) as e:
-        p.declaration(twice, 40, 38, SROG)
+        p.declaration(off, 40, 38, SROG)
     assert e.value.code == "revise_declaration"
     with pytest.raises(p.Held):
         p.declaration(set_md(), 40, 38, SROG)  # over 35 and no declaration found
@@ -587,3 +589,155 @@ def test_two_adds_on_one_set_each_get_their_own_answer():
     texts = [it.text(res.md) for it in set_items.read(res.md, SROG)]
     assert any("phone record" in t for t in texts) and any("car record" in t for t in texts)
     assert len(seen) == 2
+
+
+# ---- the firm's own layout (an invented set laid out as the firm files them) ---------------------------
+def firm_md(texts: list[str] | None = None, decl: str | None = None) -> str:
+    """Definitions under a bold title, each an UNNUMBERED paragraph opening with
+    its term in curly quotes, the comma inside the closing quote."""
+    texts = texts or [f"State fact number {n} about the INCIDENT." for n in range(1, 6)]
+    head = [
+        "PROPOUNDING PARTY: Plaintiff ALPHA EXAMPLE",
+        "RESPONDING PARTY: Defendant DELTA EXAMPLE",
+        "SET NO.: One",
+        "**DEFINITIONS**",
+        "\u201cIDENTIFY,\u201d when used with a person, means to state the full name.",
+        "\u201cINCIDENT,\u201d means the event of June 1, 2026 in Exampletown.",
+        "\u201cYOU,\u201d means the responding party.",
+    ]
+    body = []
+    for n, t in enumerate(texts, 1):
+        body += [f"**SPECIAL INTERROGATORY NO. {n}:**", t]
+    tail = ["Dated: December 1, 2026", "EXAMPLE LAW, by Alpha Lawyer"]
+    if decl:
+        tail += ["DECLARATION FOR ADDITIONAL DISCOVERY", decl]
+    return "\n\n".join(head + body + tail) + "\n"
+
+
+def test_unnumbered_definitions_under_a_bold_title_take_a_new_one_in_their_form():
+    """D1/D3. FALSIFIER: read only numbered definitions, or a closing quote with no
+    comma before it, and every real set refuses the define."""
+    md, why = p.define(firm_md(), "ACCOMMODATION(S)", '"ACCOMMODATION(S)" means any change made for a tenant.')
+    assert why is None
+    assert "\n\n\u201cACCOMMODATION(S),\u201d means any change made for a tenant.\n\n\u201cIDENTIFY,\u201d" in md
+    assert "1. " not in md  # never numbered among unnumbered neighbours
+    assert pd.defined(md) == ["ACCOMMODATION(S)", "IDENTIFY", "INCIDENT", "YOU"]
+
+
+def test_a_term_the_email_misspells_is_defined_as_the_word_the_set_uses():
+    """D2. FALSIFIER: require the email's exact spelling, and "ACCOMODATION(S)" is
+    refused; take any spelling, and a word no one wrote is defined."""
+    email = "Please define ACCOMODATION(S) in each set."
+    ops, _other, problems = p.check_plan(
+        {"ops": [{"op": "define", "quote": "define ACCOMODATION(S)", "term": "ACCOMMODATION(S)"}]}, email
+    )
+    assert not problems and ops[0].term == "ACCOMMODATION(S)"
+    _o, _x, problems = p.check_plan(
+        {"ops": [{"op": "define", "quote": "define ACCOMODATION(S)", "term": "HOUSING"}]}, email
+    )
+    assert problems
+    md = firm_md(texts=["Identify each accommodation YOU gave.", "B.", "C.", "D.", "E."])
+    res = ps.revise_unit(md, unit(md), ops, StandIn('"ACCOMMODATION(S)" means any change made.'))
+    assert 'Added the definition of "ACCOMMODATION(S)".' in res.lines
+    unused = firm_md()
+    with pytest.raises(p.Held) as e:  # the set never uses the corrected word: not confirmed
+        ps.revise_unit(unused, unit(unused), ops, StandIn('"ACCOMMODATION(S)" means any change made.'))
+    assert e.value.code == "revise_scope_unclear"
+
+
+def test_every_use_and_plural_is_put_in_capitals_after_a_bold_titled_definitions():
+    """D4. FALSIFIER: look for a heading-titled Definitions only, or match the
+    singular only, and "accommodations" stays lower case in every request."""
+    md = firm_md(
+        texts=[
+            "Identify every reasonable accommodations YOU made.",
+            "State each accommodation requested in Example v. Accommodation Co.",
+            'Describe the "accommodation" form.',
+            "C.",
+            "D.",
+        ]
+    )
+    out = p.capitalize(md, ["ACCOMMODATION(S)"])
+    assert "reasonable ACCOMMODATIONS YOU made" in out
+    assert "each ACCOMMODATION requested in Example v. Accommodation Co." in out  # a case name is never touched
+    assert '"accommodation" form' in out  # nor a quotation
+    assert "\u201cIDENTIFY,\u201d when used" in out  # nor the Definitions
+
+
+def test_a_declaration_saying_the_count_four_times_with_its_item_list_is_rewritten_whole():
+    """D6. FALSIFIER: hold on more than one statement of the count, and every
+    real set's declaration holds; rewrite the prose alone, and its list of item
+    numbers still runs to the old count."""
+    decl = (
+        "I am serving 40 specially prepared interrogatories. Code of Civil Procedure section 2030.050 (40). "
+        "This set of 40 is warranted. (E) The interrogatories are Nos. 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, "
+        "14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39 "
+        "and 40, and Nos. 1-40 in all."
+    )
+    out, line = p.declaration(firm_md(decl=decl), 40, 38, SROG)
+    got = out[out.index("DECLARATION FOR") :]
+    assert "40" not in got.replace("2030.050", "")
+    assert got.count("38") == 5 and "36, 37 and 38, and Nos. 1-38 in all" in got
+    assert line == "the declaration's count of this set is now 38 (was 40)"
+    with pytest.raises(p.Held):
+        p.declaration(firm_md(decl="This set of forty (40) interrogatories."), 40, 38, SROG)
+
+
+@pytest.mark.parametrize(
+    "quote,count,want",
+    [
+        ("to the most important 120125", 193, 73),
+        ("120-125", 193, 73),
+        ("120125", 193, 73),
+        ("120-125", 120, 0),  # already at the low end: unchanged
+        ("120-125", 118, 0),
+        ("5 or 6", 30, None),  # "or" with no "to": which is the attorney's
+    ],
+)
+def test_the_attorneys_cut_words_read_as_a_target_at_the_low_end(quote, count, want):
+    """D7. FALSIFIER: read the run-together or the bare range as nothing, or cut to
+    its top, and the set ends at a size SMD never filed."""
+    assert p.cut_drop(quote, count) == want
+
+
+def test_a_second_emails_bare_range_takes_the_sets_the_first_named():
+    """D7. FALSIFIER: scope the second email's "120-125" alone, and it names no set
+    in a thread of two kinds: held, or cut everywhere."""
+    us = [unit(firm_md()), p.read_unit("Requests for Admission, Set One.docx", RFA, set_md(RFA))]
+    email = "Cut the special interrogatories to the most important 120125.\n\nSorry, I meant 120-125."
+    plan = {
+        "ops": [
+            {"op": "cut", "quote": "Cut the special interrogatories to the most important 120125",
+             "set_types": [SROG], "number_quote": "to the most important 120125"},
+            {"op": "cut", "quote": "I meant 120-125", "number_quote": "120-125"},
+        ],
+        "other": [],
+    }  # fmt: skip
+    ops, scoped = pa.settle_plan(email, us, lambda *a: json.dumps(plan))
+    assert scoped == [[0], [0]]
+
+
+def test_follow_ups_go_directly_after_their_parents_and_everything_is_renumbered():
+    """D9. FALSIFIER: append follow-ups at the end, or leave the numbers and the
+    citations as they were, and each follow-up is cut off from the request it follows."""
+    md = firm_md(texts=["One.", "Two.", "Three.", "Four.", "Five. See Special Interrogatory No. 5.", "Six."])
+
+    class Follow(StandIn):
+        def follow_ups(self, unit, md, variant, n, quote):
+            self.calls.append(f"follow-ups:{n}")
+            return [(2, "Identify each witness to YOUR answer to the one before."),
+                    (2, "Identify each document."), (5, "State every fact.")]  # fmt: skip
+
+    oracle = Follow()
+    res = ps.revise_unit(md, unit(md), [p.Op("add", "add follow-up questions", (), "", "", "")], oracle)
+    texts = [(it.number, it.text(res.md).split("\n\n", 1)[1]) for it in set_items.read(res.md, SROG)]
+    assert [n for n, _t in texts] == list(range(1, 10))
+    assert (
+        texts[1][1] == "Two."
+        and texts[2][1].startswith("IDENTIFY each witness")
+        and texts[3][1] == "IDENTIFY each document."
+    )
+    assert texts[6][1] == "Five. See Special Interrogatory No. 7." and texts[7][1] == "State every fact."
+    assert oracle.calls == ["follow-ups:None"]  # no number named: the model chooses
+    assert "Added 3 follow-up special interrogatories, each after the one it follows (Nos. 3, 4, 8)." in res.lines
+    assert res.numbers == {1: 1, 2: 2, 3: 5, 4: 6, 5: 7, 6: 9}
