@@ -42,12 +42,12 @@ rehearsal (``propounded_rehearse.py``) and the tests run the same code.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol, Sequence
 
 from .. import render, set_items, sets
 from ..counts import STATUTORY_LIMIT
-from .propounded_numbers import add_count, crosses, cut_drop, parse_number
+from .propounded_numbers import DEFAULT_ADD, add_count, crosses, cut_drop, parse_number
 from .set_units import named_set_types
 
 #: The set types this revision edits: the ones whose requests carry numbered labels.
@@ -57,7 +57,6 @@ LIMITED = frozenset({"special_interrogatories", "requests_for_admission"})
 #: The types requests are added to (the approved design: special interrogatories).
 ADD_TYPES = frozenset({"special_interrogatories"})
 #: Requests added when the email names no number.
-DEFAULT_ADD = 10
 OPS = ("define", "add", "cut")
 #: Every set type a filed unit may be (``drafting/job.py``); form interrogatories are a form, never edited here.
 SET_TYPES = (*VARIANTS, "form_interrogatories")
@@ -199,8 +198,14 @@ def check_plan(raw: Any, email: str) -> tuple[list[Op], list[str], list[str]]:
 _ROLE = re.compile(r"(?i)\b(cross-?)?(defendants?|plaintiffs?|respondents?|petitioners?)\b")
 
 
+#: Words that name no one: "the sets served on the defendant" names only a role.
+_STOP = frozenset(
+    "a an and for her his of on our party parties responding served set sets their them to cross s".split()
+)
+
+
 def _tokens(s: str) -> set[str]:
-    return set(render._norm(s).split())
+    return set(render._norm(s).split()) - _STOP
 
 
 def party_match(quote: str, party: str | None) -> bool:
@@ -230,11 +235,24 @@ def scope(op: Op, units: list[Unit], email: str) -> list[int]:
                 f'"{op.quote}": the sets it is about are not named in the email; nothing was changed',
             )
     ks = [k for k, u in enumerate(units) if u.supported and (kinds is None or u.set_type in kinds)]
+    if kinds is None and op.op == "add":
+        ks = [k for k in ks if units[k].set_type in ADD_TYPES]  # requests are added to these alone
     if op.party_quote:
         ks = [k for k in ks if party_match(op.party_quote, units[k].party)]
+        if len({render._norm(units[k].party or "") for k in ks}) > 1:
+            raise Held(
+                "revise_scope_unclear",
+                f'"{op.quote}": "{op.party_quote}" fits sets served on more than one party; nothing was changed',
+            )
     if not ks:
         who = f" served on {op.party_quote}" if op.party_quote else ""
         raise Held("revise_scope_unclear", f'"{op.quote}": no filed set{who} is the one it names; nothing was changed')
+    if kinds is None and op.op == "cut" and len({units[k].set_type for k in ks}) > 1:
+        raise Held(
+            "revise_scope_unclear",
+            f'"{op.quote}": the email does not say which kind of set to cut, and the thread has more than one; '
+            "nothing was changed",
+        )
     return ks
 
 
@@ -336,10 +354,8 @@ def define(md: str, term: str, text: str) -> tuple[str, str | None]:
         p = rows[at][0]
         indent = re.match(r"[ \t]*", out[p:]).group(0)  # type: ignore[union-attr]
         out = out[:p] + indent + para + "\n\n" + out[p:]
-    else:
-        last = rows[-1][0]
-        end = out.find("\n", last)
-        end = len(out) if end < 0 else end
+    else:  # after the whole last definition, its (a) and (b) included: the Definitions' end
+        end = len(out[: got[1]].rstrip())
         out = out[:end] + "\n\n" + para + out[end:]
     return out, None
 
@@ -407,15 +423,15 @@ def add(md: str, variant: str, texts: list[str]) -> tuple[str, list[int]]:
 # ---- cut ---------------------------------------------------------------------------------------------
 
 
-def references(md: str, variant: str, skip: Sequence[tuple[int, int]] = ()) -> set[int]:
+def references(md: str, variant: str, skip: Sequence[tuple[int, int]] = (), own: bool = True) -> set[int]:
     """The numbers of ``variant`` the document cites in its words (never a
-    label's own number), outside the ``skip`` spans."""
-    labels = {(it.num_start, it.num_end) for it in set_items.read(md, variant)}
-    out = set()
-    for m in set_items._reference(variant).finditer(md):
-        if (m.start(3), m.end(3)) in labels or any(a <= m.start() < b for a, b in skip):
-            continue
-        out.add(int(m.group(3)))
+    label's own number), outside the ``skip`` spans: short and plural forms
+    and a range's inner numbers included (``set_items.wide_refs``). ``own``:
+    the set's own kind, where a bare "Request No. 3" is one of its requests."""
+    out: set[int] = set()
+    for at, _end, nums in set_items.wide_refs(md, variant, own):
+        if not any(a <= at < b for a, b in skip):
+            out |= nums
     return out
 
 
@@ -437,26 +453,49 @@ def cut(md: str, variant: str, ranking: list[int], n: int, protected: set[int]) 
         drop.append(num)
     if not drop or len(drop) >= len(items):
         return md, []
+    if items[-1].number in drop and _runs_on(md, items[-1]):
+        raise Held(
+            "revise_scope_unclear",
+            f"the last request (No. {items[-1].number}) is to be removed and paragraphs follow it that code cannot "
+            "tell are its own or the set's; nothing was filed",
+        )
     keep = [it for it in items if it.number not in drop]
     head, tail = md[: items[0].start], md[items[-1].end :]
     return head + "\n\n".join(it.text(md).strip() for it in keep) + tail, drop
 
 
+def _runs_on(md: str, last: set_items.Item) -> bool:
+    """Words between the set's last request and its next heading or date line:
+    the request's second paragraph, or the set's own closing; code cannot tell."""
+    rest = md[last.end :]
+    para = re.search(r"\S[\s\S]*?(?=\n\s*\n|\Z)", rest)
+    return para is not None and not set_items._HEAD.match(para.group(0))
+
+
 # ---- the declaration ---------------------------------------------------------------------------------
 
 
-def decl_block(md: str) -> tuple[int, int] | None:
-    """The declaration for additional discovery: from its title line to the
-    proof of service or the end; None when the set carries none."""
+def decl_block(md: str, variant: str | None = None) -> tuple[int, int] | None:
+    """The declaration for additional discovery: from its title line, after
+    the set's last request (a caption that names the declaration is never it),
+    to the proof of service or the end; None when the set carries none."""
+    items = set_items.read(md, variant) if variant else []
+    after = items[-1].end if items else 0
     pos = 0
     start = None
     for ln in md.splitlines(keepends=True):
-        if start is None and render.DECL_LINE.search(ln) and len(ln.strip()) <= 160:
+        if start is None and pos >= after and render.DECL_LINE.search(ln) and len(ln.strip()) <= 160:
             start = pos
         elif start is not None and render.POS_LINE.search(ln):
             return start, pos
         pos += len(ln)
     return (start, len(md)) if start is not None else None
+
+
+_SPELLED = re.compile(
+    r"(?i)\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|"
+    r"sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b"
+)
 
 
 def declaration(md: str, old: int, new: int, variant: str) -> tuple[str, str | None]:
@@ -473,7 +512,7 @@ def declaration(md: str, old: int, new: int, variant: str) -> tuple[str, str | N
             f"the set goes from {old} to {new}, {way} {STATUTORY_LIMIT}, so whether it carries a declaration "
             "changes; nothing was filed",
         )
-    block = decl_block(md)
+    block = decl_block(md, variant)
     if block is None:
         if new > STATUTORY_LIMIT:
             raise Held("revise_declaration", f"the set has {new} and no declaration code can find; nothing was filed")
@@ -487,6 +526,13 @@ def declaration(md: str, old: int, new: int, variant: str) -> tuple[str, str | N
             "count; nothing was filed",
         )
     at = a + hits[0].start()
+    near = md[max(a, at - 40) : at + len(str(old)) + 40]
+    if _SPELLED.search(near):
+        raise Held(
+            "revise_declaration",
+            f"the declaration writes this set's count in words beside {old}, which code does not rewrite; "
+            "nothing was filed",
+        )
     out = md[:at] + str(new) + md[at + len(str(old)) :]
     return out, f"the declaration's count of this set is now {new} (was {old})"
 
@@ -504,128 +550,6 @@ class Oracle(Protocol):
     def ranking(self, unit: str, md: str, variant: str, n: int, protected: set[int]) -> list[int]: ...
 
 
-# ---- one set ---------------------------------------------------------------------------------------------
-
-
-@dataclass
-class Result:
-    md: str
-    before: int
-    after: int
-    #: What changed, a line each, in the attorney's words.
-    lines: list[str] = field(default_factory=list)
-    #: What was asked of this set and left, with why.
-    left: list[str] = field(default_factory=list)
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.lines)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"before": self.before, "after": self.after, "lines": self.lines, "left": self.left}
-
-
-def _span(nums: list[int]) -> str:
-    if len(nums) > 2 and nums == list(range(nums[0], nums[-1] + 1)):
-        return f"Nos. {nums[0]} to {nums[-1]}"
-    return ("Nos. " if len(nums) > 1 else "No. ") + ", ".join(str(n) for n in nums)
-
-
-def revise_unit(
-    md: str,
-    unit: Unit,
-    ops: list[Op],
-    oracle: Oracle,
-    foreign: dict[int, list[str]] | None = None,
-) -> Result:
-    """``ops`` made in one filed set, in order: define, add, cut, renumber,
-    capitals, the declaration's count. ``foreign``: this set's numbers other
-    files cite, with their names; never cut, and named when they move."""
-    v, foreign = unit.set_type, foreign or {}
-    res = Result(md, unit.count, unit.count)
-    start = set_items.read(md, v)[0].number  # a set whose first request is cut still begins here
-    plural = set_items.NAMES[v][1]
-    terms: list[str] = []
-    for op in (o for o in ops if o.op == "define"):
-        term = op.term.upper()
-        new, why = define(md, term, oracle.definition(term, op.quote))
-        if why:
-            res.left.append(why)
-            continue
-        md = new
-        terms.append(term)
-        res.lines.append(f'Added the definition of "{term}".')
-    for op in (o for o in ops if o.op == "add"):
-        if v not in ADD_TYPES:
-            res.left.append(f'"{op.quote}": requests are added to special interrogatories only; left as written')
-            continue
-        n = add_count(op.number_quote, set_items.count(md, v))
-        if not n:
-            res.left.append(f'"{op.quote}": the set already has that many; nothing was added')
-            continue
-        md, added = add(md, v, oracle.additions(unit.name, md, v, n, op.quote)[:n])
-        if added:
-            res.lines.append(
-                f"Added {len(added)} {plural if len(added) > 1 else set_items.NAMES[v][0]}, {_span(added)}."
-            )
-    for op in (o for o in ops if o.op == "cut"):
-        have = set_items.count(md, v)
-        drop = cut_drop(op.number_quote, have)
-        if drop is None:
-            raise Held("revise_scope_unclear", f'"{op.quote}": code cannot read how many to remove; nothing was filed')
-        if not drop:
-            res.left.append(f'"{op.quote}": the set already has {have}; nothing was removed')
-            continue
-        protected = set(foreign)
-        new, dropped = cut(md, v, oracle.ranking(unit.name, md, v, drop, protected), drop, protected)
-        if len(dropped) < drop:
-            raise Refused("revise_unchecked", f"{unit.name}: only {len(dropped)} of {drop} requests could be removed")
-        md = new
-        res.lines.append(f"Removed former {_span(sorted(dropped))}.")
-    r = set_items.renumber(md, v, start)
-    md = r.doc
-    res.lines += [f"{ln}." for ln in set_items.numbers_note(r, v)]
-    moved = {b: a for b, a in zip(r.before, r.after) if b != a}
-    for num, names in sorted(foreign.items()):
-        if num in moved:
-            res.lines.append(
-                f"{', '.join(names)} cites {set_items.NAMES[v][0]} No. {num}, now No. {moved[num]}; "
-                "left as written for your review."
-            )
-    if terms:
-        md = capitalize(md, terms)
-    res.after = set_items.count(md, v)
-    md, decl = declaration(md, res.before, res.after, v)
-    if decl:
-        res.lines.append(decl[0].upper() + decl[1:] + ".")
-    res.md = md
-    return res
-
-
-def foreign_refs(units: list[Unit], mds: list[str], k: int) -> dict[int, list[str]]:
-    """Unit ``k``'s numbers the OTHER kinds of set cite ("Request for
-    Admission No. 3" in a special interrogatory), with the citing files' names."""
-    v, out = units[k].set_type, {}
-    for j, (u, md) in enumerate(zip(units, mds)):
-        if j == k or u.set_type == v or not md:
-            continue
-        for num in references(md, v):
-            out.setdefault(num, []).append(u.name)
-    return out
-
-
-def summary(name: str, res: Result, variant: str) -> list[str]:
-    """The reply's lines for one file, written by code from what was done."""
-    out = []
-    if res.changed:
-        plural = set_items.NAMES[variant][1]
-        count = f" ({res.before} {plural}, now {res.after})" if res.before != res.after else ""
-        out.append(f"{name}{count}:")
-        out += [f"- {ln}" for ln in res.lines]
-    out += [f"- {name}: {why}" for why in res.left]
-    return out
-
-
 __all__ = [
     "ADD_TYPES",
     "DEFAULT_ADD",
@@ -636,7 +560,6 @@ __all__ = [
     "Op",
     "Oracle",
     "Refused",
-    "Result",
     "Unit",
     "add",
     "add_count",
@@ -649,14 +572,11 @@ __all__ = [
     "declaration",
     "define",
     "definition_ok",
-    "foreign_refs",
     "parse_number",
     "party_match",
     "read_unit",
     "references",
-    "revise_unit",
     "scope",
-    "summary",
     "type_from_name",
     "verbatim",
 ]

@@ -159,8 +159,10 @@ def ask_ranking(md: str, variant: str, n: int, protected: set[int], ask: Ask) ->
 @dataclass
 class ModelOracle:
     """The model through ``ask``, every answer kept in ``answers`` (one
-    definition per term for the whole job; one set of requests and one
-    ranking per file) and handed to ``saved`` so a resume asks nothing twice."""
+    definition per term for the whole job; one set of requests and one ranking
+    per op on each file, keyed by the caller's ``unit#op`` key, so two asks of
+    one set never share an answer) and handed to ``saved`` so a resume asks
+    nothing twice."""
 
     ask: Ask
     email: str
@@ -200,6 +202,19 @@ def plan_chars(email: str, mds: list[str]) -> int:
     return 2 * (plan + define + per)
 
 
+def edit_chars(email: str, mds: list[str], ops: list[Op], scoped: list[list[int]]) -> int:
+    """The write calls the settled plan makes, priced before the first: one
+    definition per term, and per add and cut op each set it changes, each with
+    its retry (``plan_chars`` priced one definition before the plan was read)."""
+    terms = {o.term.upper() for o in ops if o.op == "define"}
+    define = len(terms) * (len(DEFINE_SYSTEM) + len(email) + OUTPUT_WEIGHT * 600)
+    system = {"add": len(ADD_SYSTEM), "cut": len(CUT_SYSTEM)}
+    per = sum(
+        system[o.op] + len(mds[k]) + OUTPUT_WEIGHT * 3000 for o, ks in zip(ops, scoped) if o.op in system for k in ks
+    )
+    return 2 * (define + per)
+
+
 __all__ = [
     "Ask",
     "ModelOracle",
@@ -208,6 +223,7 @@ __all__ = [
     "ask_plan",
     "ask_ranking",
     "check_ranking",
+    "edit_chars",
     "plan_chars",
     "settle_plan",
 ]
