@@ -262,6 +262,29 @@ def _tidy(block: str) -> str:
     return re.sub(r"\s+([.;,])", r"\1", " ".join(block.split()))
 
 
+def _firm_whole(own: str, book: Any, item: str) -> str:
+    """``own`` (the draft's adopted objection words) with each sentence the
+    firm's book states in full put back whole: a sentence whose words a book
+    entry contains, and the entry says more, becomes that entry. 2026-11-26,
+    rule-fix-7: 10 rows wrote the attorney-client objection's first sentence
+    only; the firm's entry carries its second."""
+    out: list[str] = []
+    for s in _sentences(own):
+        w = _words(s)
+        hits = []
+        if len(w.split()) >= 8:
+            hits = [k for k in book.entries if f" {w} " in f" {_words(book.text(k, item=item))} "]
+        said = s
+        if hits:
+            key, _how = choose(hits, s, book)
+            whole = book.text(key, item=item)
+            if len(_words(whole)) > len(w):
+                said = whole
+        if said not in out and not any(f" {_words(said)} " in f" {_words(o)} " for o in out):
+            out.append(said)
+    return " ".join(out)
+
+
 def _one(
     body: str, ground: str, book: Any, item: str, allowed: set[str], adopt_own: bool, whole: str
 ) -> tuple[str, Settled]:
@@ -281,7 +304,7 @@ def _one(
         return "", Settled("", stated[0] if stated else "", "", ground, ALREADY, tuple(keys))
     if not keys:
         if own:
-            return own, Settled("", "", "", ground, OWN)
+            return _firm_whole(own, book, item), Settled("", "", "", ground, OWN)
         why = NO_SENTENCE if adopt_own and not piped else PHRASE_MISSING
         return body, Settled("", "", why, ground)
     among = tuple(keys) if len(keys) > 1 else ()
