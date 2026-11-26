@@ -310,7 +310,7 @@ def test_a_resume_asks_the_model_nothing_twice(world) -> None:
     assert v.outcome == "delivered", (v.stage, v.reason)
     kept = json.loads((run.data / "propounded-answers.json").read_text())
     assert kept == {
-        f"additions:{NAMES[SROG]}": ["Describe the INCIDENT's cause.", "Identify every witness to the INCIDENT."]
+        f"additions:{NAMES[SROG]}#0": ["Describe the INCIDENT's cause.", "Identify every witness to the INCIDENT."]
     }
     assert client.calls == ["plan", "add"]
 
@@ -449,6 +449,41 @@ def test_over_the_cap_fails_before_any_call(world, monkeypatch: pytest.MonkeyPat
     client = ScriptClient({"ops": [op("add", "add two more", "two more")], "other": []})
     v, _r = _run(world, seat, client, "Please add two more.")
     assert v.outcome == "failed" and client.calls == [] and seat.sent == []
+
+
+def test_a_file_citing_a_renumbered_set_is_filed_again_in_the_same_job(world) -> None:
+    """FALSIFIER: renumber the admissions and leave the interrogatories, and an
+    interrogatory filed with them asks about the wrong request."""
+    srog = docx.Document(io.BytesIO(set_doc(SROG, n=2)))
+    for para in srog.paragraphs:
+        if para.text == "State fact number 2 about the INCIDENT.":
+            para.runs[0].text = "State all facts for your denial of Request for Admission No. 4."
+    buf = io.BytesIO()
+    srog.save(buf)
+    seat = PropSeat({
+        "file-0001": (NAMES[SROG], buf.getvalue(), "folder-0001"),
+        "file-0002": (NAMES[RFA], set_doc(RFA, n=4), "folder-0001"),
+    })  # fmt: skip
+    email = "Cut the requests for admission by 2."
+    client = ScriptClient(
+        {"ops": [op("cut", "Cut the requests for admission by 2", "by 2", types=[RFA])], "other": []},
+        ranking={"ranking": [1, 2, 3, 4]},
+    )
+    v, _r = _run(world, seat, client, email)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert sorted(seat.sent) == ["file-0001", "file-0002"]
+    assert "State all facts for your denial of Request for Admission No. 2." in text_of(seat.files["file-0001"][-1])
+    assert any("follow the new numbering (No. 4 is now No. 2)" in ln for ln in v.proof["changes"])
+
+
+def test_the_edits_are_priced_after_the_plan_before_any_write_call(world, monkeypatch: pytest.MonkeyPatch) -> None:
+    """FALSIFIER: price one definition per job, and a plan defining many terms
+    on many sets runs past the cap."""
+    monkeypatch.setattr(pa, "edit_chars", lambda email, mds, ops, scoped: 10**12)
+    seat = _one()
+    client = ScriptClient({"ops": [op("add", "add two more", "two more")], "other": []})
+    v, _r = _run(world, seat, client, "Please add two more.")
+    assert v.outcome == "failed" and client.calls == ["plan"] and seat.sent == []
 
 
 def test_the_dispatcher_sends_a_propounded_set_with_units_to_this_runner() -> None:

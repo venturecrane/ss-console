@@ -31,7 +31,7 @@ from typing import Any
 
 from .. import set_items
 from ..replay import recorded
-from . import prior, propounded as pp, propounded_ask as pa, set_units as su
+from . import prior, propounded as pp, propounded_ask as pa, propounded_set as ps, set_units as su
 from .set_rehearse import _ask, _rows
 
 DEFAULT_MODEL = "recorded"
@@ -52,7 +52,7 @@ def shape(md: str, variant: str) -> dict[str, Any]:
     items = [(it.number, _norm(it.text(md))) for it in set_items.read(md, variant)]
     got = pp._defs(md)
     terms = [t for *_x, t in got[2]] if got else []
-    span = pp.decl_block(md)
+    span = pp.decl_block(md, variant)
     return {"items": items, "terms": terms, "declaration": _norm(md[span[0] : span[1]]) if span else ""}
 
 
@@ -89,11 +89,7 @@ def _run(dirs: list[Path], request: str, ask: pa.Ask, work: Path) -> dict[str, A
     want_change = any(shape(k, u.set_type) != shape(m, u.set_type) for k, m, u in zip(keys, mds, units))
     try:
         ops, scoped = pa.settle_plan(request, units, ask)
-        oracle = pa.ModelOracle(ask, request)
-        results = {}
-        for k in sorted({k for ks in scoped for k in ks}):
-            mine = [o for o, ks in zip(ops, scoped) if k in ks]
-            results[k] = pp.revise_unit(mds[k], units[k], mine, oracle, pp.foreign_refs(units, mds, k))
+        results = ps.revise_all(units, mds, ops, scoped, pa.ModelOracle(ask, request))
     except recorded.NeedsModelCall as exc:
         return _end(docs, "incomplete", f"needs_recording: {exc}")
     except pp.Held as exc:
@@ -114,7 +110,7 @@ def _run(dirs: list[Path], request: str, ask: pa.Ask, work: Path) -> dict[str, A
             before=u.count,
             after=len(got["items"]),
             key=len(key["items"]),
-            lines=pp.summary(d.name, res, u.set_type) if res else [],
+            lines=ps.summary(d.name, res, u.set_type) if res else [],
             ok=got == key,
             why="" if got == key else _why(got, key),
         )

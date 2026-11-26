@@ -33,13 +33,14 @@ import json
 from typing import Any
 
 from ..outcome import DraftingFailed, DraftingHold, Verdict
-from . import book_run as br, prior, propounded as pp, propounded_ask as pa, set_units as su
+from . import book_run as br, prior, propounded as pp, propounded_ask as pa, propounded_set as ps, set_units as su
 from .set_run import NOTES, REBASES, ReviseSetRun
 
 STAGES = ("destination", "revise-base", "revise-estimate", "revise-plan", "revise-edit", "manifest")
 PLAN = "propounded-plan.json"
 ANSWERS = "propounded-answers.json"
 RESULT = "result.json"
+REVISED = "revised.md"
 
 
 class PropoundedSetRun(ReviseSetRun):
@@ -103,21 +104,17 @@ class PropoundedSetRun(ReviseSetRun):
         self._project(pa.plan_chars(self.job.request_text, mds), "the set revision", documents=len(mds))
 
     def _plan_ops(self) -> None:
+        email, sets = self.job.request_text, self._sets()
         try:
-            ops, scoped = pa.settle_plan(self.job.request_text, self._sets(), self._ask(self.firm.model("audit")))
+            ops, scoped = pa.settle_plan(email, sets, self._ask(self.firm.model("audit")))
         except pp.Held as exc:
             raise DraftingHold(str(exc)[:480]) from None
         except pp.Refused as exc:
             raise DraftingFailed(str(exc)[:480]) from None
+        # Each term, and each add and cut on each set, priced before the first write call.
+        mds = [self._md(k) for k in range(len(self.units))]
+        self._project(pa.edit_chars(email, mds, ops, scoped), "the set revision's edits", ops=len(ops))
         self._write(PLAN, {"ops": [o.to_dict() for o in ops], "scope": scoped})
-
-    def _ops_for(self, k: int) -> list[pp.Op]:
-        plan = self._json(PLAN)
-        return [
-            pp.Op(o["op"], o["quote"], tuple(o["set_types"]), o["party_quote"], o["term"], o["number_quote"])
-            for o, ks in zip(plan["ops"], plan["scope"])
-            if k in ks
-        ]
 
     # ---- the edit ----------------------------------------------------------------------------
     def _oracle(self) -> pa.ModelOracle:
@@ -127,23 +124,28 @@ class PropoundedSetRun(ReviseSetRun):
             self._ask(self.firm.model("audit")), self.job.request_text, kept, lambda a: self._write(ANSWERS, a)
         )
 
-    def _render_unit(self, k: int, oracle: Any = None) -> dict[str, Any]:  # type: ignore[override]
-        sets = self._sets()
-        mds = [self._md(j) for j in range(len(sets))]
-        d = self._udir(k)
+    def _revise(self) -> dict[int, ps.Result]:
+        """Every set's ops and every citation they move, made in memory by code."""
+        plan = self._json(PLAN)
+        ops = [pp.Op(o["op"], o["quote"], tuple(o["set_types"]), o["party_quote"], o["term"], o["number_quote"])
+               for o in plan["ops"]]  # fmt: skip
         try:
-            res = pp.revise_unit(
-                mds[k], sets[k], self._ops_for(k), oracle or self._oracle(), pp.foreign_refs(sets, mds, k)
+            return ps.revise_all(
+                self._sets(), [self._md(k) for k in range(len(self.units))], ops, plan["scope"], self._oracle()
             )
         except pp.Held as exc:
             raise DraftingHold(str(exc)[:480]) from None
         except pp.Refused as exc:
             raise DraftingFailed(f"{exc.code}: {exc.why}"[:480]) from None
-        self._uwrite(k, RESULT, res.to_dict())
-        rec: dict[str, Any] = {"out": None, "changed": res.changed}
-        if res.md != mds[k]:
+
+    def _render_unit(self, k: int) -> dict[str, Any]:
+        """Unit ``k``'s revised text (``revised.md``) made in its filed file, proven."""
+        d = self._udir(k)
+        rec: dict[str, Any] = {"out": None}
+        if (d / REVISED).is_file():
+            md = (d / REVISED).read_text(encoding="utf-8")
             out = d / "out" / self.units[k]["name"]
-            ed, diffs = su.edit_file(d / "filed.docx", res.md, out)
+            ed, diffs = su.edit_file(d / "filed.docx", md, out)
             if diffs:
                 raise DraftingFailed(
                     f"revise_layout_lost: {self.units[k]['name']}: the revision changes what no ask names: "
@@ -160,14 +162,16 @@ class PropoundedSetRun(ReviseSetRun):
         return rec
 
     def _edit(self) -> None:
-        oracle = self._oracle()
-        plan = self._json(PLAN)
-        todo = sorted({k for ks in plan["scope"] for k in ks})
-        for k in todo:
-            self._render_unit(k, oracle)
+        results = self._revise()
+        for k, res in results.items():
+            self._uwrite(k, RESULT, res.to_dict())
+            if res.md != self._md(k):
+                (self._udir(k) / REVISED).write_text(res.md, encoding="utf-8")
+        for k in results:
+            self._render_unit(k)
         self._write_notes()
-        if not any((self._ujson(k, "render.json") or {}).get("out") for k in todo):
-            left = [w for k in todo for w in (self._ujson(k, RESULT) or {}).get("left") or []]
+        if not any((self._ujson(k, "render.json") or {}).get("out") for k in results):
+            left = [w for k in results for w in (self._ujson(k, RESULT) or {}).get("left") or []]
             raise DraftingHold(
                 "revise_unchanged: no new versions were filed, because no filed set would change: "
                 + ("; ".join(left) or "nothing the email asks changes them")[:400]
@@ -181,8 +185,8 @@ class PropoundedSetRun(ReviseSetRun):
         for k, u in enumerate(self.units):
             base, raw = self._ujson(k, "base.json") or {}, self._ujson(k, RESULT)
             if raw is not None:
-                res = pp.Result("", int(raw["before"]), int(raw["after"]), list(raw["lines"]), list(raw["left"]))
-                out += pp.summary(u["name"], res, base["set_type"])
+                res = ps.Result("", int(raw["before"]), int(raw["after"]), list(raw["lines"]), list(raw["left"]))
+                out += ps.summary(u["name"], res, base["set_type"])
                 if res.changed and base.get("newer_than_delivery"):
                     out.append("- Revised on the version as the firm last saved it, not as delivered.")
             elif base and not base.get("supported", True):
