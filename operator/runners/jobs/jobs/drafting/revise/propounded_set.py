@@ -56,16 +56,7 @@ def _same_party(a: Unit, b: Unit) -> bool | None:
     return render._norm(a.party) == render._norm(b.party)
 
 
-def revise_unit(
-    md: str, unit: Unit, ops: list[Op], oracle: Oracle, foreign: dict[int, list[str]] | None = None
-) -> Result:
-    """``ops`` made in one filed set, in order: define, add, cut, renumber,
-    capitals, the declaration's count. ``foreign``: this set's numbers other
-    files cite, with their names; never cut (``revise_all`` rewrites them)."""
-    v, foreign = unit.set_type, foreign or {}
-    res = Result(md, unit.count, unit.count)
-    start = set_items.read(md, v)[0].number  # a set whose first request is cut still begins here
-    plural, one = set_items.NAMES[v][1], set_items.NAMES[v][0]
+def _define(md: str, ops: list[Op], oracle: Oracle, res: Result) -> tuple[str, list[str]]:
     terms: list[str] = []
     for op in (o for o in ops if o.op == "define"):
         term = op.term.upper()
@@ -76,20 +67,31 @@ def revise_unit(
         md = new
         terms.append(term)
         res.lines.append(f'Added the definition of "{term}".')
-    # Each add and cut op its own answer: two asks of one set never share one (``key``).
+    return md, terms
+
+
+def _add(md: str, unit: Unit, ops: list[Op], oracle: Oracle, res: Result) -> str:
+    """Each add op its own answer: two asks of one set never share one (``unit#op`` key)."""
+    v = unit.set_type
+    plural, one = set_items.NAMES[v][1], set_items.NAMES[v][0]
     for i, op in enumerate(ops):
-        key = f"{unit.name}#{i}"
-        if op.op == "add":
-            if v not in ADD_TYPES:
-                res.left.append(f'"{op.quote}": requests are added to special interrogatories only; left as written')
-                continue
-            n = add_count(op.number_quote, set_items.count(md, v))
-            if not n:
-                res.left.append(f'"{op.quote}": the set already has that many; nothing was added')
-                continue
-            md, added = add(md, v, oracle.additions(key, md, v, n, op.quote)[:n])
-            if added:
-                res.lines.append(f"Added {len(added)} {plural if len(added) > 1 else one}, {_span(added)}.")
+        if op.op != "add":
+            continue
+        if v not in ADD_TYPES:
+            res.left.append(f'"{op.quote}": requests are added to special interrogatories only; left as written')
+            continue
+        n = add_count(op.number_quote, set_items.count(md, v))
+        if not n:
+            res.left.append(f'"{op.quote}": the set already has that many; nothing was added')
+            continue
+        md, added = add(md, v, oracle.additions(f"{unit.name}#{i}", md, v, n, op.quote)[:n])
+        if added:
+            res.lines.append(f"Added {len(added)} {plural if len(added) > 1 else one}, {_span(added)}.")
+    return md
+
+
+def _cut(md: str, unit: Unit, ops: list[Op], oracle: Oracle, protected: set[int], res: Result) -> str:
+    v = unit.set_type
     for i, op in enumerate(ops):
         if op.op != "cut":
             continue
@@ -100,28 +102,47 @@ def revise_unit(
         if not drop:
             res.left.append(f'"{op.quote}": the set already has {have}; nothing was removed')
             continue
-        protected = set(foreign)
         new, dropped = cut(md, v, oracle.ranking(f"{unit.name}#{i}", md, v, drop, protected), drop, protected)
         if len(dropped) < drop:
             raise Refused("revise_unchecked", f"{unit.name}: only {len(dropped)} of {drop} requests could be removed")
         md = new
         res.lines.append(f"Removed former {_span(sorted(dropped))}.")
+    return md
+
+
+def _renumber(md: str, unit: Unit, start: int, res: Result) -> str:
+    v = unit.set_type
     r = set_items.renumber(md, v, start, wide=True)
     if r.unresolved:
         raise Held(
             "revise_scope_unclear",
-            f"{unit.name} cites No. {', '.join(map(str, r.unresolved))} of its own {plural} in a form the new "
-            "numbering cannot carry; nothing was filed",
+            f"{unit.name} cites No. {', '.join(map(str, r.unresolved))} of its own {set_items.NAMES[v][1]} in a "
+            "form the new numbering cannot carry; nothing was filed",
         )
-    md = r.doc
-    if r.changed and set_items.unparsed(md, v):
+    if r.changed and set_items.unparsed(r.doc, v):
         raise Held(
             "revise_scope_unclear",
             f"{unit.name} is renumbered and cites a request in a form code cannot read "
-            f'("{set_items.unparsed(md, v)[0]}"); nothing was filed',
+            f'("{set_items.unparsed(r.doc, v)[0]}"); nothing was filed',
         )
     res.numbers = dict(zip(r.before, r.after))
     res.lines += [f"{ln}." for ln in set_items.numbers_note(r, v)]
+    return r.doc
+
+
+def revise_unit(
+    md: str, unit: Unit, ops: list[Op], oracle: Oracle, foreign: dict[int, list[str]] | None = None
+) -> Result:
+    """``ops`` made in one filed set, in order: define, add, cut, renumber,
+    capitals, the declaration's count. ``foreign``: this set's numbers other
+    files cite, with their names; never cut (``revise_all`` rewrites them)."""
+    v = unit.set_type
+    res = Result(md, unit.count, unit.count)
+    start = set_items.read(md, v)[0].number  # a set whose first request is cut still begins here
+    md, terms = _define(md, ops, oracle, res)
+    md = _add(md, unit, ops, oracle, res)
+    md = _cut(md, unit, ops, oracle, set(foreign or {}), res)
+    md = _renumber(md, unit, start, res)
     if terms:
         md = capitalize(md, terms)
     res.after = set_items.count(md, v)
