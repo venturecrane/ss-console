@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from jobs.drafting import set_items
-from jobs.drafting.revise import propounded as p, propounded_ask as pa
+from jobs.drafting.revise import propounded as p, propounded_ask as pa, propounded_set as ps
 
 SROG = "special_interrogatories"
 RFA = "requests_for_admission"
@@ -87,7 +87,7 @@ def unit(md: str, name: str = "Special Interrogatories, Set One.docx", hint: str
         ("to 120 to 125", 150, 125),
         ("to 120 – 125", 150, 125),
         ("trim to 120125", 150, 125),  # the dash lost: one ascending split, each within the count
-        ("trim to 120125", 100, None),  # neither number is within the count: never a guess
+        ("trim to 120125", 100, 125),  # same width, ascending: read as "120-125", as the dashed form is
         ("to 1234", 200, 34),  # 1/234 is over the count and 123/4 descends: only 12/34
         ("to 5040", 100, None),  # 50/40 descends and the rest lead with zero: no split
         ("to 12345", 2345, None),  # 1/2345 and 12/345 both fit: two readings, never a guess
@@ -116,6 +116,30 @@ def test_a_cut_reads_to_and_by_and_holds_a_bare_number():
     assert p.cut_drop("to 50", 40) is None  # a target over the count is not a cut: never a guess
     assert p.cut_drop("10", 40) is None  # to ten or by ten? never a guess
     assert p.cut_drop("to 0", 40) is None  # a cut never empties a set
+
+
+@pytest.mark.parametrize(
+    "quote,want",
+    [
+        ("remove up to 10", 10),
+        ("remove 5 or 6", None),
+        ("cut only 5", 5),
+        ("drop a max of 5", 5),
+        ("cut 5 in total", 5),
+        ("reduce it to 25", 5),
+        ("cut by 16", None),  # more than half the set: the attorney's to confirm, held
+        ("cut to 10", None),  # the same, read as a target
+        ("cut 120 to 125", None),  # a removal and a target at once: never a guess
+    ],
+)
+def test_a_cut_tells_a_target_from_a_number_to_remove(quote, want):
+    """FALSIFIER: read bare "to", "only", "max" or "total" as a target, and
+    "remove up to 10" from 30 removes 20."""
+    assert p.cut_drop(quote, 30) == want
+
+
+def test_a_joined_range_and_a_dashed_one_agree_when_the_set_is_already_under_it():
+    assert p.cut_drop("down to 120125", 100) == p.cut_drop("down to 120-125", 100) == 0
 
 
 def test_an_add_reads_a_count_or_a_total_and_defaults_to_ten():
@@ -273,7 +297,17 @@ def test_scope_is_the_sets_the_words_name_and_the_party_they_name():
     every = p.Op("define", "Please define VEHICLE", (), "", "VEHICLE")
     assert p.scope(every, us, EMAIL) == [0, 1, 2]  # no set and no party named: every set it edits
     role = p.Op("define", "define VEHICLE for the defendant", (), "the defendant", "VEHICLE")
-    assert p.scope(role, us, "define VEHICLE for the defendant") == [0, 1, 2]
+    assert p.scope(role, us[:2], "define VEHICLE for the defendant") == [0, 1]  # one defendant: its sets
+
+
+def test_a_role_that_fits_two_parties_holds():
+    """FALSIFIER: the dead role branch, or a role read as every party, and "the
+    defendant" edits both defendants' sets."""
+    role = p.Op("define", "define VEHICLE for the defendant", (), "to the defendant", "VEHICLE")
+    with pytest.raises(p.Held) as e:
+        p.scope(role, _units(), "define VEHICLE for the defendant")
+    assert e.value.code == "revise_scope_unclear"
+    assert p.party_match("to the defendant", "Defendant DELTA EXAMPLE")  # stop words name no one
 
 
 def test_a_scope_no_file_matches_is_smds_never_a_question():
@@ -369,6 +403,54 @@ def test_an_old_count_not_in_the_declaration_exactly_once_holds():
         p.declaration(set_md(), 40, 38, SROG)  # over 35 and no declaration found
 
 
+def test_a_count_spelled_out_beside_the_number_holds():
+    """FALSIFIER: rewrite the digits alone, and "forty (40)" becomes "forty (38)"."""
+    md = set_md(decl="This set contains a total of forty (40) specially prepared interrogatories.")
+    with pytest.raises(p.Held) as e:
+        p.declaration(md, 40, 38, SROG)
+    assert e.value.code == "revise_declaration"
+
+
+def test_a_caption_naming_the_declaration_is_never_the_declaration():
+    """FALSIFIER: start the block at the first line that names it, and the whole
+    set is the block: a request's "40" could be rewritten as the count."""
+    md = set_md(decl=DECL)
+    md = md.replace("SET NO.: One", "SET NO.: One\n\nDECLARATION FOR ADDITIONAL DISCOVERY ATTACHED")
+    a, _b = p.decl_block(md, SROG)
+    assert a > set_items.read(md, SROG)[-1].start
+
+
+def test_a_definition_after_the_last_keeps_its_sub_paragraphs_whole():
+    """FALSIFIER: insert after the last definition's first line, and its (a) and (b) are split from it."""
+    md = set_md().replace(
+        '2. "YOU" means the responding party.',
+        '2. "YOU" means the responding party, including:\n\n(a) its agents; and\n\n(b) its attorneys.',
+    )
+    out, why = p.define(md, "ZONE", '"ZONE" means the area of the INCIDENT.')
+    assert why is None
+    assert '(a) its agents; and\n\n(b) its attorneys.\n\n3. "ZONE" means' in out
+
+
+def test_cutting_a_last_request_that_runs_on_holds():
+    """FALSIFIER: keep what follows the last request's first paragraph, and its
+    second paragraph is left as an orphan under the request before it."""
+    md = set_md(texts=["A.", "B.", "C.", "D."]).replace("\n\nD.\n\n", "\n\nD.\n\nAnd a second paragraph of D.\n\n")
+    with pytest.raises(p.Held) as e:
+        p.cut(md, SROG, [4], 1, set())
+    assert e.value.code == "revise_scope_unclear"
+    assert p.cut(md, SROG, [2], 1, set())[1] == [2]  # a request before the last: its paragraphs go with it
+
+
+def test_a_cut_naming_no_kind_holds_when_the_thread_has_several_kinds():
+    """FALSIFIER: "cut the requests down to 30" cuts every set of every kind."""
+    us = _units()[:2]  # an SROG and an RFA, one party
+    with pytest.raises(p.Held) as e:
+        p.scope(p.Op("cut", "cut these down to 3", (), "", "", "down to 3"), us, "cut these down to 3")
+    assert e.value.code == "revise_scope_unclear"
+    add = p.Op("add", "add two more", (), "", "", "two more")
+    assert p.scope(add, us, "add two more") == [0]  # an add names its kind: requests are added to SROGs alone
+
+
 def test_production_sets_carry_no_count_to_rewrite():
     md = set_md(RFP, decl=DECL)
     assert p.declaration(md, 40, 30, RFP) == (md, None)
@@ -388,7 +470,7 @@ def test_one_set_is_defined_added_to_cut_renumbered_and_its_reply_written_by_cod
     oracle = StandIn(
         '"VEHICLE" means the 2020 Example sedan.', ["About the owner.", "About the vehicle trip."], [2, 3, 5]
     )
-    res = p.revise_unit(md, u, ops, oracle)
+    res = ps.revise_unit(md, u, ops, oracle)
     items = [it.text(res.md) for it in set_items.read(res.md, SROG)]
     assert [it.number for it in set_items.read(res.md, SROG)] == [1, 2, 3]
     assert "About the VEHICLE." in items[0] and "About the INCIDENT." in items[1] and "VEHICLE trip" in items[2]
@@ -397,26 +479,111 @@ def test_one_set_is_defined_added_to_cut_renumbered_and_its_reply_written_by_cod
     assert "Added 2 special interrogatories, Nos. 5, 6." in res.lines
     assert "Removed former Nos. 2, 3, 5." in res.lines
     assert any("former No. 4 is now No. 2, former No. 6 is now No. 3" in ln for ln in res.lines)
-    assert oracle.calls == ["definition:VEHICLE", f"additions:{u.name}:2", f"ranking:{u.name}:3"]
-    lines = p.summary(u.name, res, SROG)
+    assert oracle.calls == ["definition:VEHICLE", f"additions:{u.name}#1:2", f"ranking:{u.name}#2:3"]
+    lines = ps.summary(u.name, res, SROG)
     assert lines[0] == f"{u.name} (4 special interrogatories, now 3):"
 
 
 def test_requests_are_added_to_special_interrogatories_only():
     md = set_md(RFA)
-    res = p.revise_unit(md, unit(md, hint=RFA), [p.Op("add", "add five", (), "", "", "five")], StandIn())
+    res = ps.revise_unit(md, unit(md, hint=RFA), [p.Op("add", "add five", (), "", "", "five")], StandIn())
     assert not res.changed and "special interrogatories only" in res.left[0]
 
 
-def test_another_sets_citation_is_never_cut_and_is_named_when_it_moves():
-    """An SROG cites "Request for Admission No. 3": FALSIFIER, cut it, or move it
-    silently, and the SROG file asks about a request that is gone or renumbered."""
+def test_another_sets_citation_is_never_cut_and_is_rewritten_when_it_moves():
+    """An SROG cites "Request for Admission No. 3": FALSIFIER, cut it, or leave
+    the SROG's citation, and the SROG file asks about a request that is gone or
+    now carries another number."""
     srog = set_md(texts=["State all facts for your denial of Request for Admission No. 3."])
     rfa = set_md(RFA)
     us = [unit(srog), p.read_unit("Requests for Admission, Set One.docx", RFA, rfa)]
-    foreign = p.foreign_refs(us, [srog, rfa], 1)
-    assert foreign == {3: [us[0].name]}
-    res = p.revise_unit(rfa, us[1], [p.Op("cut", "cut by 2", (), "", "", "by 2")], StandIn(ranking=[3, 1, 2]), foreign)
-    assert [it.number for it in set_items.read(res.md, RFA)] == [1, 2]
-    assert "Removed former Nos. 1, 2." in res.lines
-    assert any("cites request for admission No. 3, now No. 1" in ln for ln in res.lines)
+    assert ps.foreign_refs(us, [srog, rfa], 1) == {3: [us[0].name]}
+    cut = p.Op("cut", "cut the requests for admission by 2", (RFA,), "", "", "by 2")
+    out = ps.revise_all(us, [srog, rfa], [cut], [[1]], StandIn(ranking=[3, 1, 2]))
+    assert [it.number for it in set_items.read(out[1].md, RFA)] == [1, 2]
+    assert "Removed former Nos. 1, 2." in out[1].lines
+    assert "Request for Admission No. 1." in out[0].md and "No. 3" not in out[0].md
+    assert out[0].lines == [f"Its citations of {us[1].name} follow the new numbering (No. 3 is now No. 1)."]
+
+
+def test_a_set_to_another_party_neither_protects_nor_is_rewritten():
+    """FALSIFIER: protect across parties, and party B's citation keeps party A's request."""
+    srog = set_md(
+        texts=["State all facts for your denial of Request for Admission No. 3."], party="Defendant GAMMA EXAMPLE"
+    )
+    rfa = set_md(RFA)
+    us = [unit(srog), p.read_unit("Requests for Admission, Set One.docx", RFA, rfa)]
+    assert ps.foreign_refs(us, [srog, rfa], 1) == {}
+    cut = p.Op("cut", "cut the requests for admission by 2", (RFA,), "", "", "by 2")
+    out = ps.revise_all(us, [srog, rfa], [cut], [[1]], StandIn(ranking=[3, 1, 2]))
+    assert "Removed former Nos. 1, 3." in out[1].lines and 0 not in out
+
+
+def test_a_citation_in_another_file_code_cannot_place_holds():
+    """Two request-for-admission sets to one party: FALSIFIER, rewrite the SROG's
+    citation by either, and it may now point into the wrong set."""
+    srog = set_md(texts=["State all facts for your denial of Request for Admission No. 3."])
+    rfa = set_md(RFA)
+    us = [unit(srog), p.read_unit("Requests for Admission, Set One.docx", RFA, rfa),
+          p.read_unit("Requests for Admission, Set Two.docx", RFA, rfa)]  # fmt: skip
+    cut = p.Op("cut", "cut the requests for admission by 2", (RFA,), "", "", "by 2")
+    with pytest.raises(p.Held) as e:
+        ps.revise_all(us, [srog, rfa, rfa], [cut], [[1]], StandIn(ranking=[1, 2, 3]))
+    assert e.value.code == "revise_scope_unclear"
+
+
+@pytest.mark.parametrize(
+    "cite,cited",
+    [
+        ("Interrogatory No. 3", {3}),
+        ("Special Interrogatory Nos. 3-4", {3, 4}),
+        ("Special Interrogatories Nos. 2 through 4", {2, 3, 4}),
+        ("Interrogatory Nos. 3 and 4", {3, 4}),
+    ],
+)
+def test_short_and_plural_citations_are_read_and_protected(cite, cited):
+    """FALSIFIER: read only "Special Interrogatory No. 3", and a cut removes a
+    request the set still cites in a shorter or plural form."""
+    md = set_md(texts=["A.", "B.", "C.", "D.", "E.", f"Identify every witness to your answer to {cite}."])
+    assert p.references(md, SROG) == cited
+    new, dropped = p.cut(md, SROG, [3, 4, 2, 1, 5], 2, set())
+    assert not set(dropped) & cited
+
+
+def test_a_range_citation_follows_the_renumbering_or_holds():
+    """FALSIFIER: rewrite only the endpoints of "Nos. 3-4" after a cut inside the range."""
+    md = set_md(
+        texts=["A.", "B.", "C.", "D.", "E.", "Identify each witness to Special Interrogatory Nos. 4 through 5."]
+    )
+    res = ps.revise_unit(md, unit(md), [p.Op("cut", "cut by 1", (), "", "", "by 1")], StandIn(ranking=[2, 1]))
+    assert "Special Interrogatory Nos. 3 through 4." in res.md
+
+
+def test_a_renumbered_set_citing_a_request_in_a_form_code_cannot_read_holds():
+    """ "Request No. 2" in an interrogatory set: FALSIFIER, renumber around it and it goes stale."""
+    md = set_md(texts=["A.", "B.", "C.", "D.", "Identify each witness to Request No. 4."])
+    with pytest.raises(p.Held) as e:
+        ps.revise_unit(md, unit(md), [p.Op("cut", "cut by 1", (), "", "", "by 1")], StandIn(ranking=[1]))
+    assert e.value.code == "revise_scope_unclear"
+
+
+def test_two_adds_on_one_set_each_get_their_own_answer():
+    """FALSIFIER: key the answer by file, and the second ask reuses the first's requests."""
+    md = set_md()
+    o = pa.ModelOracle(lambda *a: "", "add two about the phone and two about the car")
+    seen = []
+
+    def ask(stage, system, user, max_tokens):
+        seen.append(user)
+        topic = "car" if "about the car" in user else "phone"  # the ask, not the set it already holds
+        return json.dumps({"items": [f"Identify each {topic} record.", f"Describe each {topic} used."]})
+
+    o.ask = ask
+    ops = [
+        p.Op("add", "add two about the phone", (), "", "", "two"),
+        p.Op("add", "add two about the car", (), "", "", "two"),
+    ]
+    res = ps.revise_unit(md, unit(md), ops, o)
+    texts = [it.text(res.md) for it in set_items.read(res.md, SROG)]
+    assert any("phone record" in t for t in texts) and any("car record" in t for t in texts)
+    assert len(seen) == 2
