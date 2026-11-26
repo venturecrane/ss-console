@@ -314,6 +314,16 @@ def test_an_express_assertion_follows_the_objection_it_asserts() -> None:
     assert para.index(_fill(WP_SHORT)) < para.index(said) < para.index("will produce")
 
 
+def test_own_words_calling_the_request_a_demand_are_not_written_twice() -> None:
+    first = "Responding Party objects to this {item} to the extent it seeks information protected by the marital communications privilege."
+    row = {"key": "obj_091", "kind": "objection", "text": first, "names": [], "sets": [], "source": ""}
+    book = book_mod.parse(json.dumps([*ROWS, row]))
+    demand = first.replace("{item}", "demand")
+    marker = "{{ATTORNEY: CANDIDATE OBJECTION: " + demand + "}}"
+    out, _done = M.settle("8", [_fill(first), marker], book, RFP, set(), adopt_own=True)
+    assert out == [_fill(first)]
+
+
 def test_a_book_with_no_express_assertion_adds_nothing():
     out, _done = M.settle("3", [_marker("work product")], BOOK, RFP, set(), adopt_own=True)
     assert out == [_fill(WP_SHORT)]

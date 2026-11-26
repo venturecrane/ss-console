@@ -262,6 +262,16 @@ def _tidy(block: str) -> str:
     return re.sub(r"\s+([.;,])", r"\1", " ".join(block.split()))
 
 
+# What a response answers, by any of its names: a draft calls a request for
+# production "this demand" where the firm's entry says "this request"
+# (2026-11-26, rule-fix-9: the same objection written twice in two responses).
+_ITEM_WORDS = re.compile(r"\b(?:demands?|requests?|interrogator(?:y|ies))\b")
+
+
+def _same_item(words: str) -> str:
+    return _ITEM_WORDS.sub("item", words)
+
+
 def _firm_whole(own: str, book: Any, item: str) -> str:
     """``own`` (the draft's adopted objection words) with each sentence the
     firm's book states in full put back whole: a sentence whose words a book
@@ -270,10 +280,10 @@ def _firm_whole(own: str, book: Any, item: str) -> str:
     only; the firm's entry carries its second."""
     out: list[str] = []
     for s in _sentences(own):
-        w = _words(s)
+        w = _same_item(_words(s))
         hits = []
         if len(w.split()) >= 8:
-            hits = [k for k in book.entries if f" {w} " in f" {_words(book.text(k, item=item))} "]
+            hits = [k for k in book.entries if f" {w} " in f" {_same_item(_words(book.text(k, item=item)))} "]
         said = s
         if hits:
             key, _how = choose(hits, s, book)
@@ -299,12 +309,16 @@ def _one(
         keys = []
     texts = {k: book.text(k, item=item) for k in keys}
     own = own_sentence(body) if adopt_own and not keys else ""
+    said_own = bool(own)
+    if own:  # each sentence the response already states is dropped: never twice
+        seen = _same_item(whole)
+        own = " ".join(x for x in _sentences(_firm_whole(own, book, item)) if f" {_same_item(_words(x))} " not in seen)
     stated = [k for k, t in texts.items() if f" {_words(t)} " in whole]
-    if stated or (own and f" {_words(own)} " in whole):  # the response already states this ground: never twice
+    if stated or (said_own and not own):  # the response already states this ground: never twice
         return "", Settled("", stated[0] if stated else "", "", ground, ALREADY, tuple(keys))
     if not keys:
         if own:
-            return _firm_whole(own, book, item), Settled("", "", "", ground, OWN)
+            return own, Settled("", "", "", ground, OWN)
         why = NO_SENTENCE if adopt_own and not piped else PHRASE_MISSING
         return body, Settled("", "", why, ground)
     among = tuple(keys) if len(keys) > 1 else ()
