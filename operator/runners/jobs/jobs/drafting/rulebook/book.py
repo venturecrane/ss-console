@@ -50,6 +50,26 @@ GROUNDS: dict[str, tuple[str, ...]] = {
 
 
 _SLOT_START = re.compile(r"(?:^|[.!?:]\s+)$")
+_COUNT = re.compile(
+    r"(?i)(?:\b(?:seen|found|used|in|on)\s+)?\b(\d+)\s*(?:of\s+\d+\s+)?(?:(?:filed|served|signed)\s+)?(?:finals?|final\s+documents?|documents?|files?|"
+    r"responses?|times?)\b|\bx\s*(\d+)\b|\bcount\s*[:=]\s*(\d+)"
+)
+_DOC_REF = re.compile(r"(?i)\.(?:docx?|pdf)\b|^[0-9a-f-]{8,}$|^[A-Za-z0-9_-]+#\d+$")
+
+
+def source_uses(source: str) -> int | None:
+    """The number of finished documents an entry's ``source`` says carry it
+    (``Book.uses``); None when it says none. A rule's own entry
+    (``rule:<id>``) is never a count."""
+    text = str(source or "").strip()
+    if not text or text.startswith("rule:"):
+        return None
+    m = _COUNT.search(text)
+    if m:
+        return int(next(g for g in m.groups() if g))
+    items = [p.strip() for p in re.split(r"[;,|\n]", text) if p.strip()]
+    refs = [p for p in items if _DOC_REF.search(p)]
+    return len(refs) if refs and len(refs) == len(items) else None
 
 
 def fill_item(text: str, word: str) -> str:
@@ -168,6 +188,14 @@ class Book:
     def text(self, key: str, item: str = "", exhibits: str = "") -> str:
         """An entry's words with its ``{item}`` and ``{exhibit}`` slots filled."""
         return fill_item(self.entries[key].text, item).replace("{exhibit}", exhibits)
+
+    def uses(self, key: str) -> int | None:
+        """How many of the firm's finished documents carry the entry, read
+        from its ``source`` (the book is built from the finals): a stated count
+        ("seen in 7 finals", "12 of 40 documents", "x9"), else the number of
+        documents it lists (names or ids separated by ";", "," or "|"). None
+        when the source says neither (an invented, rule-made or bare source)."""
+        return source_uses(self.entries[key].source)
 
     def find(self, sentence: str) -> str | None:
         """The key of the entry whose words are this sentence (quotes, spacing,
