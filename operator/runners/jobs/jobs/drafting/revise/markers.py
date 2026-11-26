@@ -355,6 +355,7 @@ def settle(
     whole = " " + " ".join(_words(_unmarked(b)) for b in blocks) + " "
     out: list[str] = []
     done: list[Settled] = []
+    pending: list[tuple[int, str]] = []  # (block the marker sat in, companion sentence)
     for b in blocks:
         cuts = _bodies(b)
         if not cuts:
@@ -366,16 +367,46 @@ def settle(
             done.append(Settled(number, how.key, how.left, how.ground, how.how, how.among))
             if how.left:
                 continue
-            if adopt_own:
-                text = " ".join(x for x in (text, *_companions(how, text, book, item, whole, set_type)) if x)
             new += [b[at:s], text]
             at = e
             whole += f"{_words(text)} "
+            if adopt_own:
+                for c in _companions(how, text, book, item, whole, set_type):
+                    pending.append((len(out), c))
+                    whole += f"{_words(c)} "
         new.append(b[at:])
         joined = _tidy("".join(new))
         if joined.strip(" .;,"):
             out.append(joined if joined != _tidy(b) else b)
+    for at_block, c in pending:
+        _place(out, at_block, c)
     return out, done
+
+
+def _place(out: list[str], at_block: int, said: str) -> None:
+    """Put a companion sentence right after the last sentence of the response
+    that states its ground, as the firm's finals order them; else at the end of
+    the paragraph its marker sat in. 2026-11-26, rule-fix-8: the work product
+    assertion came before the work product objection in six responses."""
+    groups = ground_groups(said)
+    spot = None
+    for i, para in enumerate(out):
+        cursor = 0
+        for sentence in _sentences(para):
+            found = para.find(sentence, cursor)
+            if found < 0:
+                continue
+            cursor = found + len(sentence)
+            if not EXPRESSLY.search(sentence) and ground_groups(sentence) & groups:
+                spot = (i, cursor)
+    if spot is None:
+        i = min(at_block, len(out) - 1)
+        if i < 0:
+            out.append(said)
+            return
+        spot = (i, len(out[i]))
+    i, cut = spot
+    out[i] = f"{out[i][:cut].rstrip()} {said} {out[i][cut:].lstrip()}".strip()
 
 
 __all__ = [

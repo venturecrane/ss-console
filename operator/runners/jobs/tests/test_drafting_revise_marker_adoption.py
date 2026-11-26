@@ -303,6 +303,17 @@ def test_adopted_own_words_the_firm_states_in_full_are_put_back_whole() -> None:
     assert kept == ["Responding Party objects to this request as vague."]  # under 8 words: as written
 
 
+def test_an_express_assertion_follows_the_objection_it_asserts() -> None:
+    row = {"key": "stmt_041", "kind": "statement", "text": EXPRESS, "names": [], "sets": [], "source": ""}
+    express = book_mod.parse(json.dumps([*ROWS, row]))
+    blocks = [_marker("attorney-client and work product"), f"{_fill(WP_SHORT)} Responding Party will produce the file."]
+    out, _done = M.settle("3", blocks, express, RFP, set(), adopt_own=True)
+    said = _fill(EXPRESS)
+    para = next(p for p in out if "will produce" in p)
+    assert sum(p.count("expressly") for p in out) == 1
+    assert para.index(_fill(WP_SHORT)) < para.index(said) < para.index("will produce")
+
+
 def test_a_book_with_no_express_assertion_adds_nothing():
     out, _done = M.settle("3", [_marker("work product")], BOOK, RFP, set(), adopt_own=True)
     assert out == [_fill(WP_SHORT)]
