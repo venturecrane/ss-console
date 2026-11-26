@@ -53,7 +53,10 @@ def bounds(text: str, count: int | None = None) -> tuple[int, int] | None:
     runs = _RUN.findall(text or "")
     if not runs:
         words = _WORD_NUM.findall(text or "")
-        return (_WORDS[words[0].lower()],) * 2 if len(words) == 1 else None
+        if len(words) != 1:
+            return None
+        w = _WORDS[words[0].lower()]
+        return w, w
     if len(runs) != 1:
         return None
     s = runs[0]
@@ -101,7 +104,8 @@ def cut_drop(number_quote: str, count: int) -> int | None:
     got = bounds(q, count)
     if got is None or (removal and got[0] != got[1]):
         return None  # "remove 5 or 6": which is the attorney's
-    drop = max(count - got[0], 0) if target else got[0]
+    # A set already inside the range (or under it) is left; one over its top is cut to its low end.
+    drop = (count - got[0] if count > got[1] else 0) if target else got[0]
     return drop if drop <= count * MAX_CUT_SHARE else None
 
 

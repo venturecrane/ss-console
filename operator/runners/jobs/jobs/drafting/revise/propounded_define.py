@@ -8,7 +8,11 @@ the set's uses of a new term in capitals, so the two never disagree about
 where the Definitions end. A definition is a paragraph opening with its term
 in capitals in quotes, numbered ("1. "INCIDENT" means") or not ("“IDENTIFY,”
 means", the comma inside the closing quote): a new one takes its neighbours'
-form, number and all, and goes in alphabetically.
+form, number and all, and goes in alphabetically when the set's definitions
+are in alphabetical order, else after the last; its term drops the email's
+"(S)" when no definition of the set carries one (``term_form``). New words
+the model writes keep its own case: only the job's newly defined terms are put
+in capitals (``capitalize``).
 
 The term is the model's spelling of the email's word: code takes it when it is
 the email's own, or a correction within two letters of one of the email's
@@ -112,7 +116,7 @@ def definition_ok(term: str, text: str) -> str | None:
     term in capitals); None when the model's text does not open with it."""
     t = " ".join((text or "").split())
     m = re.match(r"^[\"“]\s*([^\"”]+?)\s*[,.]?\s*[\"”]\s*[,.]?\s*(\S.*)$", t)
-    if not m or _key(m.group(1)).rstrip(",.").upper() != _key(term).upper() or len(t) > 1500:
+    if not m or base(m.group(1).rstrip(",.")) != base(term) or len(t) > 1500:
         return None
     return f'"{_key(term).upper()}" {m.group(2)}'
 
@@ -124,9 +128,25 @@ def _opening(row: re.Match[str], term: str, number: int | None) -> str:
     return f"{row.group(1)}{num}{mark}{row.group(5)}{term}{row.group(7)}{row.group(8)}{close}"
 
 
+def term_form(md: str, term: str) -> str:
+    """The new term in the set's own plural form: the email's "(S)" kept when
+    the set writes a plural mark on a definition, or has none to follow, and
+    dropped when its definitions are written plain ("DOCUMENT", "DOCUMENTS")."""
+    term = _key(term).upper()
+    rows = defined(md)
+    if not _PLURAL.search(term) or not rows or any(_PLURAL.search(r) for r in rows):
+        return term
+    return base(term)
+
+
+def _alphabetical(rows: list[re.Match[str]]) -> bool:
+    keys = [_key(r.group(6)).replace("(", "").casefold() for r in rows]
+    return keys == sorted(keys)
+
+
 def define(md: str, term: str, text: str) -> tuple[str, str | None]:
-    """The definition placed alphabetically among the set's definitions, in
-    their form (numbered, and the ones after it numbered on, only when they
+    """The definition placed alphabetically among the set's definitions when
+    they are in alphabetical order, else after the last one, in their form (numbered, and the ones after it numbered on, only when they
     are numbered): (the document, None) or (the document unchanged, why)."""
     term = _key(term).upper()
     got = defs(md)
@@ -143,7 +163,9 @@ def define(md: str, term: str, text: str) -> tuple[str, str | None]:
         return md, f'the definition of "{term}" was not added: its definitions are not numbered in order'
     rest = re.sub(r"^\"[^\"]*\"\s*", "", definition_ok(term, text) or text)
     order = term.replace("(", "").casefold()
-    at = next((i for i, r in enumerate(rows) if _key(r.group(6)).replace("(", "").casefold() > order), len(rows))
+    at = len(rows)
+    if _alphabetical(rows):
+        at = next((i for i, r in enumerate(rows) if _key(r.group(6)).replace("(", "").casefold() > order), len(rows))
     row = rows[min(at, len(rows) - 1)]
     out = md
     for i in range(len(rows) - 1, at - 1, -1) if nums else []:  # from the end, so earlier offsets hold
@@ -177,12 +199,6 @@ def _caps(seg: str, terms: list[str], others: list[str]) -> str:
     return seg
 
 
-def caps_text(text: str, md: str) -> str:
-    """New words for the set (a request the model wrote) with the set's defined terms in capitals."""
-    terms = sorted({base(t) for t in defined(md)}, key=len, reverse=True)
-    return sets._outside(text, lambda s: _caps(s, terms, [])) if terms else text
-
-
 def capitalize(md: str, terms: list[str]) -> str:
     """Every use of ``terms`` (and their plurals) after the Definitions, to the
     signature, in capitals: never inside a quotation, a case name or another
@@ -201,12 +217,12 @@ def capitalize(md: str, terms: list[str]) -> str:
 __all__ = [
     "base",
     "capitalize",
-    "caps_text",
     "define",
     "defined",
     "definition_ok",
     "defs",
     "defs_region",
     "spelled_in",
+    "term_form",
     "term_ok",
 ]

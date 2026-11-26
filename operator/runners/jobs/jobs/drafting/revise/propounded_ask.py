@@ -11,6 +11,7 @@ each request once and leaves enough that no kept request cites.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from .. import set_items
@@ -154,6 +155,10 @@ def ask_additions(md: str, variant: str, n: int, quote: str, ask: Ask) -> list[s
 FOLLOW_TOKENS = 16_000
 
 
+def _children(families: Mapping[int, list[int]]) -> set[int]:
+    return {c for cs in families.values() for c in cs}
+
+
 def check_follow_ups(raw: Any, md: str, variant: str, n: int | None) -> tuple[list[tuple[int, str]], list[str]]:
     """Follow-ups each keyed to a request the set has; at most ``n`` (or one
     per request when the email names no number)."""
@@ -187,26 +192,34 @@ def ask_follow_ups(md: str, variant: str, n: int | None, quote: str, ask: Ask) -
     )
 
 
-def check_ranking(raw: Any, md: str, variant: str, n: int, protected: set[int]) -> tuple[list[int], list[str]]:
+def check_ranking(
+    raw: Any, md: str, variant: str, n: int, protected: set[int], families: Mapping[int, list[int]] | None = None
+) -> tuple[list[int], list[str]]:
     nums = {it.number for it in set_items.read(md, variant)}
     got = raw.get("ranking") if isinstance(raw, dict) else None
     if not isinstance(got, list) or not all(isinstance(x, int) and not isinstance(x, bool) for x in got):
         return [], ['the answer is {"ranking": [request numbers]}']
     if len(set(got)) != len(got) or not set(got) <= nums:
         return [], [f"the ranking names each of the set's numbers ({min(nums)} to {max(nums)}) once"]
-    _md, dropped = cut(md, variant, got, n, protected)
+    _md, dropped = cut(md, variant, got, n, protected, families)
     if len(dropped) < n:
         return [], [f"the ranking leaves fewer than {n} requests that can be removed (no kept request may cite one)"]
     return got, []
 
 
-def ask_ranking(md: str, variant: str, n: int, protected: set[int], ask: Ask) -> list[int]:
+def ask_ranking(
+    md: str, variant: str, n: int, protected: set[int], ask: Ask, families: Mapping[int, list[int]] | None = None
+) -> list[int]:
     problems: list[str] | None = None
     for _ in range(2):
         keep = f"\nNEVER FIRST (cited by other requests): {sorted(protected)}" if protected else ""
+        if families:
+            keep += "\nA FOLLOW-UP GOES WITH THE REQUEST IT FOLLOWS; rank only these: " + str(
+                sorted(it.number for it in set_items.read(md, variant) if it.number not in _children(families))
+            )
         user = f"REMOVE: {n} of the set's {set_items.NAMES[variant][1]}{keep}\n\nTHE SET:\n{md}" + _retry(problems)
         got, problems = check_ranking(
-            parse_json(ask(STAGE_CUT, CUT_SYSTEM, user, MAX_TOKENS)), md, variant, n, protected
+            parse_json(ask(STAGE_CUT, CUT_SYSTEM, user, MAX_TOKENS)), md, variant, n, protected, families
         )
         if not problems:
             return got
@@ -249,11 +262,13 @@ class ModelOracle:
             return [(int(a), str(t)) for a, t in self.answers[key]]
         return self._keep(key, ask_follow_ups(md, variant, n, quote, self.ask))
 
-    def ranking(self, unit: str, md: str, variant: str, n: int, protected: set[int]) -> list[int]:
+    def ranking(
+        self, unit: str, md: str, variant: str, n: int, protected: set[int], families: Mapping[int, list[int]]
+    ) -> list[int]:
         key = f"ranking:{unit}"
         if key in self.answers:
             return [int(x) for x in self.answers[key]]
-        return self._keep(key, ask_ranking(md, variant, n, protected, self.ask))
+        return self._keep(key, ask_ranking(md, variant, n, protected, self.ask, families))
 
 
 def plan_chars(email: str, mds: list[str]) -> int:

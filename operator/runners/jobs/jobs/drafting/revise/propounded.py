@@ -43,11 +43,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any, Protocol, Sequence
 
 from .. import render, set_items
 from ..counts import STATUTORY_LIMIT
-from .propounded_define import capitalize, caps_text, define, definition_ok, term_ok
+from .propounded_define import capitalize, define, definition_ok, term_ok
 from .propounded_numbers import DEFAULT_ADD, add_count, crosses, cut_drop, parse_number
 from .set_units import named_set_types
 
@@ -318,7 +319,6 @@ def add(md: str, variant: str, texts: list[str]) -> tuple[str, list[int]]:
         return md, []
     before = set_items.count(md, variant)
     head, tail, inline = _label_style(md, variant)
-    texts = [caps_text(t, md) for t in texts]
     first = set_items.read(md, variant)[-1].number + 1
     block = "\n\n".join(
         f"{head}{first + i}{tail}{t}" if inline else f"{head}{first + i}{tail}\n\n{t}" for i, t in enumerate(texts)
@@ -332,28 +332,29 @@ def add(md: str, variant: str, texts: list[str]) -> tuple[str, list[int]]:
 FOLLOW_UP = re.compile(r"(?i)\bfollow[- ]?ups?\b|\bfollow(?:ing)?[- ]up\s+(?:questions|interrogatories|requests)\b")
 
 
-def follow_ups(md: str, variant: str, pairs: list[tuple[int, str]]) -> tuple[str, int]:
+def follow_ups(md: str, variant: str, pairs: list[tuple[int, str]]) -> tuple[str, dict[int, int]]:
     """Each (parent number, words) put directly after its parent request,
-    labeled as the set's labels are, in the order given; numbered for
-    ``set_items.renumber`` to give their places: (the document, how many went in)."""
+    labeled as the set's labels are, in the order given, its words as the
+    model wrote them; numbered for ``set_items.renumber`` to give their
+    places: (the document, each follow-up's number to its parent's)."""
     by = {it.number: it for it in set_items.read(md, variant)}
     head, tail, inline = _label_style(md, variant)
-    terms_md = md
     groups: dict[int, list[str]] = {}
     for parent, text in pairs:
         text = " ".join(_LEAD_LABEL.sub("", text).split())
         if parent in by and text:
-            groups.setdefault(parent, []).append(caps_text(text, terms_md))
-    fresh = set_items.FRESH
+            groups.setdefault(parent, []).append(text)
+    fresh, parents = set_items.FRESH, {}
     for parent in sorted(groups, key=lambda n: -by[n].start):  # from the end, so earlier offsets hold
         block = ""
         for t in groups[parent]:
             label = f"{head}{fresh}{tail}"
             block += f"\n\n{label}{t}" if inline else f"\n\n{label}\n\n{t}"
+            parents[fresh] = parent
             fresh += 1
         end = by[parent].end
         md = md[:end] + block + md[end:]
-    return md, fresh - set_items.FRESH
+    return md, parents
 
 
 # ---- cut ---------------------------------------------------------------------------------------------
@@ -371,22 +372,36 @@ def references(md: str, variant: str, skip: Sequence[tuple[int, int]] = (), own:
     return out
 
 
-def cut(md: str, variant: str, ranking: list[int], n: int, protected: set[int]) -> tuple[str, list[int]]:
-    """The first ``n`` requests of ``ranking`` removed, skipping any one a
-    request that stays cites or ``protected`` names: (the document, the
-    numbers removed, in ranking order). Never renumbers (``set_items.renumber``)."""
+def cut(
+    md: str,
+    variant: str,
+    ranking: list[int],
+    n: int,
+    protected: set[int],
+    families: Mapping[int, list[int]] | None = None,
+) -> tuple[str, list[int]]:
+    """Exactly ``n`` requests removed in ``ranking`` order, a request with
+    follow-ups (``families``: parent to its follow-ups) only with all of them
+    and a follow-up only with its parent, skipping any a request that stays
+    cites or ``protected`` names, and a family that would remove more than
+    ``n``: (the document, the numbers removed). Never renumbers."""
     items = set_items.read(md, variant)
     by = {it.number: it for it in items}
+    families = families or {}
+    child = {c for cs in families.values() for c in cs}
+    block = decl_block(md, variant)
+    decl = [block] if block else []  # its lists follow the cut (``propounded_decl``); never protect
     drop: list[int] = []
     for num in ranking:
         if len(drop) == n:
             break
-        if num in drop or num not in by or num in protected:
+        fam = [num, *families.get(num, [])]
+        if num in drop or num in child or num not in by or set(fam) & protected or len(drop) + len(fam) > n:
             continue
-        gone = [(by[d].start, by[d].end) for d in (*drop, num)]
-        if num in references(md, variant, gone):
+        gone = [(by[d].start, by[d].end) for d in (*drop, *fam)] + decl
+        if set(fam) & references(md, variant, gone):
             continue
-        drop.append(num)
+        drop += fam
     if not drop or len(drop) >= len(items):
         return md, []
     if items[-1].number in drop and _runs_on(md, items[-1]):
@@ -405,12 +420,16 @@ def _runs_on(md: str, last: set_items.Item) -> bool:
     the request's second paragraph, or the set's own closing; code cannot tell."""
     rest = md[last.end :]
     para = re.search(r"\S[\s\S]*?(?=\n\s*\n|\Z)", rest)
-    return para is not None and not set_items._HEAD.match(para.group(0))
+    return para is not None and not (set_items._HEAD.match(para.group(0)) or _CLOSING.match(para.group(0)))
 
 
-# ---- the declaration ---------------------------------------------------------------------------------
+#: The set's own closing after its last request: a table (the firm's signature
+#: block is a table row, "Dated: ... | EXAMPLE LAW By: ..."), a Dated: or By:
+#: line, or a page break.
+_CLOSING = re.compile(r"(?i)^\s*(?:\||\W*(?:dated|by)\s*:|-{3,}\s*$|\f)")
 
 
+# ---- the declaration's place (``propounded_decl`` rewrites it) ----------------------------------------
 def decl_block(md: str, variant: str | None = None) -> tuple[int, int] | None:
     """The declaration for additional discovery: from its title line, after
     the set's last request (a caption that names the declaration is never it),
@@ -428,95 +447,6 @@ def decl_block(md: str, variant: str | None = None) -> tuple[int, int] | None:
     return (start, len(md)) if start is not None else None
 
 
-_SPELLED = re.compile(
-    r"(?i)\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|"
-    r"sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b"
-)
-
-
-#: A list of every item number ("Nos. 1, 2, 3, ... 193") and a range of them ("Nos. 1-193", "1 through 193").
-_LIST = re.compile(r"(?<![\d.])\d+(?:(?:[ \t]*,[ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+)\d+){2,}(?![\d.]\d)")
-_SPAN = re.compile(r"(?<![\d.])(\d+)[ \t]*(?:-|\u2013|\u2014|through|thru|to)[ \t]*(\d+)(?![\d.]\d)", re.I)
-
-
-def _listed(text: str, first: int) -> list[tuple[int, int, list[int]]]:
-    """Each list of item numbers that begins at the set's first number."""
-    out = []
-    for m in _LIST.finditer(text):
-        nums = [int(n) for n in re.findall(r"\d+", m.group(0))]
-        if nums[0] == first:
-            out.append((m.start(), m.end(), nums))
-    return out
-
-
-def _list_text(old: str, nums: range) -> str:
-    """The new list in the old one's separators: ", " between, "and" before the last if it had one."""
-    sep = ", " if ", " in old else ","
-    tail = re.search(r"(?i)(,?\s*and\s+)\d+$", old)
-    last = tail.group(1) if tail else sep
-    words = [str(n) for n in nums]
-    return sep.join(words[:-1]) + last + words[-1] if len(words) > 1 else words[0]
-
-
-def _rewrite_count(text: str, old: int, new: int, first: int) -> str:
-    """Every statement of the count and of the item numbers in the declaration
-    (prose, beside the statute, the "(E)" list or range) rewritten to agree.
-    ``Held(revise_declaration)`` when they disagree with each other already,
-    say nothing code reads, or a count is also written out in words."""
-    lists = _listed(text, first)
-    spans = [m for m in _SPAN.finditer(text) if int(m.group(1)) == first]
-    stale = [nums for _a, _b, nums in lists if nums != list(range(first, old + 1))]
-    stale += [m.group(0) for m in spans if int(m.group(2)) != old]
-    if stale:
-        raise Held(
-            "revise_declaration",
-            f"the declaration lists the set's items as {stale[0]}, which is not this set's {old}; nothing was filed",
-        )
-    edits = [(a, b, _list_text(text[a:b], range(first, new + 1))) for a, b, _n in lists]
-    for m in re.finditer(rf"(?<![\d.]){old}(?!\d|\.\d)", text):
-        if any(a <= m.start() < b for a, b, _x in edits):
-            continue
-        if _SPELLED.search(text[max(0, m.start() - 40) : m.end() + 40]):
-            raise Held(
-                "revise_declaration",
-                f"the declaration writes this set's count in words beside {old}, which code does not rewrite; "
-                "nothing was filed",
-            )
-        edits.append((m.start(), m.end(), str(new)))
-    if not edits:
-        raise Held("revise_declaration", f"the declaration never says {old}, this set's count; nothing was filed")
-    for a, b, words in sorted(edits, reverse=True):
-        text = text[:a] + words + text[b:]
-    return text
-
-
-def declaration(md: str, old: int, new: int, variant: str) -> tuple[str, str | None]:
-    """This set's count rewritten in its declaration, every place it says it,
-    the list of item numbers included: (the document, the line for the reply,
-    or None when nothing changed). ``Held(revise_declaration)`` when the count
-    crosses 35 either way, or ``_rewrite_count`` cannot make it agree: what
-    the declaration should say is SMD's."""
-    if variant not in LIMITED or old == new:
-        return md, None
-    if crosses(old, new):
-        way = "over" if new > STATUTORY_LIMIT else "under"
-        raise Held(
-            "revise_declaration",
-            f"the set goes from {old} to {new}, {way} {STATUTORY_LIMIT}, so whether it carries a declaration "
-            "changes; nothing was filed",
-        )
-    block = decl_block(md, variant)
-    if block is None:
-        if new > STATUTORY_LIMIT:
-            raise Held("revise_declaration", f"the set has {new} and no declaration code can find; nothing was filed")
-        return md, None
-    a, b = block
-    items = set_items.read(md, variant)
-    first = items[0].number if items else 1
-    out = md[:a] + _rewrite_count(md[a:b], old, new, first) + md[b:]
-    return out, f"the declaration's count of this set is now {new} (was {old})"
-
-
 # ---- the model ----------------------------------------------------------------------------------------
 
 
@@ -529,7 +459,9 @@ class Oracle(Protocol):
 
     def follow_ups(self, unit: str, md: str, variant: str, n: int | None, quote: str) -> list[tuple[int, str]]: ...
 
-    def ranking(self, unit: str, md: str, variant: str, n: int, protected: set[int]) -> list[int]: ...
+    def ranking(
+        self, unit: str, md: str, variant: str, n: int, protected: set[int], families: Mapping[int, list[int]]
+    ) -> list[int]: ...
 
 
 __all__ = [
@@ -552,8 +484,8 @@ __all__ = [
     "check_plan",
     "crosses",
     "cut",
+    "decl_block",
     "cut_drop",
-    "declaration",
     "define",
     "definition_ok",
     "parse_number",

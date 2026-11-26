@@ -299,7 +299,7 @@ def test_define_add_and_cut_are_made_in_the_filed_set_as_a_new_version(world) ->
     ]
     assert "Identify every passenger in the VEHICLE." in body
     assert "State fact number 2 about the INCIDENT." not in body
-    assert client.calls == ["plan", "define", "add", "cut"]
+    assert client.calls == ["plan", "add", "define", "cut"]
     changes = v.proof["changes"]
     assert changes[0] == f"{NAMES[SROG]} (4 special interrogatories, now 3):"
     assert any("former No. 4 is now No. 2" in ln for ln in changes)

@@ -34,6 +34,7 @@ from ..replay import recorded
 from . import (
     prior,
     propounded as pp,
+    propounded_decl as pdc,
     propounded_define as pd,
     propounded_ask as pa,
     propounded_set as ps,
@@ -58,7 +59,7 @@ def shape(md: str, variant: str) -> dict[str, Any]:
     terms in order, and the declaration's words."""
     items = [(it.number, _norm(it.text(md))) for it in set_items.read(md, variant)]
     terms = pd.defined(md)
-    span = pp.decl_block(md, variant)
+    span = pdc.decl_block(md, variant)
     return {"items": items, "terms": terms, "declaration": _norm(md[span[0] : span[1]]) if span else ""}
 
 
