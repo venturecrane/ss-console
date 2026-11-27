@@ -73,16 +73,7 @@ class ReviseRun(DraftingRun):
         self._filed_cache: dict[str, Any] | None = None
         self._verdicts: dict[str, tuple[str, str, list[str]]] | None = None
 
-    # ---- plumbing ---------------------------------------------------------------
-    def _ask(self, model: str):
-        def ask(stage: str, system: str, user: str, max_tokens: int) -> str:
-            r = self.doorway.call(
-                stage, model=model, system=system, messages=[{"role": "user", "content": user}], max_tokens=max_tokens
-            )
-            return r.text
-
-        return ask
-
+    # ---- plumbing (the model call, ``_ask``, is DraftingRun's: run_ask.py) -------
     def _file_entry(self, role: str) -> dict[str, Any] | None:
         return next((f for f in self.revise["files"] if f["role"] == role), None)
 

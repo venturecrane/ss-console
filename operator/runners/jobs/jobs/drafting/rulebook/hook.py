@@ -3,8 +3,8 @@
 
 Each call is a no-op, returning the markdown it was given, unless the firm
 authored ``phrase_book`` with that mode in its ``stages`` (``book.stages``).
-The model call is the run's own doorway (``ReviseRun._ask``), so a replay
-answers it from recordings at $0.
+The model call is the run's own doorway (``run_ask.DoorwayAsk._ask``, which a
+first draft and a revision share), so a replay answers it from recordings at $0.
 """
 
 from __future__ import annotations

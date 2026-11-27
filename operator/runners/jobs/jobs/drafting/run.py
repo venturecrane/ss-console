@@ -83,6 +83,7 @@ from . import (
 from .evidence_lane import CHARGES_LINE, EvidenceLane
 from .forms import lane_hook as form_hook
 from .placing import Placing
+from .run_ask import DoorwayAsk
 from .run_free import RESPONSE as RESPONSE, FreeStages
 from .served_plan import DiscoveryPlan
 from . import plan_early
@@ -157,7 +158,7 @@ CAP_OVER_FIRM = (
 )
 
 
-class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
+class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages, DoorwayAsk):
     def __init__(
         self,
         job_dir: Path,
