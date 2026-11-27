@@ -5,21 +5,27 @@ propounded set checked only, its findings kept for the set lane. Invented values
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
-from jobs import firm_wording
+from drafting_testkit import ScriptedClient, make_inputs, make_job
+from jobs_testkit import PRICING
+from jobs import firm_wording, spend
 from jobs.drafting import render
 from jobs.drafting.outcome import DraftingFailed
 from jobs.drafting.rulebook import grid, hook, reading, sets_check, stage
 from jobs.drafting.rulebook.types import StageDoc, StageJob
+from jobs.drafting.run import DraftingRun
 
 from test_drafting_rulebook import BOOK_ROWS, MD
-from test_drafting_rulebook_stage import PRIV, RULES, Model
+from test_drafting_rulebook_stage import GRID, PRIV, READ, RULES, Model
 
 
 def _firm(stages=("first_draft",)) -> SimpleNamespace:
@@ -171,3 +177,43 @@ def test_two_units_through_the_gate_at_once_read_the_rules_once_and_keep_both(tm
     for key in ("set-1", "set-2"):
         assert json.loads((tmp_path / stage.DIR / f"{key}.json").read_text())["applied"]
     assert not list(tmp_path.rglob("*.tmp"))
+
+
+# ---- a real first-draft run: the model call is the run's own doorway (D6, 2026-11-26) ----
+class _RuleClient(ScriptedClient):
+    """The drafting script, plus the rules stage's two reads, told apart by their system prompt."""
+
+    def _answer(self, params):
+        system = json.dumps(params.get("system"))
+        for prompt, answer in ((reading.SYSTEM, READ), (grid.SYSTEM, GRID)):
+            if json.dumps(prompt)[1:80] in system:
+                return json.dumps(answer)
+        return super()._answer(params)
+
+
+def _first_draft(tmp_path: Path, client: ScriptedClient) -> DraftingRun:
+    pricing = tmp_path / "pricing.json"
+    pricing.write_text(json.dumps(PRICING), encoding="utf-8")
+    inputs = make_inputs(tmp_path / "inputs", phrase_book={"path": "phrase-book.json", "stages": ["first_draft"]})
+    (inputs / "phrase-book.json").write_text(json.dumps(BOOK_ROWS), encoding="utf-8")
+    cfg = yaml.safe_load((inputs / "drafting-firm.yaml").read_text(encoding="utf-8"))
+    cfg["inputs"]["phrase-book.json"] = hashlib.sha256((inputs / "phrase-book.json").read_bytes()).hexdigest()
+    (inputs / "drafting-firm.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    jd = make_job(tmp_path / "job", cls="discovery_response")
+    run = DraftingRun(
+        jd, inputs_dir=str(inputs), pricing=str(pricing), seat_factory=lambda: None, client=client, log=lambda _m: None
+    )
+    (run.data / firm_wording.FILE).write_text(json.dumps({"rules": RULES}), encoding="utf-8")  # frozen, none read
+    return run
+
+
+def test_a_first_draft_reads_its_unread_rules_through_its_own_doorway(tmp_path):
+    """On origin/main e50de3a32 a first draft had no ``_ask``: every unread frozen
+    rule failed the job ``rule_unchecked`` at the gate, with nothing delivered."""
+    run = _first_draft(tmp_path, _RuleClient())
+    assert not (run.data / reading.FILE).exists()  # nothing read yet: the read must be a model call
+    out = hook.at_gate(run, _unit(tmp_path), DRAFTED)
+    assert PRIV in render.split_notes(out)[0]
+    rows = [json.loads(line) for line in (run.data / spend.LEDGER_NAME).read_text().splitlines() if line.strip()]
+    assert [r["stage"] for r in rows] == [reading.STAGE, grid.STAGE]  # each priced and recorded by the doorway
+    assert json.loads((run.data / reading.FILE).read_text())
