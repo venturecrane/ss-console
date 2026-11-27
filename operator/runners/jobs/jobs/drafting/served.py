@@ -143,7 +143,14 @@ _REQUIRED = ("set_type", "set_number", "propounding_party", "responding_party", 
 _NUMBERS = "One Two Three Four Five Six Seven Eight Nine Ten".split()
 #: A numbered request in the served text: a line that starts "<label> NO. n"
 #: ("REQUEST NO. 3:", "SPECIAL INTERROGATORY NO. 3."), its text the lines after.
-_SERVED_ITEM = re.compile(r"(?im)^[\W_]*(?:[a-z][a-z .'’-]{0,60}?\s)?NO\.?\s*(\d+)\s*[:.)]?[ \t]*")
+#: What ends a label's number: a colon, period or closing paren (bold marks
+#: allowed before it), or the end of the line. A number followed by a word is a
+#: cross-reference the pleading's wrap put at a line start ("Special
+#: Interrogatory No. 3 for which YOU contend", measured 2026-11-26 on a real
+#: 35-request set, read as 1,2,3,4,3,5,3...), never a label. Case is no guide:
+#: some sets title-case their labels.
+LABEL_END = r"(?=[ \t*_]*(?:[:.)]|\r?$))"
+_SERVED_ITEM = re.compile(r"(?im)^[\W_]*(?:[a-z][a-z .'’-]{0,60}?\s)?NO\.?\s*(\d+)" + LABEL_END + r"\s*[:.)]?[ \t]*")
 
 
 @dataclass(frozen=True)

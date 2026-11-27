@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from .served import SET_TYPES
+from .served import LABEL_END, SET_TYPES
 
 RESPONDING = re.compile(r"(?im)^[ \t]*RESPONDING[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
 #: The asking party's line (measured 2026-11-20: half the real sets say REQUESTING).
@@ -27,8 +27,13 @@ TITLES = {
 TITLE = {k: re.compile(v) for k, v in TITLES.items()}
 _LABELLED = re.compile(
     r"(?im)^[\W_]*(?:SPECIAL(?:LY\s+PREPARED)?\s+)?(?:INTERROGATORY|REQUEST\s+FOR\s+(?:PRODUCTION(?:\s+OF\s+DOCUMENTS)?"
-    r"|ADMISSION)|DEMAND\s+FOR\s+(?:PRODUCTION|INSPECTION))\s+NO\.?\s*(\d+)\s*[:.)]?"
+    r"|ADMISSION)|DEMAND\s+FOR\s+(?:PRODUCTION|INSPECTION))\s+NO\.?\s*(\d+)" + LABEL_END + r"\s*[:.)]?"
 )
+#: The short label "REQUEST NO. n:" a production or admission set may print
+#: (measured 2026-11-26: a real 20-request RFP), a label only in a set its title
+#: already typed as one of those, under the same number-ends-it rule.
+_SHORT = re.compile(r"(?im)^[\W_]*REQUEST\s+NO\.?\s*(\d+)" + LABEL_END + r"\s*[:.)]?")
+_SHORT_KINDS = ("requests_for_production", "requests_for_admission")
 #: A bare request number: "15. Text" or "15." alone on its line with the text
 #: below (measured 2026-11-20: 4 of 5 real text sets). A space or the line end
 #: must follow the period, so a split citation ("4.1.") never counts.
@@ -91,6 +96,8 @@ def slice_requests(pages: dict[int, str], kind: str) -> tuple[str, str]:
     end = _END.search(body)
     body = body[: end.start()] if end else body
     lab = list(_LABELLED.finditer(body))
+    if not lab and kind in _SHORT_KINDS:
+        lab = list(_SHORT.finditer(body))
     if lab:
         return body[lab[0].start() :].strip(), "labelled"
     start = _bare_start(body, kind)
