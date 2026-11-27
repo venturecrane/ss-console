@@ -126,5 +126,5 @@ def fill(md: str, firm_data: Mapping[str, Any], cls: str) -> tuple[str, list[str
         return md, [f"opening demand: left for the attorney ({why})"]
     sentence = rule["sentence"].replace("{total}", howell.fmt(figure))
     return md.replace(rule["marker"], sentence, 1), [
-        f"opening demand: {howell.fmt(figure)}, the {rule['column']} total of the chart in {rule['chart']}, computed by code"
+        f"opening demand: {howell.fmt(figure)}, the {rule['column']} total of the chart in {rule['chart']}"
     ]
