@@ -27,14 +27,17 @@ import json
 import re
 from typing import Any, Callable
 
+from .job_lanes import LANE_REVISE_MAX_UNITS
+
 #: The class whose delivery files a document per served set.
 SET_CLASS = "discovery_response"
 #: Every class whose delivery files one document per set, revised whole: the
 #: responses to served sets, and the propounded sets (``revise/propounded_run.py``,
 #: 2026-11-26), each named by file id.
 SET_CLASSES = frozenset({SET_CLASS, "discovery_set"})
-#: The most filed sets one revision takes (the runner's ``job.MAX_UNITS``).
-MAX_UNITS = 20
+#: The most filed sets one revision takes: one value with the runner's
+#: ``job.MAX_UNITS``, declared in operator/contracts/job-lanes.yaml.
+MAX_UNITS = LANE_REVISE_MAX_UNITS["drafting"]
 #: The jobs read back per matter: every delivery of the class a thread can hold.
 MAX_JOBS = 50
 #: A served set's label words -> its type, the runner's ``served.SET_TYPES``.

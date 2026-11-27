@@ -148,13 +148,37 @@ def test_sets_smd_recorded_as_delivered_by_hand_are_revised_in_place(tmp_path) -
     assert len(_queued(queue, out["job_id"])["revise"]["units"]) == 3
 
 
+def _many(n: int) -> tuple[str, ...]:
+    return tuple(f"Special Interrogatories, Set {i}.docx" for i in range(n))
+
+
+@pytest.mark.parametrize("n", [21, 30])
+def test_up_to_thirty_filed_sets_are_revised(tmp_path, n) -> None:
+    """The real thread holds 21 filed sets (2026-11-26): every reply was refused at
+    the old ceiling of 20. FALSIFIER: keep 20, and all four emails are SMD's."""
+    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    _delivered(broker, writer, names=_many(n))
+    out = call(broker, "drafting_job_submit", envelope=_sets(*REPLIES[0]))
+    assert out["accepted"] and out["mode"] == "revise"
+    assert len(_queued(queue, out["job_id"])["revise"]["units"]) == n
+
+
 def test_more_sets_than_one_revision_takes_stay_smds(tmp_path) -> None:
     """FALSIFIER: drop the unit ceiling and the runner refuses the job after it is
     queued (its ``job.MAX_UNITS``), with the attorney told nothing true."""
     broker, _db, _queue, writer = _seat(tmp_path, THREADS.__getitem__)
-    _delivered(broker, writer, names=tuple(f"Special Interrogatories, Set {i}.docx" for i in range(21)))
+    _delivered(broker, writer, names=_many(31))
     out = call(broker, "drafting_job_submit", envelope=_sets(*REPLIES[0]))
     assert out["accepted"] is False and out["code"] == "prior_several_drafts" and out["smd_told"] is True
+
+
+def test_the_broker_and_the_job_share_one_ceiling() -> None:
+    """One value, declared once (operator/contracts/job-lanes.yaml), generated into
+    each tree. FALSIFIER: restate a number in either module, and a raise in one
+    queues jobs the other refuses."""
+    from workspace_broker import drafting_revise_units, job_lanes
+
+    assert drafting_revise_units.MAX_UNITS == job_lanes.LANE_REVISE_MAX_UNITS["drafting"] == 30
 
 
 def test_a_request_in_another_thread_still_drafts(tmp_path) -> None:
@@ -216,6 +240,7 @@ ACME = [{"request_words": "Draft special interrogatories to defendant Acme Corp.
         "Please prepare RFAs to the County that should track the ones to Acme.",
         "Please prepare RFAs to the City, limit them to 35",
         "Also prepare new sets to the district, and cut the specials to 35.",
+        "Please prepare RFAs to the County for the Acme matter.",
     ],
 )
 def test_a_new_party_is_a_new_ask_even_beside_a_change(text) -> None:
@@ -233,6 +258,9 @@ def test_a_new_party_is_a_new_ask_even_beside_a_change(text) -> None:
         "Trim the requests to 35.",
         "Reduce the interrogatories to the top 20.",
         "Cut the requests to thirty-five.",
+        "Cut the RFAs to 35 for now.",
+        "Reduce the interrogatories to 35 per set.",
+        "Trim the RFAs to 35 for Acme.",
     ],
 )
 def test_a_cut_to_a_number_is_a_change_never_a_new_party(text) -> None:

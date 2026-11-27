@@ -47,6 +47,10 @@
 #                    (<lane>-firm.yaml) or a directory (<lane>/<lane>-firm.yaml)
 #   firm_module      the runner module whose validate() judges those inputs
 #   broker_firm_copy the applier also writes <lane>-broker-firm.yaml for the broker
+#   revise_max_units the most filed documents one revision of the lane's job
+#                    takes: the broker refuses a revision of more for SMD, the
+#                    job's own check refuses more (one value for both trees;
+#                    the job's cost cap stays the real limit)
 #   waits_for        queued lanes whose running child keeps this lane's next job
 #                    from starting (the runner's BUSY_PIDS, from their child_pid);
 #                    work-health does not call a job queued behind one stuck
@@ -93,6 +97,7 @@ lanes:
     audit_prefix: DRAFTING
     firm_inputs: dir
     firm_module: jobs.drafting.firm
+    revise_max_units: 30
 
   litigation:
     skill: litigation-status

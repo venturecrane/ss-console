@@ -679,3 +679,35 @@ def test_a_revision_that_failed_after_sending_a_version_says_so_to_the_broker(tm
     dl._submit(lane, client)
     assert lane.tick() == "failed"
     assert client.records[-1][2]["delivery"]["uploads_started"] is True
+
+
+@pytest.mark.parametrize("n,loads", [(21, True), (30, True), (31, False)])
+def test_the_job_takes_up_to_thirty_filed_sets(n, loads) -> None:
+    """The job's own check, one value with the broker's (job-lanes.yaml)."""
+    from jobs.drafting import job as drafting_job
+
+    unit = {
+        "name": "Special Interrogatories.docx", "size": 3000, "sha256": "e" * 64,
+        "set_type": "special_interrogatories", "prior_job_id": "01M5ABCDEFGHJKMNPQRSTVWXYZ", "folder_id": "folder-1",
+    }  # fmt: skip
+    units = [{**unit, "file_id": f"file-set-{i:04d}"} for i in range(n)]
+    block = {"prior_job_id": unit["prior_job_id"], "folder_id": "folder-1", "units": units}
+    if loads:
+        assert len(drafting_job._revise(block)["units"]) == n
+    else:
+        with pytest.raises(Exception, match="1 to 30 filed drafts"):
+            drafting_job._revise(block)
+
+
+def test_the_cost_projection_counts_every_one_of_thirty_sets() -> None:
+    """The $10 cap stays the real limit: both projections, priced before any call
+    and before the first write call, grow with every set. FALSIFIER: price a fixed
+    number of sets, and a 30-set revision runs past the cap unpriced."""
+    from jobs.drafting.revise import propounded as pp
+
+    md = "\n".join(f"**SPECIAL INTERROGATORY NO. {i}:**\nState all facts." for i in range(1, 194))
+    cut = [pp.Op("cut", "Cut the specials to 120", (SROG,), "", "", "to 120")]
+    one, thirty = pa.edit_chars("x", [md], cut, [[0]]), pa.edit_chars("x", [md] * 30, cut, [list(range(30))])
+    assert thirty == 30 * one
+    per_set = pa.plan_chars("x", [md, md]) - pa.plan_chars("x", [md])
+    assert per_set > 2 * len(md) and pa.plan_chars("x", [md] * 30) == pa.plan_chars("x", [md]) + 29 * per_set

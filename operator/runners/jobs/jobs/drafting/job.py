@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..job_lanes import LANE_REVISE_MAX_UNITS
 from .firm import CLASSES
 
 JOB_FILE = "job.json"
@@ -202,7 +203,7 @@ _UNIT_SET_TYPES = (
     "requests_for_admission",
 )
 _UNIT_KEYS = {"file_id", "name", "size", "sha256", "set_type", "prior_job_id", "folder_id"}
-MAX_UNITS = 20
+MAX_UNITS = LANE_REVISE_MAX_UNITS["drafting"]  # one value with the broker's, operator/contracts/job-lanes.yaml
 
 
 def _unit_ok(u: Any) -> bool:

@@ -28,6 +28,9 @@ SMD_WAKE_WORD_JOB_KIND_KEYS='chronology demand drafting litigation casefile nego
 # Queued lane -> the lanes whose running child keeps its next job from starting.
 smd_lane_waits_for() { case "$1" in litigation) echo 'demand drafting casefile records' ;; casefile) echo 'demand drafting medchron litigation records' ;; negotiation) echo 'demand drafting casefile records' ;; records) echo 'demand drafting medchron litigation casefile' ;; *) return 1 ;; esac; }
 SMD_LANE_WAITS_FOR_KEYS='litigation casefile negotiation records'
+# Lane -> the most filed documents one revision of its job takes (the broker refuses more; the job checks).
+smd_lane_revise_max_units() { case "$1" in drafting) echo '30' ;; *) return 1 ;; esac; }
+SMD_LANE_REVISE_MAX_UNITS_KEYS='drafting'
 # Job kinds whose wake may be a scheduled run's (no request email).
 SMD_SCHEDULED_JOB_KINDS='litigation_job casefile_job negotiation_job note_job'
 # Lanes that write a request card row.

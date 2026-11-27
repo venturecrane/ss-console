@@ -35,8 +35,8 @@ _PARTY = re.compile(
 )
 #: Where a party's name ends: the clause after it says what to do, not who.
 _PARTY_END = re.compile(
-    r",|\b(?:so|that|because|with|which|who|whom|to|by|about|regarding|including|asking|on|in|is|are|was|were|"
-    r"should|need|needs|must|please)\b",
+    r",|\b(?:so|that|because|with|which|who|whom|to|for|per|by|about|regarding|including|asking|on|in|is|are|was|"
+    r"were|should|need|needs|must|please)\b",
     re.I,
 )
 #: A "to" that names how many, not whom (2026-11-24, "cut the special
