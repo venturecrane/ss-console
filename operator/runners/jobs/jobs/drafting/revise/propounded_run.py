@@ -101,8 +101,8 @@ class PropoundedSetRun(ReviseSetRun):
 
     # ---- the estimate and the plan ----------------------------------------------------------
     def _estimate(self) -> None:
-        mds = [self._md(k) for k in range(len(self.units))]
-        self._project(pa.plan_chars(self.job.request_text, mds), "the set revision", documents=len(mds))
+        sets = self._sets()
+        self._project(pa.plan_chars(self.job.request_text, sets), "the set revision", documents=len(sets))
 
     def _plan_ops(self) -> None:
         email, sets = self.job.request_text, self._sets()
@@ -114,7 +114,7 @@ class PropoundedSetRun(ReviseSetRun):
             raise DraftingFailed(str(exc)[:480]) from None
         # Each term, and each add and cut on each set, priced before the first write call.
         mds = [self._md(k) for k in range(len(self.units))]
-        self._project(pa.edit_chars(email, mds, ops, scoped), "the set revision's edits", ops=len(ops))
+        self._project(pa.edit_chars(email, mds, sets, ops, scoped), "the set revision's edits", ops=len(ops))
         self._write(PLAN, {"ops": [o.to_dict() for o in ops], "scope": scoped})
 
     # ---- the edit ----------------------------------------------------------------------------

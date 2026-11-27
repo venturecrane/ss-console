@@ -18,6 +18,8 @@ from .. import set_items
 from ..verify.items import parse_json
 from .set_units import named_set_types
 from .propounded import FOLLOW_UP, Held, Op, Refused, Unit, check_numbers, check_plan, cut, definition_ok, scope
+from .propounded_define import defined
+from .propounded_numbers import add_count, cut_drop
 
 STAGE_PLAN, STAGE_DEFINE, STAGE_ADD, STAGE_CUT = "revise-plan", "revise-define", "revise-add", "revise-cut"
 MAX_TOKENS = 4_000
@@ -126,10 +128,54 @@ def _retry(problems: list[str] | None) -> str:
     return "\n\nYOUR LAST ANSWER WAS REFUSED BY CODE:\n" + "\n".join(f"- {p}" for p in problems) if problems else ""
 
 
+# ---- what each call sends: only what it needs (2026-11-26) -------------------------------
+# No call sends a whole filed set: the plan reads the sets' names, types and
+# counts; a definition reads the email alone; an add or a follow-up reads the
+# set's defined terms and its requests; a ranking reads the requests alone. The
+# caption, instructions and signature are never sent. ``edit_chars`` prices
+# these same texts, so the estimate is what the calls send.
+
+
+def requests_text(md: str, variant: str) -> str:
+    """The set's requests, each its label and words on one line."""
+    return "THE REQUESTS:\n" + "\n".join(" ".join(it.text(md).split()) for it in set_items.read(md, variant))
+
+
+def _terms_and_requests(md: str, variant: str) -> str:
+    terms = defined(md)
+    head = f"THE SET'S DEFINED TERMS: {', '.join(terms)}\n\n" if terms else ""
+    return head + requests_text(md, variant)
+
+
+def define_user(term: str, quote: str, email: str) -> str:
+    return f'THE EMAIL:\n{email.strip()}\n\nTHE ASK: "{quote}"\nTHE TERM: "{term.upper()}"'
+
+
+def add_user(md: str, variant: str, n: int, quote: str) -> str:
+    plural = set_items.NAMES[variant][1]
+    return f'THE ASK: "{quote}"\nWRITE AT MOST: {n} new {plural}\n\n{_terms_and_requests(md, variant)}'
+
+
+def follow_user(md: str, variant: str, n: int | None, quote: str) -> str:
+    most = f"\nWRITE AT MOST: {n}" if n else ""
+    return f'THE ASK: "{quote}"{most}\n\n{_terms_and_requests(md, variant)}'
+
+
+def rank_user(
+    md: str, variant: str, n: int, protected: set[int], families: Mapping[int, list[int]] | None = None
+) -> str:
+    keep = f"\nNEVER FIRST (cited by other requests): {sorted(protected)}" if protected else ""
+    if families:
+        keep += "\nA FOLLOW-UP GOES WITH THE REQUEST IT FOLLOWS; rank only these: " + str(
+            sorted(it.number for it in set_items.read(md, variant) if it.number not in _children(families))
+        )
+    return f"REMOVE: {n} of the set's {set_items.NAMES[variant][1]}{keep}\n\n{requests_text(md, variant)}"
+
+
 def ask_definition(term: str, quote: str, email: str, ask: Ask) -> str:
     problems: list[str] | None = None
     for _ in range(2):
-        user = f'THE EMAIL:\n{email.strip()}\n\nTHE ASK: "{quote}"\nTHE TERM: "{term.upper()}"' + _retry(problems)
+        user = define_user(term, quote, email) + _retry(problems)
         raw = parse_json(ask(STAGE_DEFINE, DEFINE_SYSTEM, user, MAX_TOKENS))
         got = definition_ok(term, raw.get("definition", "") if isinstance(raw, dict) else "")
         if got:
@@ -141,9 +187,7 @@ def ask_definition(term: str, quote: str, email: str, ask: Ask) -> str:
 def ask_additions(md: str, variant: str, n: int, quote: str, ask: Ask) -> list[str]:
     problems: list[str] | None = None
     for _ in range(2):
-        user = f'THE ASK: "{quote}"\nWRITE AT MOST: {n} new {set_items.NAMES[variant][1]}\n\nTHE SET:\n{md}' + _retry(
-            problems
-        )
+        user = add_user(md, variant, n, quote) + _retry(problems)
         raw = parse_json(ask(STAGE_ADD, ADD_SYSTEM, user, MAX_TOKENS))
         items = raw.get("items") if isinstance(raw, dict) else None
         if isinstance(items, list) and items and all(isinstance(t, str) and t.strip() for t in items):
@@ -181,8 +225,7 @@ def check_follow_ups(raw: Any, md: str, variant: str, n: int | None) -> tuple[li
 def ask_follow_ups(md: str, variant: str, n: int | None, quote: str, ask: Ask) -> list[tuple[int, str]]:
     problems: list[str] | None = None
     for _ in range(2):
-        most = f"\nWRITE AT MOST: {n}" if n else ""
-        user = f'THE ASK: "{quote}"{most}\n\nTHE SET:\n{md}' + _retry(problems)
+        user = follow_user(md, variant, n, quote) + _retry(problems)
         raw = parse_json(ask(STAGE_ADD, FOLLOW_SYSTEM, user, FOLLOW_TOKENS))
         got, problems = check_follow_ups(raw, md, variant, n)
         if not problems:
@@ -212,12 +255,7 @@ def ask_ranking(
 ) -> list[int]:
     problems: list[str] | None = None
     for _ in range(2):
-        keep = f"\nNEVER FIRST (cited by other requests): {sorted(protected)}" if protected else ""
-        if families:
-            keep += "\nA FOLLOW-UP GOES WITH THE REQUEST IT FOLLOWS; rank only these: " + str(
-                sorted(it.number for it in set_items.read(md, variant) if it.number not in _children(families))
-            )
-        user = f"REMOVE: {n} of the set's {set_items.NAMES[variant][1]}{keep}\n\nTHE SET:\n{md}" + _retry(problems)
+        user = rank_user(md, variant, n, protected, families) + _retry(problems)
         got, problems = check_ranking(
             parse_json(ask(STAGE_CUT, CUT_SYSTEM, user, MAX_TOKENS)), md, variant, n, protected, families
         )
@@ -271,30 +309,55 @@ class ModelOracle:
         return self._keep(key, ask_ranking(md, variant, n, protected, self.ask, families))
 
 
-def plan_chars(email: str, mds: list[str]) -> int:
-    """Every call a job can make, priced before any: the plan, one definition,
-    and per file the requests to add and the ranking, each with its retry."""
-    plan = len(PLAN_SYSTEM) + len(email) + 200 * len(mds) + OUTPUT_WEIGHT * 800
-    define = len(DEFINE_SYSTEM) + len(email) + OUTPUT_WEIGHT * 600
-    per = sum(len(ADD_SYSTEM) + len(CUT_SYSTEM) + 2 * len(md) + OUTPUT_WEIGHT * 3000 for md in mds)
-    return 2 * (plan + define + per)
+#: The output each call is allowed for, in characters: a plan, a definition,
+#: one new request, a ranking's number.
+_PLAN_OUT, _DEFINE_OUT, _PER_REQUEST_OUT, _PER_RANK_OUT = 800, 600, 400, 8
+#: A call returns no more than its max tokens allow: about four characters each.
+_CHARS_PER_TOKEN = 4
 
 
-def edit_chars(email: str, mds: list[str], ops: list[Op], scoped: list[list[int]]) -> int:
-    """The write calls the settled plan makes, priced before the first: one
-    definition per term, and per add and cut op each set it changes, each with
-    its retry (``plan_chars`` priced one definition before the plan was read)."""
-    terms = {o.term.upper() for o in ops if o.op == "define"}
-    define = len(terms) * (len(DEFINE_SYSTEM) + len(email) + OUTPUT_WEIGHT * 600)
-    system = {"add": len(ADD_SYSTEM), "cut": len(CUT_SYSTEM)}
+def plan_chars(email: str, units: list[Unit]) -> int:
+    """The plan call, priced before it is made: the email and each set's name,
+    type and count (no set text), with its retry. The edits are priced after
+    it, before the first write call (``edit_chars``)."""
+    return 2 * (len(PLAN_SYSTEM) + len(plan_user(email, units)) + OUTPUT_WEIGHT * _PLAN_OUT)
 
-    def one(o: Op, md: str) -> int:
-        if o.op == "add" and FOLLOW_UP.search(o.quote):  # follow-ups are written for the whole set
-            return len(FOLLOW_SYSTEM) + len(md) + OUTPUT_WEIGHT * max(3000, len(md) // 3)
-        return system[o.op] + len(md) + OUTPUT_WEIGHT * 3000
 
-    per = sum(one(o, mds[k]) for o, ks in zip(ops, scoped) if o.op in system for k in ks)
-    return 2 * (define + per)
+def edit_chars(email: str, mds: list[str], units: list[Unit], ops: list[Op], scoped: list[list[int]]) -> int:
+    """The write calls the settled plan makes, priced before the first, each with
+    its retry, on exactly the text each sends: one definition per term (no set
+    text); per set in scope, an add or follow-up on its terms and requests and a
+    ranking on its requests, only where a cut removes some. A set out of scope
+    costs nothing; a request an earlier add writes is priced into the ranking."""
+    terms = {o.term.upper(): o for o in ops if o.op == "define"}
+    total = sum(len(DEFINE_SYSTEM) + len(define_user(t, o.quote, email)) + OUTPUT_WEIGHT * _DEFINE_OUT
+                for t, o in terms.items())  # fmt: skip
+    for k, (md, unit) in enumerate(zip(mds, units)):
+        total += _set_chars(md, unit.set_type, [o for o, ks in zip(ops, scoped) if k in ks and o.op != "define"])
+    return 2 * total
+
+
+def _set_chars(md: str, v: str, ops: list[Op]) -> int:
+    """One set's adds, follow-ups and rankings, in the order the revision makes them."""
+    total, grown, have = 0, 0, set_items.count(md, v)
+    adds = [o for o in ops if o.op == "add" and not FOLLOW_UP.search(o.quote)]
+    follows = [o for o in ops if o.op == "add" and FOLLOW_UP.search(o.quote)]
+    for o in adds:
+        n = add_count(o.number_quote, have) or 0
+        if n:
+            out = min(_PER_REQUEST_OUT * n, _CHARS_PER_TOKEN * MAX_TOKENS)
+            total += len(ADD_SYSTEM) + len(add_user(md, v, n, o.quote)) + grown + OUTPUT_WEIGHT * out
+            grown, have = grown + out, have + n
+    for o in follows:
+        n = add_count(o.number_quote, have) if o.number_quote else None
+        out = min(_PER_REQUEST_OUT * (n or have), _CHARS_PER_TOKEN * FOLLOW_TOKENS)
+        total += len(FOLLOW_SYSTEM) + len(follow_user(md, v, n, o.quote)) + grown + OUTPUT_WEIGHT * out
+        grown, have = grown + out, have + (n or have)
+    for o in (o for o in ops if o.op == "cut"):
+        drop = cut_drop(o.number_quote, have)
+        if drop:
+            total += len(CUT_SYSTEM) + len(rank_user(md, v, drop, set())) + grown + OUTPUT_WEIGHT * _PER_RANK_OUT * have
+    return total
 
 
 __all__ = [
@@ -307,7 +370,12 @@ __all__ = [
     "ask_plan",
     "ask_ranking",
     "check_ranking",
+    "add_user",
+    "define_user",
     "edit_chars",
+    "follow_user",
     "plan_chars",
+    "rank_user",
+    "requests_text",
     "settle_plan",
 ]

@@ -458,7 +458,7 @@ def test_a_staff_save_mid_job_that_changes_the_set_holds_and_writes_nothing(worl
 
 def test_over_the_cap_fails_before_any_call(world, monkeypatch: pytest.MonkeyPatch) -> None:
     """FALSIFIER: price after the plan call, and an oversized set is paid for."""
-    monkeypatch.setattr(pa, "plan_chars", lambda email, mds: 10**12)
+    monkeypatch.setattr(pa, "plan_chars", lambda email, sets: 10**12)
     seat = _one()
     client = ScriptClient({"ops": [op("add", "add two more", "two more")], "other": []})
     v, _r = _run(world, seat, client, "Please add two more.")
@@ -513,7 +513,7 @@ def test_a_file_citing_a_renumbered_set_is_filed_again_in_the_same_job(world) ->
 def test_the_edits_are_priced_after_the_plan_before_any_write_call(world, monkeypatch: pytest.MonkeyPatch) -> None:
     """FALSIFIER: price one definition per job, and a plan defining many terms
     on many sets runs past the cap."""
-    monkeypatch.setattr(pa, "edit_chars", lambda email, mds, ops, scoped: 10**12)
+    monkeypatch.setattr(pa, "edit_chars", lambda email, mds, sets, ops, scoped: 10**12)
     seat = _one()
     client = ScriptClient({"ops": [op("add", "add two more", "two more")], "other": []})
     v, _r = _run(world, seat, client, "Please add two more.")
@@ -699,15 +699,81 @@ def test_the_job_takes_up_to_thirty_filed_sets(n, loads) -> None:
             drafting_job._revise(block)
 
 
-def test_the_cost_projection_counts_every_one_of_thirty_sets() -> None:
-    """The $10 cap stays the real limit: both projections, priced before any call
-    and before the first write call, grow with every set. FALSIFIER: price a fixed
-    number of sets, and a 30-set revision runs past the cap unpriced."""
+def _invented_set(n: int, first: int = 1) -> str:
+    """A filed special-interrogatory set of ``n`` requests, invented words, with
+    a caption, definitions and a signature that no call sends."""
+    head = "CAPTION OF THE CASE\n\nPRELIMINARY STATEMENT AND INSTRUCTIONS. " + "Answer fully. " * 200
+    defs = '\n\n**DEFINITIONS**\n\n1. "INCIDENT" means the event of the complaint.\n'
+    body = "\n\n".join(
+        f"**SPECIAL INTERROGATORY NO. {i}:**\n\nState all facts that support your contention number {i} about "
+        "the INCIDENT, and identify each PERSON with knowledge of them."
+        for i in range(first, first + n)
+    )
+    return head + defs + "\n\n" + body + "\n\nDated: ________\n\nBy: ________"
+
+
+def _usd(chars: int, rate: float = 3.0) -> float:
+    from jobs.drafting.revise.run import FIXED_USD
+
+    return FIXED_USD + chars / 1_000_000 * rate
+
+
+def _units_of(mds: list[str]):
     from jobs.drafting.revise import propounded as pp
 
-    md = "\n".join(f"**SPECIAL INTERROGATORY NO. {i}:**\nState all facts." for i in range(1, 194))
-    cut = [pp.Op("cut", "Cut the specials to 120", (SROG,), "", "", "to 120")]
-    one, thirty = pa.edit_chars("x", [md], cut, [[0]]), pa.edit_chars("x", [md] * 30, cut, [list(range(30))])
-    assert thirty == 30 * one
-    per_set = pa.plan_chars("x", [md, md]) - pa.plan_chars("x", [md])
-    assert per_set > 2 * len(md) and pa.plan_chars("x", [md] * 30) == pa.plan_chars("x", [md]) + 29 * per_set
+    return [pp.Unit(f"Set {k}.docx", SROG, "Defendant", set_items.count(md, SROG)) for k, md in enumerate(mds)]
+
+
+def test_a_define_over_twenty_one_sets_prices_no_set_text() -> None:
+    """A definition reads the email alone, the plan the sets' names and counts.
+    FALSIFIER: price an add and a ranking on every set (the old estimate), and a
+    define over 21 large sets projects past the $10 cap and fails unrun."""
+    from jobs.drafting.revise import propounded as pp
+
+    mds = [_invented_set(193) for _ in range(21)]
+    units, email = _units_of(mds), "Please define ACCOMODATION(S) in each set."
+    ops = [pp.Op("define", email[:-1], (), "", "ACCOMMODATION(S)", "")]
+    plan, edit = pa.plan_chars(email, units), pa.edit_chars(email, mds, units, ops, [list(range(21))])
+    assert _usd(plan) < 1 and _usd(edit) < 1
+    assert edit == pa.edit_chars(email, mds[:1], units[:1], ops, [[0]])  # no set text: 21 sets cost what one does
+
+
+def test_follow_ups_price_the_requests_of_the_sets_in_scope_only() -> None:
+    """FALSIFIER: price the whole file (caption, instructions, signature), or a
+    set out of scope, and the estimate is not what the calls send."""
+    from jobs.drafting.revise import propounded as pp
+
+    mds = [_invented_set(70) for _ in range(6)]
+    units, quote = _units_of(mds), "The interrogatories need follow up questions"
+    ops = [pp.Op("add", quote, (SROG,), "", "", "")]
+    got = pa.edit_chars(quote, mds, units, ops, [[0, 1, 2, 3, 4]])
+    one = (
+        len(pa.FOLLOW_SYSTEM)
+        + len(pa.follow_user(mds[0], SROG, None, quote))
+        + pa.OUTPUT_WEIGHT * min(400 * 70, 4 * pa.FOLLOW_TOKENS)
+    )
+    assert got == 2 * 5 * one
+    assert "CAPTION" not in pa.follow_user(mds[0], SROG, None, quote)
+    assert "PRELIMINARY" not in pa.rank_user(mds[0], SROG, 5, set()) and "Dated" not in pa.add_user(
+        mds[0], SROG, 2, "x"
+    )
+
+
+def test_a_cut_prices_a_ranking_only_for_a_set_above_its_target() -> None:
+    from jobs.drafting.revise import propounded as pp
+
+    mds = [_invented_set(193), _invented_set(203), _invented_set(100)]
+    units = _units_of(mds)
+    ops = [pp.Op("cut", "Cut the special interrogatories to 120", (SROG,), "", "", "to 120")]
+    three = pa.edit_chars("x", mds, units, ops, [[0, 1, 2]])
+    assert three == pa.edit_chars("x", mds[:2], units[:2], ops, [[0, 1]]) > 0  # the 100-request set is not ranked
+
+
+def test_each_call_sends_only_what_it_needs() -> None:
+    """The add, follow-up and ranking calls carry the set's requests (and an add
+    or follow-up its defined terms), never the caption or the signature."""
+    md = _invented_set(3)
+    for user in (pa.add_user(md, SROG, 2, "q"), pa.follow_user(md, SROG, None, "q"), pa.rank_user(md, SROG, 1, set())):
+        assert "SPECIAL INTERROGATORY NO. 3:" in user and "CAPTION" not in user and "By: ____" not in user
+    assert '"INCIDENT"' not in pa.rank_user(md, SROG, 1, set()) and "INCIDENT" in pa.add_user(md, SROG, 2, "q")
+    assert "DEFINED TERMS: INCIDENT" in pa.follow_user(md, SROG, None, "q")
