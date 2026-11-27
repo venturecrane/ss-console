@@ -276,6 +276,8 @@ def target(run: Any, variant: str | None) -> tuple[tuple[int | None, int | None]
 def target_line(variant: str, bounds: tuple[int | None, int | None], a: Asked | None) -> str:
     """The THIS DOCUMENT line's number, in the drafter's words; "" with none."""
     lo, hi = bounds
+    if variant not in set_items.NAMES or (a is None and not lo and not hi):
+        return ""  # nothing to say, or a set with no set-size line (a form set)
     plural = set_items.NAMES[variant][1]
     never = "Never write a request the record does not support to reach a number; fewer is right when the record supports fewer."
     if a is not None:

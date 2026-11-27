@@ -397,3 +397,15 @@ def test_the_review_reads_the_declaration_by_the_same_rule():
     )
     srogs = _set("special_interrogatories", list(range(1, 41))) + "\n" + DECL_2033.split("-->")[1]
     assert "on a set of special interrogatories" in render.decl_problems("Document 1", srogs, "", {})[0][1]
+
+
+def test_a_form_set_unit_has_no_set_size_line_and_never_raises(tmp_path):
+    """#4203 looked up the set's plural before asking whether there was a number:
+    a form set (no plural in ``set_items.NAMES``) raised KeyError at the plan."""
+    for cls in ("discovery_response", "discovery_set"):
+        run = Run(tmp_path, "Draft responses to the form interrogatories.")
+        run.cls = cls
+        assert counts.instruction(run, "form_interrogatories", "x") == "x"
+        assert counts.instruction(run, "form_interrogatories", None) is None
+    assert counts.target_line("form_interrogatories", (None, None), None) == ""
+    assert counts.target_line("form_interrogatories", (5, 10), None) == ""

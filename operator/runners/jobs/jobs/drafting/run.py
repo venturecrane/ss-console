@@ -542,19 +542,19 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=hold.setting, reason=f"limit: {hold.reason}")
         except request_size.RequestTooLarge as exc:  # our machinery's: failed, resumable, SMD told, the firm not
-            v = Verdict("failed", stage=self._current(), reason=str(exc))
+            v = Verdict("failed", stage=self._at(), reason=str(exc))
         except DraftingHold as h:
-            v = Verdict("held", stage=self._current(), reason=str(h))
+            v = Verdict("held", stage=self._at(), reason=str(h))
         except DraftingFailed as exc:
-            v = Verdict("failed", stage=self._current(), reason=str(exc))
+            v = Verdict("failed", stage=self._at(), reason=str(exc))
         except compose.DraftingError as exc:
-            v = Verdict("failed", stage=self._current(), reason=f"stage_unfinished: {self._current()}: {exc}")
+            v = Verdict("failed", stage=self._at(), reason=f"stage_unfinished: {self._at()}: {exc}")
         except Exception as exc:  # noqa: BLE001 - the verdict carries a sentence; the trace goes to the log
             self.log(traceback.format_exc())
             v = Verdict(
                 "failed",
-                stage=self._current(),
-                reason=f"unexpected: {type(exc).__name__} at {self._current()}: {str(exc)[:300]}",
+                stage=self._at(),
+                reason=f"unexpected: {type(exc).__name__} at {self._at()}: {str(exc)[:300]}",
             )
         if v.reason and not REASON.match(v.reason):  # a missed code is still never client text first
             v.reason = f"unexpected: {v.reason}"
@@ -577,6 +577,14 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan, FreeStages):
             e = self._json("preflight.json")
             v.documents, v.pages = int(e["documents"]), int(e["estimate"]["pages"])
         return v
+
+    def _at(self) -> str:
+        """``_current`` for a verdict: a stage reader that itself raises names no
+        stage, so the job still ends failed with its reason, never uncaught."""
+        try:
+            return self._current()
+        except Exception:  # noqa: BLE001 - the reason already carries the error
+            return "unknown"
 
     def _current(self) -> str:
         mid = ("evidence-extract", "evidence-verify", "evidence-images", "index") if self.evidence.ledger else ()
