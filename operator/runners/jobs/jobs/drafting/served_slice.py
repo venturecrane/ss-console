@@ -39,6 +39,18 @@ _BLANK_RESPONSE = re.compile(r"(?im)^[\W_]*RESPONSE(?:\s+TO\s+[^\n:]{0,80})?\s*:
 _MARGIN = re.compile(r"(?m)^[ \t]*\d{1,2}[ \t]*$\n?")
 
 
+def _may_run(ln: str) -> bool:
+    """A line that can be a running header or footer: one with words, or a
+    footer's phone or fax line (measured 2026-11-26: "(510) 768-0650", no
+    letters, sat inside 3 of 11 requests of a real 6-page set), seven digits or
+    more with at most a "Tel:" of letters. Never a request's number line, and
+    never a margin number (two digits at most)."""
+    if _LABELLED.match(ln) or _BARE.match(ln):
+        return False
+    letters = sum(c.isalpha() for c in ln)
+    return letters >= 4 or (letters <= 3 and sum(c.isdigit() for c in ln) >= 7)
+
+
 def running_lines(pages: dict[int, str]) -> set[str]:
     """The lines a paper repeats on most of its pages: its running header and
     footer (measured 2026-11-20: the paper's title in capitals, which landed
@@ -48,7 +60,7 @@ def running_lines(pages: dict[int, str]) -> set[str]:
     seen: dict[str, int] = {}
     for t in pages.values():
         for ln in {x.strip() for x in t.splitlines()}:
-            if sum(c.isalpha() for c in ln) >= 4 and not (_LABELLED.match(ln) or _BARE.match(ln)):
+            if _may_run(ln):
                 seen[ln] = seen.get(ln, 0) + 1
     return {ln for ln, n in seen.items() if n * 2 > len(pages)}
 
