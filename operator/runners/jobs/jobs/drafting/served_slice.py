@@ -37,6 +37,10 @@ _END = re.compile(r"(?m)^[ \t]*(?:DATED|Dated)\b|^[ \t]*PROOF\s+OF\s+SERVICE\b")
 #: A blank response line some served sets print after each request.
 _BLANK_RESPONSE = re.compile(r"(?im)^[\W_]*RESPONSE(?:\s+TO\s+[^\n:]{0,80})?\s*:\s*$\n?")
 _MARGIN = re.compile(r"(?m)^[ \t]*\d{1,2}[ \t]*$\n?")
+#: A printed page number alone on its line: "-5-", "- 5 -", "Page 5", "Page 5
+#: of 12" (measured 2026-11-26: "-5-" sat inside every request crossing a page
+#: of a real 34-request set). A bare "5" is a margin number, above.
+_PAGE_NO = re.compile(r"(?im)^[ \t]*(?:-[ \t]*\d{1,3}[ \t]*-|page[ \t]+\d{1,3}(?:[ \t]+of[ \t]+\d{1,3})?)[ \t]*$\n?")
 
 
 def _may_run(ln: str) -> bool:
@@ -75,7 +79,7 @@ def _clean(text: str, running: set[str] | None = None) -> str:
     if running:
         lines = text.split("\n")
         text = "\n".join(x for i, x in enumerate(lines) if x.strip() not in running or _heads_a_run(lines, i))
-    return _MARGIN.sub("", _BLANK_RESPONSE.sub("", text))
+    return _PAGE_NO.sub("", _MARGIN.sub("", _BLANK_RESPONSE.sub("", text)))
 
 
 def _bare_start(body: str, kind: str) -> int:

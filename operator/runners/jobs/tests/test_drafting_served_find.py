@@ -541,6 +541,22 @@ def test_a_phone_line_in_the_running_footer_is_not_inside_a_request_that_crosses
     assert "010-0199" not in s.request_text and "Example Street" not in s.request_text
 
 
+@pytest.mark.parametrize("mark", ["-{n}-  ", "- {n} -", "Page {n}", "Page {n} of 4", "  {n}"])
+def test_a_printed_page_number_is_not_inside_a_request_that_crosses_a_page(tmp_path, mark):
+    """The 2026-11-26 replay: "-5-" alone on its line (it differs per page, so
+    it is never a running line) sat inside every request crossing a page, and
+    the review held 16 requests as not restated as served."""
+    pages = [head("REQUESTS FOR PRODUCTION") + "REQUESTS FOR PRODUCTION\n1. All example records 1.\n2. All example\n",
+             "records 2 in full.\n3. All example\n", "records 3 in full.\n4. All example records 4.\n", END]  # fmt: skip
+    pages = [p + mark.format(n=n) + "\n" for n, p in enumerate(pages, 1)]
+    data, jd = matter(tmp_path, [{"id": "s1", "name": "s.pdf", "pages": pages}])
+    run(data, jd, Fake({"PRODUCTION": values("requests_for_production", 4)}))
+    (s,) = served.read(jd, [CLIENT])
+    got = served.numbered(s.request_text)
+    assert sorted(got) == [1, 2, 3, 4]
+    assert got[2] == "All example records 2 in full." and got[3] == "All example records 3 in full."
+
+
 # ---- the second $0 replay's shapes (2026-11-20; invented values) -----------------------------
 
 
