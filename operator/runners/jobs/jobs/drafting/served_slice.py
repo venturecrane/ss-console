@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from .served import SET_TYPES
+from .served import LABEL_END, SET_TYPES
 
 RESPONDING = re.compile(r"(?im)^[ \t]*RESPONDING[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
 #: The asking party's line (measured 2026-11-20: half the real sets say REQUESTING).
@@ -27,7 +27,7 @@ TITLES = {
 TITLE = {k: re.compile(v) for k, v in TITLES.items()}
 _LABELLED = re.compile(
     r"(?im)^[\W_]*(?:SPECIAL(?:LY\s+PREPARED)?\s+)?(?:INTERROGATORY|REQUEST\s+FOR\s+(?:PRODUCTION(?:\s+OF\s+DOCUMENTS)?"
-    r"|ADMISSION)|DEMAND\s+FOR\s+(?:PRODUCTION|INSPECTION))\s+NO\.?\s*(\d+)\s*[:.)]?"
+    r"|ADMISSION)|DEMAND\s+FOR\s+(?:PRODUCTION|INSPECTION))\s+NO\.?\s*(\d+)" + LABEL_END + r"\s*[:.)]?"
 )
 #: A bare request number: "15. Text" or "15." alone on its line with the text
 #: below (measured 2026-11-20: 4 of 5 real text sets). A space or the line end
