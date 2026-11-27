@@ -14,10 +14,34 @@ import re
 
 from .model import Block, Definition
 
-_Q_OPEN, _Q_CLOSE = "\"“'‘", "\"”'’"
-_TERM = re.compile(rf"^[^\w\"“]*(?:(\d+)[.)]\s*)?([{_Q_OPEN}])([^\"“”\n]{{1,80}}?)([,.;:]?)([{_Q_CLOSE}])")
-_PLURAL = re.compile(rf"^\s*,?\s*(?:or|and/or|and)\s+([{_Q_OPEN}])([^\"“”\n]{{1,80}}?)[,.;:]?[{_Q_CLOSE}]")
+#: Each opening quote mark and the marks that close it. A double quote closes
+#: only on a double quote; a single quote closes only on a single quote that
+#: is not followed by a letter, so an apostrophe inside a word ("PLAINTIFF'S")
+#: never ends a term.
+_PAIRS = {'"': '"”', "“": '”"', "'": "'’", "‘": "’'"}
+_SINGLE = "'’"
+_LEAD = re.compile(r"^[^\w\"“'‘]*(?:(\d+)[.)]\s*)?")
+_OR = re.compile(r"^\s*,?\s*(?:or|and/or|and)\s+")
 _PAREN_PLURAL = re.compile(r"^(.*?)\((E?S)\)$", re.IGNORECASE)
+_MAX_TERM = 80
+
+
+def _quoted(text: str, at: int) -> tuple[str, str, int] | None:
+    """The quoted span opening at ``at``: (inside, opening mark, index past the
+    closing mark), or None when no mark that pairs with the opening closes it."""
+    if at >= len(text) or text[at] not in _PAIRS:
+        return None
+    opener, closers = text[at], _PAIRS[text[at]]
+    for k in range(at + 1, min(len(text), at + 2 + _MAX_TERM)):
+        c = text[k]
+        if c == "\n" or (c in '"“”' and c not in closers):
+            return None
+        if c in closers:
+            if c in _SINGLE and k + 1 < len(text) and text[k + 1].isalpha():
+                continue  # an apostrophe inside a word
+            inside = text[at + 1 : k]
+            return (inside, opener, k + 1) if inside.strip() else None
+    return None
 
 
 def _number(b: Block, in_text: str | None) -> int | None:
@@ -27,27 +51,36 @@ def _number(b: Block, in_text: str | None) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _plural_after(text: str) -> str | None:
+    m = _OR.match(text)
+    got = _quoted(text, m.end()) if m else None
+    return got[0].strip().rstrip(",.;:").strip() if got else None
+
+
 def term_of(b: Block) -> Definition | None:
     """The definition this block opens, or None when it opens none."""
-    m = _TERM.match(b.text)
-    if not m:
+    lead = _LEAD.match(b.text)
+    assert lead is not None
+    got = _quoted(b.text, lead.end())
+    if got is None:
         return None
-    term, plural = m.group(3).strip(), None
+    inside, opener, past = got
+    raw = inside.strip()
+    punct_inside = raw[-1:] in ",.;:"
+    term = raw.rstrip(",.;:").strip()
     paren = _PAREN_PLURAL.match(term)
     if paren:
         term = paren.group(1).strip()
-        plural = term + paren.group(2)
+        plural: str | None = term + paren.group(2)
     else:
-        pm = _PLURAL.match(b.text[m.end() :])
-        plural = pm.group(2).strip() if pm else None
-    curly = m.group(2) in "“‘"
+        plural = _plural_after(b.text[past:])
     return Definition(
         term=term,
         plural=plural,
-        number=_number(b, m.group(1)),
+        number=_number(b, lead.group(1)),
         ids=[b.id],
-        punct_inside=bool(m.group(4)),
-        quote="“”" if curly else '"',
+        punct_inside=punct_inside,
+        quote="“”" if opener in "“‘" else '"',
     )
 
 

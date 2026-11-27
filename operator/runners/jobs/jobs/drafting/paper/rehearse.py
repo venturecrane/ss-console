@@ -45,6 +45,7 @@ def summary(paper: Paper) -> dict[str, Any]:
         if d is None
         else {
             "counts": [c.value for c in d.count_mentions],
+            "prior": [c.value for c in d.prior_counts],
             "lists": _lists(d),
         },
         "detectors": paper.detectors,
@@ -72,11 +73,11 @@ def compare(got: dict[str, Any], key: dict[str, Any]) -> list[str]:
 
 def _line(name: str, got: dict[str, Any]) -> str:
     d = got["declaration"]
-    decl = (
-        "no declaration"
-        if d is None
-        else f"declaration counts {d['counts']}, lists {{{', '.join(f'{k or chr(45)}: {len(v)}' for k, v in d['lists'].items())}}}"
-    )
+    if d is None:
+        decl = "no declaration"
+    else:
+        sizes = ", ".join(f"{k or '-'}: {len(v)}" for k, v in d["lists"].items())
+        decl = f"declaration counts {d['counts']}, prior {d['prior']}, lists {{{sizes}}}"
     return (
         f"{name}: {got['type']}, {got['items']} items, numbering ok, "
         f"terms {got['terms']}, {decl}, detectors {got['detectors']}"

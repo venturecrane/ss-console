@@ -40,6 +40,11 @@ class SetSpec:
     signature: str = "table"  # "table" | "textbox" | "lines"
     #: Prose after the signature that belongs to no region.
     stray_after_signature: bool = False
+    #: The statutory prior-sets statement in the declaration: "" for none,
+    #: "one" for one sentence, "two" for "... Of these, M were not form."
+    prior: str = ""
+    #: A plain (not bold) "Notes for the Attorney" page at the very end.
+    notes: bool = False
     set_no: str = "ONE"
 
 
@@ -153,6 +158,16 @@ def declaration(doc: Any, spec: SetSpec) -> None:
     _bold(doc, "DECLARATION FOR ADDITIONAL DISCOVERY")
     doc.add_paragraph("I, Alex Example, declare: I am an attorney for Plaintiff.")
     doc.add_paragraph(f"I am propounding to Defendant RIVER CO. the attached set of {n} special interrogatories.")
+    if spec.prior == "one":
+        doc.add_paragraph(
+            "I have previously propounded a total of 12 interrogatories to this party, of which 12 were not "
+            "form interrogatories."
+        )
+    elif spec.prior == "two":
+        doc.add_paragraph(
+            "I have previously propounded a total of 12 interrogatories to this party. Of these, 10 interrogatories "
+            "were not form interrogatories."
+        )
     doc.add_paragraph(
         "This set will cause the total number of specially prepared interrogatories propounded to exceed the "
         "number permitted by Code of Civil Procedure section 2030.030, subdivision (a)(1)."
@@ -181,23 +196,37 @@ def set_docx(path: Path, spec: SetSpec | None = None) -> Path:
     closing(doc, spec)
     if spec.declaration:
         declaration(doc, spec)
+    if spec.notes:
+        doc.add_paragraph("Notes for the Attorney")
+        doc.add_paragraph(
+            "Consider adding 3 more requests about the invented repair records before this set is served, "
+            "and confirm the invented date of the incident with the client."
+        )
     doc.save(str(path))
     return path
 
 
-def response_docx(path: Path, n: int = 3, wrong_head: int | None = None) -> Path:
+def response_docx(
+    path: Path,
+    n: int = 3,
+    wrong_head: int | None = None,
+    numbers: list[int] | None = None,
+    title: str = "DEFENDANT'S RESPONSES TO SPECIAL INTERROGATORIES, SET ONE",
+    label: str = "SPECIAL INTERROGATORY",
+) -> Path:
     doc = Document()
-    caption(doc, "DEFENDANT'S RESPONSES TO SPECIAL INTERROGATORIES, SET ONE", "ONE", responding=True)
+    caption(doc, title, "ONE", responding=True)
     _bold(doc, "PRELIMINARY STATEMENT")
     doc.add_paragraph("Responding Party has not completed its investigation of the invented facts.")
-    for k in range(1, n + 1):
-        _bold(doc, f"SPECIAL INTERROGATORY NO. {k}:")
+    nums = numbers or list(range(1, n + 1))
+    for k in nums:
+        _bold(doc, f"{label} NO. {k}:")
         doc.add_paragraph(f"State each fact about invented topic {k}.")
-        head = wrong_head if (wrong_head and k == n) else k
-        _bold(doc, f"RESPONSE TO SPECIAL INTERROGATORY NO. {head}:")
+        head = wrong_head if (wrong_head and k == nums[-1]) else k
+        _bold(doc, f"RESPONSE TO {label} NO. {head}:")
         doc.add_paragraph("Responding Party objects to this interrogatory as vague and overbroad.")
         doc.add_paragraph(f"Without waiving these objections, Responding Party answers: invented answer {k}.")
-        if k == 1:
+        if k == nums[0]:
             doc.add_paragraph("See Exhibit 1, Bates RC-0001.")
     doc.add_paragraph("Dated: an invented date")
     doc.add_paragraph("By: Alex Example")
@@ -205,3 +234,6 @@ def response_docx(path: Path, n: int = 3, wrong_head: int | None = None) -> Path
     doc.add_paragraph("I have read the foregoing responses and know their contents; they are true.")
     doc.save(str(path))
     return path
+
+
+bold = _bold

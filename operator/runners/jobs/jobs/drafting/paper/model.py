@@ -101,6 +101,9 @@ class ReasonList:
 class Declaration:
     count_mentions: list[CountMention] = field(default_factory=list)
     reason_lists: list[ReasonList] = field(default_factory=list)
+    #: The numbers of the statutory prior-sets statement ("previously
+    #: propounded a total of N ..., of which M were not form"), in order.
+    prior_counts: list[CountMention] = field(default_factory=list)
     ids: list[str] = field(default_factory=list)
 
 

@@ -50,7 +50,39 @@ def read(blocks: list[Block], profile: dict[str, str] | None = None) -> Paper | 
             except _Failed as f:
                 if best is None or f.stage > best.stage:
                     best = f
+    if best is not None and best.stage == _FOUND:
+        alone = _index_alone(blocks)
+        if alone is not None:
+            return alone
     return best.unread if best else Unread("items", None, "no detector to try")
+
+
+def _index_alone(blocks: list[Block]) -> Paper | None:
+    """An index of exhibits filed as its own document: no items, an index
+    title (bold or not); what precedes the title is its caption."""
+    at = next((i for i, b in enumerate(blocks) if detect.plain_title(b) == "index"), None)
+    if at is None:
+        return None
+    empty = {name: Region(name) for name in ("title", "ident", "front", "definitions", "instructions")}
+    return Paper(
+        type="index_of_exhibits",
+        caption=Region("caption", [b.id for b in blocks[:at]]),
+        title=empty["title"],
+        ident=empty["ident"],
+        front=empty["front"],
+        definitions_region=empty["definitions"],
+        definitions=[],
+        instructions=empty["instructions"],
+        items=[],
+        closing=Region("closing"),
+        declaration=None,
+        verification=Region("verification"),
+        index=Region("index", [b.id for b in blocks[at:]]),
+        service=Region("service"),
+        notes=Region("notes"),
+        blocks=blocks,
+        detectors={"title": "plain", "items": "none"},
+    )
 
 
 def _by_titles_found(blocks: list[Block]) -> list[str]:
@@ -67,6 +99,7 @@ def _fail(stage: int, region: str, block: Block | None, why: str) -> _Failed:
 
 def _read_with(blocks: list[Block], title_det: str, item_det: str) -> Paper:
     titles = detect.titles(title_det, blocks)
+    titles.update({i: "notes" for i, b in enumerate(blocks) if detect.plain_title(b) == "notes"})
     front_titles = [i for i, r in titles.items() if r in vocab.FRONT]
     found = detect.heads(item_det, blocks, max(front_titles, default=-1))
     if not found:
@@ -116,9 +149,13 @@ def _ids_to_idx(blocks: list[Block], ids: list[str]) -> list[int]:
     return [i for i, b in enumerate(blocks) if b.id in want]
 
 
-def _is_type_title(b: Block) -> bool:
+def _names_type(b: Block) -> bool:
     t = vocab.norm(b.text)
-    return any(w in t for _, words in vocab.TYPES for w in words) and (b.caps or b.bold or b.heading > 0)
+    return any(w in t for _, words in vocab.TYPES for w in words)
+
+
+def _is_type_title(b: Block) -> bool:
+    return _names_type(b) and (b.caps or b.bold or b.heading > 0)
 
 
 def _header(blocks: list[Block], first: int, titles: dict[int, str]) -> tuple[Region, Region, Region, int]:
@@ -126,7 +163,9 @@ def _header(blocks: list[Block], first: int, titles: dict[int, str]) -> tuple[Re
     runs to the last identification line, or the title when there is none,
     before the first front title or item."""
     stop = min([i for i, r in titles.items() if r in vocab.FRONT and i < first] + [first])
-    title_at = next((i for i in range(stop) if _is_type_title(blocks[i])), None)
+    title_at = next((i for i in range(stop) if _is_type_title(blocks[i]) and not blocks[i].in_table), None)
+    if title_at is None:  # the title written in a caption table cell
+        title_at = next((i for i in range(stop) if blocks[i].in_table and _names_type(blocks[i])), None)
     ident_at = [i for i in range(stop) if vocab.IDENT.match(blocks[i].text)]
     end = max(ident_at + ([title_at] if title_at is not None else []), default=-1)
     caption, title, ident = Region("caption"), Region("title"), Region("ident")
@@ -200,9 +239,23 @@ def _item(blocks: list[Block], head: detect.Head, end: int) -> Item:
     return it
 
 
+def _title_text(blocks: list[Block], title: Region) -> str:
+    return vocab.norm(" ".join(b.text for b in blocks if b.id in set(title.ids)))
+
+
 def _type(blocks: list[Block], title: Region, items: list[Item]) -> str:
-    text = vocab.norm(" ".join(b.text for b in blocks if b.id in set(title.ids)))
-    base = next((name for name, words in vocab.TYPES if any(w in text for w in words)), None)
+    """The type the title names; a typed label ("REQUEST FOR ADMISSION NO.")
+    naming another type is a type_conflict, never a guess. A generic label
+    ("REQUEST NO.") takes the title's type."""
+    text = _title_text(blocks, title)
+    by_title = next((name for name, words in vocab.TYPES if any(w in text for w in words)), None)
+    typed = [it for it in items if it.label in vocab.LABEL_TYPES and it.label not in vocab.GENERIC_LABELS]
+    clash = next((it for it in typed if by_title and vocab.LABEL_TYPES[it.label] != by_title), None)
+    if clash is not None:
+        b = next(x for x in blocks if x.id == clash.ids[0])
+        why = f"type_conflict: the title names {by_title}, item {clash.number} is labelled {clash.label}"
+        raise _fail(_NUMBERED, "type", b, why)
+    base = by_title or next((vocab.LABEL_TYPES[it.label] for it in typed), None)
     if base is None:
         base = next((vocab.LABEL_TYPES[it.label] for it in items if it.label in vocab.LABEL_TYPES), "unknown")
     response = "RESPONSE" in text or any(it.response_head for it in items)
@@ -228,14 +281,24 @@ def _check(paper: Paper, blocks: list[Block], ident: Region) -> None:
     for b in blocks:
         if b.id not in seen:
             raise _fail(_ASSIGNED, "unassigned", b, "block belongs to no region")
-    _check_numbers(paper, by_id, _set_number(blocks, ident))
+    partial = bool(vocab.PARTIAL.search(_title_text(blocks, paper.title)))
+    _check_numbers(paper, by_id, _set_number(blocks, ident), partial)
     if paper.declaration is not None:
         _check_declaration(paper.declaration, paper.items, by_id)
 
 
-def _check_numbers(paper: Paper, by_id: dict[str, Block], set_no: int | None) -> None:
+def _check_numbers(paper: Paper, by_id: dict[str, Block], set_no: int | None, partial: bool) -> None:
+    """Items 1..n with no gap; a later set may start past 1; an amended or
+    supplemental paper answers only the challenged items, so its numbers need
+    only rise. A repeat or a fall is never read."""
     nums = [it.number for it in paper.items]
     start = nums[0]
+    if partial:
+        for prev, it in zip(paper.items, paper.items[1:], strict=False):
+            if it.number <= prev.number:
+                why = f"item {it.number} follows item {prev.number}: a repeat or a fall"
+                raise _fail(_NUMBERED, "items", by_id[it.ids[0]], why)
+        return
     if start != 1 and (set_no is None or set_no <= 1):
         raise _fail(_NUMBERED, "items", by_id[paper.items[0].ids[0]], f"the first item is numbered {start}, not 1")
     for prev, it in zip(paper.items, paper.items[1:], strict=False):

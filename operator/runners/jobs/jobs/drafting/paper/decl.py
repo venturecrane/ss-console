@@ -43,14 +43,43 @@ def _is_limit(text: str, start: int, end: int) -> bool:
     return bool(_LIMIT.search(text[max(0, start - 40) : start]) or _LIMIT.search(text[end : end + 30]))
 
 
-def counts(b: Block) -> list[CountMention]:
+#: The statutory prior-sets statement (CCP 2030.050, 2033.050): "I have
+#: previously propounded a total of N ..., of which M were not form". Its
+#: numbers count earlier sets, never this one.
+_PRIOR = re.compile(r"(?i)\b(?:previously|prior(?:ly)?|earlier|already)\s+(?:been\s+)?(?:propounded|served)\b")
+_PRIOR_TAIL = re.compile(r"(?i)^\W*(?:of\s+(?:which|these|those|that\s+total))\b")
+_SENTENCE = re.compile(r"(?<=[.;])\s+(?=[A-Z(])")
+_NUMBER = re.compile(r"(?<![\d.])\(?(\d{1,3})\)?(?![\d.]?\d)")
+
+
+def _sentences(text: str) -> list[tuple[int, str, bool]]:
+    """(offset, sentence, is_prior) for each sentence; a sentence opening "of
+    which" continues a prior-sets sentence."""
+    out: list[tuple[int, str, bool]] = []
+    pos = 0
+    for part in _SENTENCE.split(text):
+        at = text.index(part, pos)
+        pos = at + len(part)
+        prior = bool(_PRIOR.search(part)) or bool(out and out[-1][2] and _PRIOR_TAIL.match(part))
+        out.append((at, part, prior))
+    return out
+
+
+def counts(b: Block) -> tuple[list[CountMention], list[CountMention]]:
+    """This set's count mentions in ``b``, and the prior-sets numbers."""
     found: dict[int, CountMention] = {}
-    for pat in _COUNTS:
-        for m in pat.finditer(b.text):
-            if m.start(1) in found or _is_limit(b.text, m.start(1), m.end(1)):
-                continue
-            found[m.start(1)] = CountMention(int(m.group(1)), b.id)
-    return [found[k] for k in sorted(found)]
+    prior: list[CountMention] = []
+    for at, sent, is_prior in _sentences(b.text):
+        if is_prior:
+            prior += [CountMention(int(m.group(1)), b.id) for m in _NUMBER.finditer(sent)]
+            continue
+        for pat in _COUNTS:
+            for m in pat.finditer(sent):
+                key = at + m.start(1)
+                if key in found or _is_limit(sent, m.start(1), m.end(1)):
+                    continue
+                found[key] = CountMention(int(m.group(1)), b.id)
+    return [found[k] for k in sorted(found)], prior
 
 
 def lists(b: Block, reason: str | None) -> list[ReasonList]:
@@ -69,6 +98,8 @@ def read(region: list[Block]) -> Declaration:
         m = _REASON.match(b.numbered or "") or _REASON.match(b.text)
         if m:
             reason = m.group(1)
-        d.count_mentions += counts(b)
+        mine, prior = counts(b)
+        d.count_mentions += mine
+        d.prior_counts += prior
         d.reason_lists += lists(b, reason)
     return d

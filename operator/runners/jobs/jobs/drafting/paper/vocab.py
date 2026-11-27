@@ -15,6 +15,8 @@ import re
 LABELS = (
     "SPECIAL INTERROGATORY",
     "SPECIALLY PREPARED INTERROGATORY",
+    "REQUEST FOR IDENTIFICATION AND PRODUCTION OF DOCUMENTS",
+    "REQUEST FOR IDENTIFICATION AND PRODUCTION",
     "REQUEST FOR PRODUCTION OF DOCUMENTS",
     "REQUEST FOR PRODUCTION",
     "DEMAND FOR PRODUCTION",
@@ -22,6 +24,7 @@ LABELS = (
     "REQUEST FOR ADMISSION",
     "INTERROGATORY",
     "REQUEST",
+    "DEMAND",
 )
 _LABEL_ALT = "|".join(w.replace(" ", r"\s+") for w in LABELS)
 #: "SPECIAL INTERROGATORY NO. 4:" at the start of a block. A decimal number
@@ -43,7 +46,14 @@ TITLES: dict[str, tuple[str, ...]] = {
     "verification": ("VERIFICATION",),
     "index": ("INDEX OF EXHIBITS", "EXHIBIT INDEX", "INDEX OF DOCUMENTS"),
     "service": ("PROOF OF SERVICE", "CERTIFICATE OF SERVICE"),
-    "notes": ("ATTORNEY NOTES", "NOTES TO ATTORNEY", "DRAFTING NOTES"),
+    "notes": (
+        "NOTES FOR THE ATTORNEY",
+        "NOTES FOR ATTORNEY",
+        "ATTORNEY NOTES",
+        "NOTES TO ATTORNEY",
+        "NOTES TO THE ATTORNEY",
+        "DRAFTING NOTES",
+    ),
 }
 #: The regions that come after the items; each runs to the next one's title.
 ATTACHMENTS = ("declaration", "verification", "index", "service", "notes")
@@ -63,7 +73,16 @@ CLOSING_MAX_WORDS = 14
 TYPES = (
     ("special_interrogatories", ("SPECIAL INTERROGATOR", "SPECIALLY PREPARED INTERROGATOR")),
     ("form_interrogatories", ("FORM INTERROGATOR",)),
-    ("requests_for_production", ("REQUEST FOR PRODUCTION", "REQUESTS FOR PRODUCTION", "DEMAND FOR")),
+    (
+        "requests_for_production",
+        (
+            "REQUEST FOR PRODUCTION",
+            "REQUESTS FOR PRODUCTION",
+            "IDENTIFICATION AND PRODUCTION",
+            "DEMAND FOR",
+            "DEMANDS FOR",
+        ),
+    ),
     ("requests_for_admission", ("REQUEST FOR ADMISSION", "REQUESTS FOR ADMISSION")),
 )
 #: A label word to its type, for a paper whose title does not say.
@@ -71,12 +90,20 @@ LABEL_TYPES = {
     "SPECIAL INTERROGATORY": "special_interrogatories",
     "SPECIALLY PREPARED INTERROGATORY": "special_interrogatories",
     "INTERROGATORY": "special_interrogatories",
+    "REQUEST FOR IDENTIFICATION AND PRODUCTION OF DOCUMENTS": "requests_for_production",
+    "REQUEST FOR IDENTIFICATION AND PRODUCTION": "requests_for_production",
     "REQUEST FOR PRODUCTION OF DOCUMENTS": "requests_for_production",
     "REQUEST FOR PRODUCTION": "requests_for_production",
     "DEMAND FOR PRODUCTION": "requests_for_production",
     "DEMAND FOR INSPECTION": "requests_for_production",
     "REQUEST FOR ADMISSION": "requests_for_admission",
+    "DEMAND": "requests_for_production",
 }
+#: Labels that name no type ("REQUEST NO. 4", "INTERROGATORY NO. 4"): the
+#: paper's type comes from its title.
+GENERIC_LABELS = {"REQUEST", "INTERROGATORY"}
+#: A title naming a paper that answers only some items (the challenged ones).
+PARTIAL = re.compile(r"(?i)\b(AMENDED|SUPPLEMENTAL)\b")
 
 
 def norm(text: str) -> str:

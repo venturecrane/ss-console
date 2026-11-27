@@ -102,3 +102,10 @@ def titles(name: str, blocks: list[Block]) -> dict[int, str]:
         if region:
             out[i] = region
     return out
+
+
+def plain_title(b: Block) -> str | None:
+    """The region a short line names whatever its marking, bold or not: for the
+    titles a firm may type as a plain line (notes for the attorney, an exhibit
+    index filed alone)."""
+    return vocab.title_region(b.text) if _short(b) else None
