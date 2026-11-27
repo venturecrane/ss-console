@@ -333,12 +333,13 @@ def _response(f: Found, d: Doc, kind: str | None, clients: list[str], out: Sorte
         f.note(d, "response", False, "the other side's response to our client's discovery; ignored", set_type=kind)
         f.settled.add(d.id)
         return
-    # Ours and answering nothing only on strong evidence and with no proof of
-    # service on it; anything else is held by the final pass (``_account``).
+    # Ours and answering nothing only on strong evidence and with no executed
+    # proof of service on it (a blank template proof is none, D8 2026-11-26);
+    # anything else is held by the final pass (``_account``).
     strong = (
         provenance.whose(d.name, d.folder, head, ev=f.ev, doc_id=d.id, ext=d.ext, sha=d.sha).side == provenance.OURS
     )
-    if strong and not papers.has_proof(d.text):
+    if strong and not papers.executed_proof(d.text):
         f.settled.add(d.id)
     if not kind:
         f.note(d, "response", False, "our side's paper, not a served set; its kind is not read")
