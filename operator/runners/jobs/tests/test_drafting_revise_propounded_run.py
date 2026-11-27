@@ -776,4 +776,28 @@ def test_each_call_sends_only_what_it_needs() -> None:
     for user in (pa.add_user(md, SROG, 2, "q"), pa.follow_user(md, SROG, None, "q"), pa.rank_user(md, SROG, 1, set())):
         assert "SPECIAL INTERROGATORY NO. 3:" in user and "CAPTION" not in user and "By: ____" not in user
     assert '"INCIDENT"' not in pa.rank_user(md, SROG, 1, set()) and "INCIDENT" in pa.add_user(md, SROG, 2, "q")
-    assert "DEFINED TERMS: INCIDENT" in pa.follow_user(md, SROG, None, "q")
+    assert '"INCIDENT" means the event of the complaint' in pa.follow_user(md, SROG, None, "q")
+
+
+def test_an_add_and_a_follow_up_carry_each_definitions_meaning() -> None:
+    """FALSIFIER: send the term names only and the model never learns what
+    YOU or SUBJECT PROPERTY means; send nothing when the paragraphs do not
+    parse and the definitions are lost."""
+    from jobs.drafting.revise.propounded_define import defined
+
+    md = _invented_set(3).replace(
+        '1. "INCIDENT" means the event of the complaint.',
+        '1. "YOU" means the responding party and each agent.\n\n2. "SUBJECT PROPERTY" means the lot at 1 Invented Way.',
+    )
+    for user in (pa.add_user(md, SROG, 2, "q"), pa.follow_user(md, SROG, None, "q")):
+        assert "means the responding party and each agent" in user and "the lot at 1 Invented Way" in user
+    odd = _invented_set(3).replace(
+        '1. "INCIDENT" means the event of the complaint.', "a. the word claim covers every demand made in writing."
+    )
+    assert defined(odd) == []
+    assert "covers every demand made in writing" in pa.add_user(odd, SROG, 2, "q")
+    assert "covers every demand made in writing" in pa.follow_user(odd, SROG, None, "q")
+    bare = (
+        _invented_set(3).replace("**DEFINITIONS**", "").replace('1. "INCIDENT" means the event of the complaint.', "")
+    )
+    assert "DEFINITIONS" not in pa.add_user(bare, SROG, 2, "q")  # no region: requests only, as before

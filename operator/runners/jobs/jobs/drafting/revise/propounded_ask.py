@@ -18,7 +18,7 @@ from .. import set_items
 from ..verify.items import parse_json
 from .set_units import named_set_types
 from .propounded import FOLLOW_UP, Held, Op, Refused, Unit, check_numbers, check_plan, cut, definition_ok, scope
-from .propounded_define import defined
+from .propounded_define import defined, defs_region
 from .propounded_numbers import add_count, cut_drop
 
 STAGE_PLAN, STAGE_DEFINE, STAGE_ADD, STAGE_CUT = "revise-plan", "revise-define", "revise-add", "revise-cut"
@@ -131,7 +131,7 @@ def _retry(problems: list[str] | None) -> str:
 # ---- what each call sends: only what it needs (2026-11-26) -------------------------------
 # No call sends a whole filed set: the plan reads the sets' names, types and
 # counts; a definition reads the email alone; an add or a follow-up reads the
-# set's defined terms and its requests; a ranking reads the requests alone. The
+# set's Definitions as filed and its requests; a ranking reads the requests alone. The
 # caption, instructions and signature are never sent. ``edit_chars`` prices
 # these same texts, so the estimate is what the calls send.
 
@@ -142,8 +142,15 @@ def requests_text(md: str, variant: str) -> str:
 
 
 def _terms_and_requests(md: str, variant: str) -> str:
-    terms = defined(md)
-    head = f"THE SET'S DEFINED TERMS: {', '.join(terms)}\n\n" if terms else ""
+    """The set's Definitions as filed, verbatim (what YOU or a defined property
+    means, read whether or not each paragraph parses), then its requests. A set
+    whose Definitions code cannot find sends the term names it can read."""
+    region = defs_region(md)
+    if region and md[region[0] : region[1]].strip():
+        head = f"THE SET'S DEFINITIONS, AS FILED:\n{md[region[0] : region[1]].strip()}\n\n"
+    else:
+        terms = defined(md)
+        head = f"THE SET'S DEFINED TERMS: {', '.join(terms)}\n\n" if terms else ""
     return head + requests_text(md, variant)
 
 
