@@ -90,3 +90,31 @@ def test_a_label_alone_on_its_line_keeps_the_text_below():
 )
 def test_a_number_followed_by_a_word_or_comma_is_a_cross_reference(line):
     assert served.numbering(line) == []
+
+
+_DEFINITIONS = (
+    "PLAINTIFF'S REQUESTS FOR PRODUCTION OF DOCUMENTS, SET ONE\n\nDEFINITIONS\n\n"
+    "1. YOU means the responding party.\n\n2. DOCUMENT means a writing.\n\n3. INCIDENT means the collision.\n\n"
+    "REQUESTS FOR PRODUCTION\n\n"
+)
+
+
+def test_a_short_request_label_slices_a_production_set_and_skips_its_numbered_definitions():
+    """D9 (2026-11-26): a real 20-request RFP labelled "REQUEST NO. n:" fell to
+    bare mode and sliced its numbered definitions (1..8, then 1..5)."""
+    items = "\n\n".join(f"REQUEST NO. {n}:\nAll DOCUMENTS about item {n}." for n in range(1, 6))
+    pages = {1: _HEAD + _DEFINITIONS + items + "\n\nDated: today\n"}
+    text, style = slice_requests(pages, "requests_for_production")
+    assert style == "labelled"
+    assert text.startswith("REQUEST NO. 1:")
+    assert served.numbering(text) == [1, 2, 3, 4, 5]
+    assert served.numbered(text)[3] == "All DOCUMENTS about item 3."
+
+
+def test_the_short_label_obeys_the_number_ends_it_rule_and_only_for_its_kinds():
+    body = "REQUEST NO. 1:\nAll DOCUMENTS.\n\nREQUEST NO. 2:\nAll DOCUMENTS identified in\nRequest No. 1 above.\n"
+    text, style = slice_requests({1: _HEAD + body}, "requests_for_admission")
+    assert style == "labelled"
+    assert served.numbering(text) == [1, 2]
+    _, style = slice_requests({1: _HEAD + body}, "special_interrogatories")
+    assert style != "labelled"
