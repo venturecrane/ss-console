@@ -6,7 +6,9 @@ matters). Each rule answers a question the finder asked wrongly there:
 * :func:`was_served`: does a response paper show it was SERVED? Only a served
   response answers a set. SMD's own drafts awaiting attorney review and the
   firm's unserved drafts are Word response papers too (8 across the three
-  matters), and counting them ended all three ``served_none``.
+  matters), and counting them ended all three ``served_none``. A proof of
+  service counts only when executed (:func:`executed_proof`): a firm's own
+  drafts carry a blank template one (D8, 2026-11-26).
 * :func:`draft_name` and :func:`draft_of`: a file named as a draft never
   answers, and a draft of a set still owed makes the job a revision.
 * :func:`form_signature`: two copies of one served FORM set (an emailed copy
@@ -29,8 +31,29 @@ _DATE = rf"(?:(?:{_MONTHS})\.?\s+\d{{1,2}},?\s+\d{{4}}|\d{{1,2}}/\d{{1,2}}/\d{{2
 _PROOF = re.compile(r"(?m)^[ \t|]*PROOF\s+OF\s+(?:ELECTRONIC\s+)?SERVICE\b")
 #: "Dated: March 3, 2026" or "served on 3/3/2026", with a date.
 _DATED = re.compile(rf"(?i)\b(?:dated|served)\b[^\n]{{0,40}}?{_DATE}")
-#: A signature block after the date: "/s/", "By:", or "Attorneys for".
-_SIGNED = re.compile(r"(?i)/s/|^[ \t|]*By:|\bAttorneys?\s+for\b", re.M)
+#: A "By:" signature line and what is written on it ("By: /s/ Jane Example", "By: ____").
+_BY_LINE = re.compile(r"(?im)^[ \t|]*By:(?P<rest>[^\n]*)\n?(?P<next>(?:[ \t|]*\n)?[^\n]*)")
+#: A typed name on its own line: two to four capitalized words, ", Esq." allowed.
+_NAME_LINE = re.compile(r"(?m)^[ \t|]*[A-Z][A-Za-z.'’-]+(?:,?[ \t]+[A-Z][A-Za-z.'’-]*){1,4}[ \t]*$")
+_METHOD = (
+    r"BY\s+(?:U\.?S\.?\s+)?(?:FIRST[\s-]+CLASS\s+)?"
+    r"(?:MAIL|FAX|FACSIMILE|PERSONAL\s+(?:SERVICE|DELIVERY)|OVERNIGHT|FEDERAL\s+EXPRESS|E[\s-]?MAIL|ELECTRONIC)"
+)
+#: A service-method line marked as chosen: "[X] BY MAIL", "x By Electronic Mail",
+#: "☒ BY FAX", or the method in capitals first on its line, no blank leader ("BY MAIL.").
+#: A "____ BY MAIL.", "[ ] BY MAIL" or "☐ BY MAIL" line is a template's unchosen option.
+_MARKED = re.compile(
+    rf"(?m)^[ \t|]*(?:\[\s*[Xx✓✔]\s*\]|\(\s*[Xx✓✔]\s*\)|[Xx✓✔☒☑])[ \t._:-]*(?i:{_METHOD})|^[ \t|]*{_METHOD}"
+)
+#: "Served by email on October 30, 2026": a statement that service was made.
+_SERVED_BY = re.compile(
+    r"(?i)\bserved\s+(?:by|via)\s+(?:e-?mail|electronic\s+(?:mail|service)|(?:u\.?s\.?\s+)?mail|fax|facsimile"
+    rf"|personal\s+(?:service|delivery)|overnight\s+\w+)\b[^\n]{{0,40}}?\bon\s+{_DATE}"
+)
+#: "/s/ Jane Example": an electronic signature with a name after it, never "/s/ ____".
+_S_SIGNED = re.compile(r"/s/[ \t]*[A-Za-z]")
+#: "Executed on November 17, 2026": a real date, never a blank.
+_EXECUTED = re.compile(rf"(?i)\bExecuted\s+on\s+{_DATE}")
 #: A file NAMED as SMD's or the Operator's: "DRAFT ..." first, "for attorney review"
 #: (``ours_written``: never wider than this, 2026-11-24 review).
 _DRAFT_START = re.compile(r"(?i)^\s*DRAFT\b|for\s+attorney\s+review")
@@ -65,20 +88,52 @@ def draft_name(name: str) -> bool:
     return bool(_DRAFT_NAME.search(spaced) or STAMP.search(spaced))
 
 
+def executed_proof(text: str) -> bool:
+    """A proof of service that shows service MADE, not the firm's blank template
+    (D8, 2026-11-26: two of a firm's own response drafts carried "PROOF OF
+    SERVICE ... I served the foregoing document" with every "____ BY MAIL." line
+    blank and no signature, and counting them dropped two owed sets). Executed
+    means, after the heading: a method line marked ("[X] BY ELECTRONIC MAIL",
+    "X BY MAIL", "BY MAIL." with no blank leader), a "served by <method> on
+    <date>" statement, an "/s/" signature, or "Executed on <date>" with a typed
+    declarant name after it."""
+    for m in _PROOF.finditer(text or ""):
+        tail = text[m.end() :]
+        if _MARKED.search(tail) or _SERVED_BY.search(tail) or _S_SIGNED.search(tail):
+            return True
+        executed = _EXECUTED.search(tail)
+        if executed and _NAME_LINE.search(tail, executed.end(), executed.end() + 400):
+            return True
+    return False
+
+
 def was_served(name: str, text: str) -> bool:
-    """A response paper that shows it was served: a proof of service, or a dated
-    ("Dated"/"served" with a date) signature block. A draft by name never is."""
+    """A response paper that shows it was served: an executed proof of service
+    (:func:`executed_proof`), or, with no proof of service heading on it, a dated
+    ("Dated"/"served" with a date) signature block. A draft by name never is.
+    A paper whose only proof of service is a blank template is not served: its
+    proof says what was done, and nothing was."""
     if draft_name(name):
         return False
     if _PROOF.search(text or ""):
-        return True
+        return executed_proof(text)
     dated = _DATED.search(text or "")
-    return bool(dated and _SIGNED.search(text, dated.end()))
+    return bool(dated and signed_after(text, dated.end()))
 
 
-def has_proof(text: str) -> bool:
-    """The paper carries a proof of service heading, whoever served it."""
-    return bool(_PROOF.search(text or ""))
+def signed_after(text: str, pos: int) -> bool:
+    """A real signature after ``pos``: "/s/ <name>", or a "By:" line with a name
+    typed on it or on the line under it. A "By: ____" line with nothing else is
+    the template's blank signature (D8, 2026-11-26: a firm's own draft read
+    "Dated: November 17, 2026 / <FIRM> LLP / By: ______" and counted as served)."""
+    if _S_SIGNED.search(text, pos):
+        return True
+    for m in _BY_LINE.finditer(text, pos):
+        if re.search(r"[A-Za-z]", m.group("rest").replace("/s/", "")) or _NAME_LINE.match(
+            m.group("next").split("\n")[-1]
+        ):
+            return True
+    return False
 
 
 def asks_amended(request: str) -> bool:
