@@ -37,6 +37,22 @@ _END = re.compile(r"(?m)^[ \t]*(?:DATED|Dated)\b|^[ \t]*PROOF\s+OF\s+SERVICE\b")
 #: A blank response line some served sets print after each request.
 _BLANK_RESPONSE = re.compile(r"(?im)^[\W_]*RESPONSE(?:\s+TO\s+[^\n:]{0,80})?\s*:\s*$\n?")
 _MARGIN = re.compile(r"(?m)^[ \t]*\d{1,2}[ \t]*$\n?")
+#: A printed page number alone on its line: "-5-", "- 5 -", "Page 5", "Page 5
+#: of 12" (measured 2026-11-26: "-5-" sat inside every request crossing a page
+#: of a real 34-request set). A bare "5" is a margin number, above.
+_PAGE_NO = re.compile(r"(?im)^[ \t]*(?:-[ \t]*\d{1,3}[ \t]*-|page[ \t]+\d{1,3}(?:[ \t]+of[ \t]+\d{1,3})?)[ \t]*$\n?")
+
+
+def _may_run(ln: str) -> bool:
+    """A line that can be a running header or footer: one with words, or a
+    footer's phone or fax line (measured 2026-11-26: "(510) 768-0650", no
+    letters, sat inside 3 of 11 requests of a real 6-page set), seven digits or
+    more with at most a "Tel:" of letters. Never a request's number line, and
+    never a margin number (two digits at most)."""
+    if _LABELLED.match(ln) or _BARE.match(ln):
+        return False
+    letters = sum(c.isalpha() for c in ln)
+    return letters >= 4 or (letters <= 3 and sum(c.isdigit() for c in ln) >= 7)
 
 
 def running_lines(pages: dict[int, str]) -> set[str]:
@@ -48,7 +64,7 @@ def running_lines(pages: dict[int, str]) -> set[str]:
     seen: dict[str, int] = {}
     for t in pages.values():
         for ln in {x.strip() for x in t.splitlines()}:
-            if sum(c.isalpha() for c in ln) >= 4 and not (_LABELLED.match(ln) or _BARE.match(ln)):
+            if _may_run(ln):
                 seen[ln] = seen.get(ln, 0) + 1
     return {ln for ln, n in seen.items() if n * 2 > len(pages)}
 
@@ -63,7 +79,7 @@ def _clean(text: str, running: set[str] | None = None) -> str:
     if running:
         lines = text.split("\n")
         text = "\n".join(x for i, x in enumerate(lines) if x.strip() not in running or _heads_a_run(lines, i))
-    return _MARGIN.sub("", _BLANK_RESPONSE.sub("", text))
+    return _PAGE_NO.sub("", _MARGIN.sub("", _BLANK_RESPONSE.sub("", text)))
 
 
 def _bare_start(body: str, kind: str) -> int:
