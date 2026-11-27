@@ -41,6 +41,9 @@ its own party even inside the District's value.
 * Two names in the request that are one caption span, a scope name that is no
   candidate, or a request naming none of several defendants: stop
   (``party_unknown``, SMD alerted). Never a guess.
+* A shorter spelling of one caption party ("<Name> School District" for
+  "<Name> City School District") names it; a second party phrase in the same
+  sending list that names no caption party stops (``party_phrase.py``).
 * One name, or none, with one defendant on the caption: no parties are
   planned, and the job drafts exactly as it always did.
 
@@ -93,7 +96,10 @@ _ONLY = re.compile(
 #: "<party> only", the clause before it (SMD's hand line: "SMD: <party> only").
 _BARE_ONLY = re.compile(r"(?P<c>[^.;:\n]+?)\s+only\b", re.I)
 #: "DOES 1 through 50", "Does 1 - 100", "ROES 1 to 10": fictitious defendants, never a party served.
-_FICTITIOUS = re.compile(r"(?i)^(?:and\s+)?(?:does?|roes?)\s+\d+\s*(?:-|–|to|through|thru)\s*\d+\b")
+_DOE_RANGE = r"(?:does?|roes?)\s+\d+\s*(?:-|–|to|through|thru)\s*\d+\b"
+_FICTITIOUS = re.compile(r"(?i)^(?:and\s+)?" + _DOE_RANGE)
+#: The same entry after "and" inside one comma piece ("BETA LLC and DOES 1-25"): cut, never a party.
+_FICTITIOUS_TAIL = re.compile(r"(?i)\s+and\s+" + _DOE_RANGE + r".*$")
 #: What a caption prints after a name, describing it ("a public entity", "inclusive").
 _DESCRIBES = re.compile(r"(?i)^(?:an?\s|inclusive\b|et\s+al\b|individually\b|jointly\b|erroneously\b|sued\s+as\b)")
 #: A corporate suffix printed after a comma ("Smith and Sons, Inc."): part of the name before it.
@@ -274,10 +280,11 @@ def named_in(text: str, cands: list[Candidate]) -> list[Candidate]:
     the order the text names them; one per span of the text. One phrase of
     the text naming two unrelated candidates stops (``PartyUnknown``). A
     short reference ("to the school district") names a party only as its
-    unique tail (``party_tail.py``)."""
-    from . import party_tail  # it imports this module's helpers
+    unique tail (``party_tail.py``), a shorter spelling ("to the <Name> School
+    District") only as ``party_phrase.py`` allows."""
+    from . import party_phrase, party_tail  # they import this module's helpers
 
-    hits = [h for c in cands for h in _hits(text, c)] + party_tail.hits(text, cands)
+    hits = [h for c in cands for h in _hits(text, c)] + party_tail.hits(text, cands) + party_phrase.hits(text, cands)
     hits.sort(key=lambda h: (-(h[1] - h[0]), h[0]))
     taken: list[tuple[int, int, Candidate]] = []
     for h in hits:
@@ -416,6 +423,7 @@ def entities(value: str) -> list[str]:
         if _FICTITIOUS.match(p) or _DESCRIBES.match(p):
             boundary = True
             continue
+        p = _FICTITIOUS_TAIL.sub("", p)
         if _QUALIFIER.match(p) and not boundary and pieces:
             raise Undecided(f'"{p[:80]}" after "{pieces[-1][:60]}" in the caption\'s "{str(value)[:200]}"')
         pieces.append(p)
@@ -528,10 +536,13 @@ def resolve(request: str, values: list[str], ours_defend: bool = False) -> Resol
     """Who the request serves (module docstring, the rules in order).
     ``ours_defend``: our client is a defendant on the caption, so "the
     defense" is our own side and stops for SMD."""
+    from . import party_phrase
+
     request = request_body(request)
     cands = candidates(values)
     found = named_in(request, cands)
     near_misses(request, cands, found)
+    party_phrase.unnamed(request, cands, found)  # never fewer parties than the request names
     named = _distinct(found)
     scoped = _scope(request, cands)
     if scoped is not None:
