@@ -309,3 +309,52 @@ def test_a_revision_that_would_change_nothing_says_why_and_never_not_drafted() -
 def test_any_other_held_revision_is_not_called_undrafted_and_relays_no_reason() -> None:
     (text,) = fixed_wording.render("drafting_job", _revision(state="held", reason="destination_mismatch: wrong matter"))
     assert text == "The changes to the document for matter 900201 are not all made yet. Nothing is needed from you."
+
+
+# -- a revision of filed propounded sets (revise/propounded_run.py, 2026-11-26) -----------
+
+
+def test_a_delivered_set_revision_lists_one_line_per_set_and_asks_nothing() -> None:
+    """FALSIFIER: render it as the brief's revision, and the attorney reads that
+    "the document" was filed and that notes list his changes, with no notes filed.
+    A set left as filed is listed apart, never under the sets that were refiled."""
+    changed = ['"Special Interrogatories, Set One.docx" (193 special interrogatories, now 120): Removed former No. 4.']
+    left = ['"Requests for Admission, Set One.docx": It does not use "VEHICLE", so no definition was added to it.']
+    delivery = {
+        "files": [{"role": "draft", "name": "Special Interrogatories, Set One.docx"}],
+        "set_lines": changed,
+        "sets_left": left,
+    }
+    row = _revision(state="delivered", document_class="discovery_set", delivery_json=json.dumps(delivery))
+    (text,) = fixed_wording.render("drafting_job", row)
+    assert text.startswith("These sets for matter 900201 were changed and filed as new versions of the same files")
+    lead, rest = text.split("\n\n", 1)
+    assert lead.endswith(changed[0]) and "Admission" not in lead
+    assert rest.startswith("Left as filed:\n" + left[0])
+    assert "attorney notes" not in text and "?" not in text
+    assert text.endswith("Nothing has been sent to anyone outside the firm.")
+
+
+def test_a_set_revision_that_refiled_its_notes_names_them() -> None:
+    files = [
+        {"role": "draft", "name": "Special Interrogatories.docx"},
+        {"role": "attorney_notes", "name": "Notes.docx"},
+    ]
+    delivery = {"files": files, "set_lines": ['"Special Interrogatories.docx": Added the definition of "VEHICLE".']}
+    row = _revision(state="delivered", document_class="discovery_set", delivery_json=json.dumps(delivery))
+    (text,) = fixed_wording.render("drafting_job", row)
+    assert 'The attorney notes are filed as a new version too: "Notes.docx".' in text
+    assert "Left as filed" not in text
+
+
+def test_a_set_revision_that_would_change_nothing_says_why_and_any_other_hold_says_not_yet() -> None:
+    reason = "revise_unchanged: no new versions were filed, because no filed set would change: the set already has 30"
+    held = _revision(state="held", document_class="discovery_set", reason=reason)
+    (text,) = fixed_wording.render("drafting_job", held)
+    assert text == (
+        "No new version of the sets for matter 900201 was filed, because no filed set would change: "
+        "the set already has 30."
+    )
+    held = _revision(state="held", document_class="discovery_set", reason="revise_declaration: the count crosses 35")
+    (text,) = fixed_wording.render("drafting_job", held)
+    assert text == "The changes to the sets for matter 900201 are not all made yet. Nothing is needed from you."

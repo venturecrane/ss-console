@@ -105,6 +105,11 @@ LANE_WAITS_FOR: dict[str, tuple[str, ...]] = {
     "records": ("demand", "drafting", "medchron", "litigation", "casefile"),
 }
 
+#: Lane -> the most filed documents one revision of its job takes (the broker refuses more; the job checks).
+LANE_REVISE_MAX_UNITS: dict[str, int] = {
+    "drafting": 30,
+}
+
 #: Job kinds whose wake may be a scheduled run's (no request email).
 SCHEDULED_JOB_KINDS: tuple[str, ...] = (
     "litigation_job",

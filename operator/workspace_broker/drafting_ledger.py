@@ -190,11 +190,26 @@ class SubmitRefused(ValueError):
     """A valid request the ledger will not queue NOW. ``job_id`` names the job
     it collided with, when there is one."""
 
-    def __init__(self, message: str, job_id: str | None = None, *, underway: bool = False) -> None:
+    def __init__(
+        self, message: str, job_id: str | None = None, *, underway: bool = False, partly_filed: bool = False
+    ) -> None:
         super().__init__(message)
         self.job_id = job_id
         #: The collision is a draft still running on the matter, not this same email.
         self.underway = underway
+        #: The collision is this email's own revision, failed after it filed some
+        #: new versions: a fresh job would make the same changes again.
+        self.partly_filed = partly_filed
+
+
+def uploads_started(delivery_json: str | None) -> bool:
+    """A failed revision's report says it had sent a new version of a filed
+    file (the lane's ``uploads_started``, read from the job's ``versions.json``)."""
+    try:
+        report = json.loads(delivery_json) if delivery_json else {}
+    except ValueError:
+        return False
+    return isinstance(report, dict) and report.get("uploads_started") is True
 
 
 def digest(obj: Any) -> str:
@@ -456,6 +471,50 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
         finally:
             conn.close()
 
+    @staticmethod
+    def _collisions(conn: sqlite3.Connection, env: dict[str, Any], klass: str, revise: dict[str, Any] | None) -> None:
+        """Refuse (rolled back) what this email may not start now: its own job
+        again, its revision that failed after filing, or a revision of the same
+        documents still in flight."""
+        dup = conn.execute(
+            "SELECT id FROM drafting_jobs WHERE request_ref=? AND document_class=? AND state != 'failed' "
+            "ORDER BY created_at DESC LIMIT 1",
+            (env["request_ref"], klass),
+        ).fetchone()
+        if dup is not None:
+            conn.rollback()
+            raise SubmitRefused(f"that request email already queued drafting job {dup['id']}", dup["id"])
+        # A revision of this email that failed after filing some new versions:
+        # it is resumed (SMD's), never started again, or the same added
+        # requests land twice and the same cut takes twice as many.
+        for row in conn.execute(
+            "SELECT id, delivery_json FROM drafting_jobs WHERE request_ref=? AND document_class=? "
+            "AND state='failed' AND revise_of IS NOT NULL ORDER BY created_at DESC",
+            (env["request_ref"], klass),
+        ).fetchall():
+            if uploads_started(row["delivery_json"]):
+                conn.rollback()
+                raise SubmitRefused(
+                    f"that request email's revision, job {row['id']}, failed after filing some new versions; "
+                    "it is resumed, never started again",
+                    row["id"],
+                    partly_filed=True,
+                )
+        # A revision of filed documents is not a second draft: a fresh draft of
+        # the same class running on the matter does not hold it back (the
+        # attorney's change to the delivered sets would otherwise land only in
+        # the running draft, 2026-11-24). Only another revision in flight does.
+        twin = conn.execute(
+            "SELECT id FROM drafting_jobs WHERE matter_id=? AND document_class=? "
+            "AND state NOT IN ('delivered','failed','held') AND (? = 0 OR revise_of IS NOT NULL) "
+            "ORDER BY created_at DESC LIMIT 1",
+            (env["matter"]["id"], klass, int(revise is not None)),
+        ).fetchone()
+        if twin is not None:
+            conn.rollback()
+            what = f"{CLASS_LABEL[klass]} on this matter is already underway as job {twin['id']}"
+            raise SubmitRefused(what, twin["id"], underway=True)
+
     def submit(
         self,
         envelope: dict[str, Any],
@@ -475,28 +534,7 @@ class DraftingLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            dup = conn.execute(
-                "SELECT id FROM drafting_jobs WHERE request_ref=? AND document_class=? AND state != 'failed' "
-                "ORDER BY created_at DESC LIMIT 1",
-                (env["request_ref"], klass),
-            ).fetchone()
-            if dup is not None:
-                conn.rollback()
-                raise SubmitRefused(f"that request email already queued drafting job {dup['id']}", dup["id"])
-            # A revision of filed documents is not a second draft: a fresh draft of
-            # the same class running on the matter does not hold it back (the
-            # attorney's change to the delivered sets would otherwise land only in
-            # the running draft, 2026-11-24). Only another revision in flight does.
-            twin = conn.execute(
-                "SELECT id FROM drafting_jobs WHERE matter_id=? AND document_class=? "
-                "AND state NOT IN ('delivered','failed','held') AND (? = 0 OR revise_of IS NOT NULL) "
-                "ORDER BY created_at DESC LIMIT 1",
-                (env["matter"]["id"], klass, int(revise is not None)),
-            ).fetchone()
-            if twin is not None:
-                conn.rollback()
-                what = f"{CLASS_LABEL[klass]} on this matter is already underway as job {twin['id']}"
-                raise SubmitRefused(what, twin["id"], underway=True)
+            self._collisions(conn, env, klass, revise)
             if allowance is not None and revise is None:
                 window = cycle_window(now, anchor_day, effective_from)
                 used = self._used(conn, window.start, window.end)

@@ -66,6 +66,7 @@ _FIELDS = {
     "firm_module",
     "broker_firm_copy",
     "waits_for",
+    "revise_max_units",
 }
 _QUEUE_DIRS = ("queue_dir", "jobs_dir", "child_pid")
 _TS_KEY = re.compile(r"\A[A-Za-z_$][A-Za-z0-9_$]*\Z")
@@ -88,6 +89,7 @@ class Lane:
     firm_module: str | None = None
     broker_firm_copy: bool = False
     waits_for: tuple[str, ...] = ()
+    revise_max_units: int | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +143,11 @@ def _lane(name: object, spec: object) -> Lane:
         raise ValueError(f"job lanes: {name}.waits_for must be a list of lane names")
     if waits_for and not queued:
         raise ValueError(f"job lanes: {name}: only a queued lane waits for another lane's child")
+    revise_max_units = spec.get("revise_max_units")
+    if revise_max_units is not None and (
+        not isinstance(revise_max_units, int) or isinstance(revise_max_units, bool) or not 1 <= revise_max_units <= 100
+    ):
+        raise ValueError(f"job lanes: {name}.revise_max_units must be a whole number from 1 to 100")
     wake_word = _str(name, spec, "wake_word", _WORD)
     if spec.get("scheduled") and wake_word is None:
         raise ValueError(f"job lanes: {name}: a scheduled lane wakes a turn, so it needs a wake_word")
@@ -160,6 +167,7 @@ def _lane(name: object, spec: object) -> Lane:
         firm_module=firm_module,
         broker_firm_copy=spec.get("broker_firm_copy") is True,
         waits_for=tuple(waits_for),
+        revise_max_units=revise_max_units,
     )
 
 
@@ -242,6 +250,11 @@ def _run_constants(lanes: tuple[Lane, ...]) -> list[tuple[str, str, object]]:
             {lane.name: lane.waits_for for lane in lanes if lane.waits_for},
         ),
         (
+            "LANE_REVISE_MAX_UNITS",
+            "Lane -> the most filed documents one revision of its job takes (the broker refuses more; the job checks).",
+            {lane.name: lane.revise_max_units for lane in lanes if lane.revise_max_units is not None},
+        ),
+        (
             "SCHEDULED_JOB_KINDS",
             "Job kinds whose wake may be a scheduled run's (no request email).",
             tuple(f"{lane.name}_job" for lane in lanes if lane.scheduled),
@@ -303,7 +316,9 @@ def _header(comment: str) -> str:
 
 
 def _py_item(value: object) -> str:
-    """One dict value: a string, or a tuple of strings (``LANE_WAITS_FOR``)."""
+    """One dict value: a string, a number (``LANE_REVISE_MAX_UNITS``), or a tuple of strings (``LANE_WAITS_FOR``)."""
+    if isinstance(value, int):
+        return str(value)
     if isinstance(value, tuple):
         return "(" + ", ".join(f'"{v}"' for v in value) + ("," if len(value) == 1 else "") + ")"
     return f'"{value}"'
@@ -334,7 +349,8 @@ def render_python(decl: Declaration) -> str:
     for name, comment, value in constants(decl):
         if isinstance(value, dict):
             nested = any(isinstance(v, tuple) for v in value.values())
-            kind = "dict[str, tuple[str, ...]]" if nested else "dict[str, str]"
+            numbers = bool(value) and all(isinstance(v, int) for v in value.values())
+            kind = "dict[str, tuple[str, ...]]" if nested else "dict[str, int]" if numbers else "dict[str, str]"
         else:
             kind = "tuple[str, ...]"
         lines += [f"#: {comment}", f"{name}: {kind} = {_py_value(value)}", ""]

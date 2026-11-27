@@ -304,6 +304,9 @@ def test_define_add_and_cut_are_made_in_the_filed_set_as_a_new_version(world) ->
     assert changes[0] == f"{NAMES[SROG]} (4 special interrogatories, now 3):"
     assert any("former No. 4 is now No. 2" in ln for ln in changes)
     assert v.proof["mode"] == "revise"
+    (line,) = v.proof["set_lines"]  # the reply's one line per set (drafting_lane carries it)
+    assert v.proof["sets_left"] == []
+    assert line.startswith(f'"{NAMES[SROG]}" (4 special interrogatories, now 3): Added the definition of "VEHICLE".')
 
 
 def test_a_resume_asks_the_model_nothing_twice(world) -> None:
@@ -419,6 +422,9 @@ def test_two_jobs_files_in_one_thread_are_each_filed_in_their_own_folder(world) 
     assert seat.sent == ["file-0002"]
     assert len(_labels(seat.files["file-0002"][-1])) == 6 and len(seat.files["file-0001"]) == 1
     assert any("left as filed; the email does not ask to change it" in ln for ln in v.proof["changes"])
+    assert len(v.proof["set_lines"]) == 1 and v.proof["sets_left"] == [
+        f'"{NAMES[SROG]}": the email does not ask to change it.'
+    ]
 
 
 def test_two_revise_jobs_on_the_same_file_each_revise_the_version_before_them(world) -> None:
@@ -452,7 +458,7 @@ def test_a_staff_save_mid_job_that_changes_the_set_holds_and_writes_nothing(worl
 
 def test_over_the_cap_fails_before_any_call(world, monkeypatch: pytest.MonkeyPatch) -> None:
     """FALSIFIER: price after the plan call, and an oversized set is paid for."""
-    monkeypatch.setattr(pa, "plan_chars", lambda email, mds: 10**12)
+    monkeypatch.setattr(pa, "plan_chars", lambda email, sets: 10**12)
     seat = _one()
     client = ScriptClient({"ops": [op("add", "add two more", "two more")], "other": []})
     v, _r = _run(world, seat, client, "Please add two more.")
@@ -507,7 +513,7 @@ def test_a_file_citing_a_renumbered_set_is_filed_again_in_the_same_job(world) ->
 def test_the_edits_are_priced_after_the_plan_before_any_write_call(world, monkeypatch: pytest.MonkeyPatch) -> None:
     """FALSIFIER: price one definition per job, and a plan defining many terms
     on many sets runs past the cap."""
-    monkeypatch.setattr(pa, "edit_chars", lambda email, mds, ops, scoped: 10**12)
+    monkeypatch.setattr(pa, "edit_chars", lambda email, mds, sets, ops, scoped: 10**12)
     seat = _one()
     client = ScriptClient({"ops": [op("add", "add two more", "two more")], "other": []})
     v, _r = _run(world, seat, client, "Please add two more.")
@@ -603,3 +609,195 @@ def test_the_attorney_notes_get_a_new_version_naming_what_changed(world) -> None
     assert seat.sent == ["file-0001", "notes-0001"]
     text = " ".join(text_of(seat.files["notes-0001"][-1]))
     assert "Added 2 special interrogatories, Nos. 5, 6." in text and "Attorney notes for the special" in text
+
+
+SET_LINES_RUNNER = """
+import json, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+out = [{"unit": "drafting", "kind": "drafting", "outcome": "delivered", "stage": "file", "reason": None,
+        "dollars": 1.0, "document_class": "discovery_set", "folder_id": "folder-9",
+        "files": [{"name": "A.docx", "size": 10, "role": "draft"}],
+        "proof": {"readback": "confirmed", "files": [{"name": "A.docx", "file_id": "f1", "size": 10,
+                  "sha256": "a" * 64}], "review": "passed", "review_cents": 0,
+                  "set_lines": ['"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.'],
+                  "sets_left": ['"B.docx": the email does not ask to change it.']}}]
+(jd / 'verdict.json').write_text(json.dumps(out))
+print(json.dumps(out))
+"""
+
+
+def test_the_lane_records_a_propounded_revisions_one_line_per_set(tmp_path):
+    """FALSIFIER: leave ``set_lines`` in the proof, and the reply has nothing to
+    list: the attorney is told only that new versions were filed."""
+    import test_drafting_lane as dl
+
+    lane, client = dl._lane(tmp_path, script=SET_LINES_RUNNER)
+    dl._submit(lane, client)
+    assert lane.tick() == "delivered"
+    delivery = client.records[-1][2]["delivery"]
+    assert delivery["set_lines"] == ['"A.docx" (40 special interrogatories, now 38): Removed former Nos. 4, 9.']
+    assert delivery["sets_left"] == ['"B.docx": the email does not ask to change it.']
+    assert "uploads_started" not in delivery
+
+
+def test_a_brokers_propounded_revise_block_loads_and_takes_the_propounded_runner():
+    """The broker's block (``drafting_revise_units.collect``) passes the job's own
+    check and picks the propounded runner. FALSIFIER: a key the job refuses, and
+    every routed reply fails at load."""
+    from jobs.drafting import job as drafting_job
+    from jobs.drafting.revise.propounded_run import PropoundedSetRun, runner_for
+
+    unit = {
+        "file_id": "file-set-0000", "name": "Special Interrogatories, Set One.docx", "size": 3000,
+        "sha256": "e" * 64, "set_type": "special_interrogatories", "prior_job_id": "01M5ABCDEFGHJKMNPQRSTVWXYZ",
+        "folder_id": "folder-sets-0001",
+    }  # fmt: skip
+    block = {"prior_job_id": unit["prior_job_id"], "folder_id": unit["folder_id"], "units": [unit]}
+    revise = drafting_job._revise(block)
+    assert runner_for(revise, "discovery_set") is PropoundedSetRun
+
+
+PARTWAY_RUNNER = """
+import json, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+(jd / "data").mkdir(exist_ok=True)
+(jd / "data" / "versions.json").write_text(json.dumps({"draft:0": {"sent": True}, "draft:1": {}}))
+out = [{"unit": "drafting", "kind": "drafting", "outcome": "failed", "stage": "file",
+        "reason": "filing_failed: the second set did not read back", "dollars": 0.4,
+        "document_class": "discovery_set", "files": []}]
+(jd / 'verdict.json').write_text(json.dumps(out))
+print(json.dumps(out))
+"""
+
+
+def test_a_revision_that_failed_after_sending_a_version_says_so_to_the_broker(tmp_path):
+    """FALSIFIER: record the failure without ``uploads_started``, and the broker
+    lets the same email start a second job that makes the same edits again."""
+    import test_drafting_lane as dl
+
+    lane, client = dl._lane(tmp_path, script=PARTWAY_RUNNER)
+    dl._submit(lane, client)
+    assert lane.tick() == "failed"
+    assert client.records[-1][2]["delivery"]["uploads_started"] is True
+
+
+@pytest.mark.parametrize("n,loads", [(21, True), (30, True), (31, False)])
+def test_the_job_takes_up_to_thirty_filed_sets(n, loads) -> None:
+    """The job's own check, one value with the broker's (job-lanes.yaml)."""
+    from jobs.drafting import job as drafting_job
+
+    unit = {
+        "name": "Special Interrogatories.docx", "size": 3000, "sha256": "e" * 64,
+        "set_type": "special_interrogatories", "prior_job_id": "01M5ABCDEFGHJKMNPQRSTVWXYZ", "folder_id": "folder-1",
+    }  # fmt: skip
+    units = [{**unit, "file_id": f"file-set-{i:04d}"} for i in range(n)]
+    block = {"prior_job_id": unit["prior_job_id"], "folder_id": "folder-1", "units": units}
+    if loads:
+        assert len(drafting_job._revise(block)["units"]) == n
+    else:
+        with pytest.raises(Exception, match="1 to 30 filed drafts"):
+            drafting_job._revise(block)
+
+
+def _invented_set(n: int, first: int = 1) -> str:
+    """A filed special-interrogatory set of ``n`` requests, invented words, with
+    a caption, definitions and a signature that no call sends."""
+    head = "CAPTION OF THE CASE\n\nPRELIMINARY STATEMENT AND INSTRUCTIONS. " + "Answer fully. " * 200
+    defs = '\n\n**DEFINITIONS**\n\n1. "INCIDENT" means the event of the complaint.\n'
+    body = "\n\n".join(
+        f"**SPECIAL INTERROGATORY NO. {i}:**\n\nState all facts that support your contention number {i} about "
+        "the INCIDENT, and identify each PERSON with knowledge of them."
+        for i in range(first, first + n)
+    )
+    return head + defs + "\n\n" + body + "\n\nDated: ________\n\nBy: ________"
+
+
+def _usd(chars: int, rate: float = 3.0) -> float:
+    from jobs.drafting.revise.run import FIXED_USD
+
+    return FIXED_USD + chars / 1_000_000 * rate
+
+
+def _units_of(mds: list[str]):
+    from jobs.drafting.revise import propounded as pp
+
+    return [pp.Unit(f"Set {k}.docx", SROG, "Defendant", set_items.count(md, SROG)) for k, md in enumerate(mds)]
+
+
+def test_a_define_over_twenty_one_sets_prices_no_set_text() -> None:
+    """A definition reads the email alone, the plan the sets' names and counts.
+    FALSIFIER: price an add and a ranking on every set (the old estimate), and a
+    define over 21 large sets projects past the $10 cap and fails unrun."""
+    from jobs.drafting.revise import propounded as pp
+
+    mds = [_invented_set(193) for _ in range(21)]
+    units, email = _units_of(mds), "Please define ACCOMODATION(S) in each set."
+    ops = [pp.Op("define", email[:-1], (), "", "ACCOMMODATION(S)", "")]
+    plan, edit = pa.plan_chars(email, units), pa.edit_chars(email, mds, units, ops, [list(range(21))])
+    assert _usd(plan) < 1 and _usd(edit) < 1
+    assert edit == pa.edit_chars(email, mds[:1], units[:1], ops, [[0]])  # no set text: 21 sets cost what one does
+
+
+def test_follow_ups_price_the_requests_of_the_sets_in_scope_only() -> None:
+    """FALSIFIER: price the whole file (caption, instructions, signature), or a
+    set out of scope, and the estimate is not what the calls send."""
+    from jobs.drafting.revise import propounded as pp
+
+    mds = [_invented_set(70) for _ in range(6)]
+    units, quote = _units_of(mds), "The interrogatories need follow up questions"
+    ops = [pp.Op("add", quote, (SROG,), "", "", "")]
+    got = pa.edit_chars(quote, mds, units, ops, [[0, 1, 2, 3, 4]])
+    one = (
+        len(pa.FOLLOW_SYSTEM)
+        + len(pa.follow_user(mds[0], SROG, None, quote))
+        + pa.OUTPUT_WEIGHT * min(400 * 70, 4 * pa.FOLLOW_TOKENS)
+    )
+    assert got == 2 * 5 * one
+    assert "CAPTION" not in pa.follow_user(mds[0], SROG, None, quote)
+    assert "PRELIMINARY" not in pa.rank_user(mds[0], SROG, 5, set()) and "Dated" not in pa.add_user(
+        mds[0], SROG, 2, "x"
+    )
+
+
+def test_a_cut_prices_a_ranking_only_for_a_set_above_its_target() -> None:
+    from jobs.drafting.revise import propounded as pp
+
+    mds = [_invented_set(193), _invented_set(203), _invented_set(100)]
+    units = _units_of(mds)
+    ops = [pp.Op("cut", "Cut the special interrogatories to 120", (SROG,), "", "", "to 120")]
+    three = pa.edit_chars("x", mds, units, ops, [[0, 1, 2]])
+    assert three == pa.edit_chars("x", mds[:2], units[:2], ops, [[0, 1]]) > 0  # the 100-request set is not ranked
+
+
+def test_each_call_sends_only_what_it_needs() -> None:
+    """The add, follow-up and ranking calls carry the set's requests (and an add
+    or follow-up its defined terms), never the caption or the signature."""
+    md = _invented_set(3)
+    for user in (pa.add_user(md, SROG, 2, "q"), pa.follow_user(md, SROG, None, "q"), pa.rank_user(md, SROG, 1, set())):
+        assert "SPECIAL INTERROGATORY NO. 3:" in user and "CAPTION" not in user and "By: ____" not in user
+    assert '"INCIDENT"' not in pa.rank_user(md, SROG, 1, set()) and "INCIDENT" in pa.add_user(md, SROG, 2, "q")
+    assert '"INCIDENT" means the event of the complaint' in pa.follow_user(md, SROG, None, "q")
+
+
+def test_an_add_and_a_follow_up_carry_each_definitions_meaning() -> None:
+    """FALSIFIER: send the term names only and the model never learns what
+    YOU or SUBJECT PROPERTY means; send nothing when the paragraphs do not
+    parse and the definitions are lost."""
+    from jobs.drafting.revise.propounded_define import defined
+
+    md = _invented_set(3).replace(
+        '1. "INCIDENT" means the event of the complaint.',
+        '1. "YOU" means the responding party and each agent.\n\n2. "SUBJECT PROPERTY" means the lot at 1 Invented Way.',
+    )
+    for user in (pa.add_user(md, SROG, 2, "q"), pa.follow_user(md, SROG, None, "q")):
+        assert "means the responding party and each agent" in user and "the lot at 1 Invented Way" in user
+    odd = _invented_set(3).replace(
+        '1. "INCIDENT" means the event of the complaint.', "a. the word claim covers every demand made in writing."
+    )
+    assert defined(odd) == []
+    assert "covers every demand made in writing" in pa.add_user(odd, SROG, 2, "q")
+    assert "covers every demand made in writing" in pa.follow_user(odd, SROG, None, "q")
+    bare = (
+        _invented_set(3).replace("**DEFINITIONS**", "").replace('1. "INCIDENT" means the event of the complaint.', "")
+    )
+    assert "DEFINITIONS" not in pa.add_user(bare, SROG, 2, "q")  # no region: requests only, as before

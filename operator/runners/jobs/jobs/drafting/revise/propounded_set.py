@@ -328,4 +328,19 @@ def summary(name: str, res: Result, variant: str) -> list[str]:
     return lines
 
 
-__all__ = ["Result", "foreign_refs", "revise_all", "revise_unit", "summary"]
+def one_line(name: str, res: Result, variant: str, extra: str = "") -> str:
+    """The reply's one line for one file: its name, its count when it changed,
+    what was done and what was left, written by code (the broker lists these)."""
+    plural = set_items.NAMES[variant][1]
+    count = f" ({res.before} {plural}, now {res.after})" if res.changed and res.before != res.after else ""
+    left = sentences(res.left)
+    done = res.lines if res.changed else ["Left as filed."] if not left else []
+    return f'"{name}"{count}: ' + " ".join([*done, *left, *([extra] if extra else [])])
+
+
+def sentences(left: list[str]) -> list[str]:
+    """Each reason a change was left, as a sentence."""
+    return [w[:1].upper() + w[1:] + ("" if w.endswith(".") else ".") for w in left]
+
+
+__all__ = ["Result", "foreign_refs", "one_line", "revise_all", "revise_unit", "sentences", "summary"]

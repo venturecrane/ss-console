@@ -116,13 +116,15 @@ def test_the_failed_jobs_own_email_asked_again_still_drafts(tmp_path) -> None:
     assert out["accepted"] and out["mode"] == "draft"
 
 
-def test_a_comment_on_several_delivered_sets_is_smds_never_a_redraft(tmp_path) -> None:
+def test_a_comment_on_several_delivered_sets_revises_them_never_a_redraft(tmp_path) -> None:
     """FALSIFIER: let a propounded delivery of several drafts fall through to
-    ``return None`` and the comment redrafts all five sets from the file."""
-    broker, _db, _queue, writer = _seat(tmp_path)
-    _delivered(broker, writer, drafts=5)
+    ``return None`` and the comment redrafts all five sets from the file. Since
+    2026-11-26 the propounded runner revises them (test_drafting_route_propounded)."""
+    broker, _db, queue, writer = _seat(tmp_path)
+    prior = _delivered(broker, writer, drafts=5)
     out = call(broker, "drafting_job_submit", envelope=_sets(COMMENT))
-    assert out["accepted"] is False and out["code"] == "prior_several_drafts" and out["smd_told"] is True
+    assert out["accepted"] and out["mode"] == "revise" and out["revise_of"] == prior
+    assert len(json.loads((queue / f"{out['job_id']}.json").read_text())["revise"]["units"]) == 5
 
 
 def test_the_hold_names_the_draft_still_running_on_the_matter(tmp_path) -> None:
@@ -153,7 +155,8 @@ def test_a_second_revision_in_flight_still_holds_the_next(tmp_path) -> None:
     _delivered(broker, writer, drafts=1)
     assert call(broker, "drafting_job_submit", envelope=_sets(COMMENT))["mode"] == "revise"
     again = call(broker, "drafting_job_submit", envelope=_sets(LATER))
-    assert again["accepted"] is False and again["code"] == "underway"
+    # Owed by SMD, never "underway": the running revision reads only its own email (2026-11-26).
+    assert again["accepted"] is False and again["code"] == "revision_underway" and again["smd_told"] is True
 
 
 def _add(broker, job_id, ref, thread, **over):
