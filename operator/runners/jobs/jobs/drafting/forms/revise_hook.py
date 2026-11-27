@@ -89,7 +89,7 @@ def _revise(run: Any, rec: dict[str, Any]) -> None:
     notes = [
         f"# Attorney notes: {rec['label']} (revised)",
         "",
-        f"Sections changed: {', '.join(got.sections) or 'none (the layout was set again by code)'}.",
+        f"Sections changed: {', '.join(got.sections) or 'none (only the layout was set again)'}.",
         *(["", "Per attorney (stated in your request, not checked against the file):"] if got.per_attorney else []),
         *[f"- {n}{' (' + k + ')' if k else ''}" for n, k in got.per_attorney],
         "",

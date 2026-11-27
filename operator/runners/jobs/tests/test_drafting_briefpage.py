@@ -117,7 +117,7 @@ def test_the_opening_demand_is_the_charts_total_computed_by_code():
     )
     out, notes = opening_demand.fill(md, {"opening_demand": DEMAND}, CLS)
     assert "Plaintiff's opening demand is $16,750.50." in out and "{{ATTORNEY: the opening demand}}" not in out
-    assert "computed by code" in notes[0]
+    assert notes[0].startswith("opening demand: $16,750.50, the ") and "by code" not in notes[0]
 
 
 @pytest.mark.parametrize(

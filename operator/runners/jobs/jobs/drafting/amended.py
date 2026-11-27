@@ -293,7 +293,7 @@ def unit_notes(data: Path, key: str) -> list[str]:
     for n in p["numbers"]:
         quotes = "; ".join(f'"{i.quote}" (page {i.page})' for i in ch.quotes_for(s_type, n_set, n))
         out.append(f"No. {n}: challenged as {quotes}.")
-    out += [f"Not confirmed by code, left out: {r}" for r in ch.rejected]
+    out += [f"Not confirmed against the letter's own words, left out: {r}" for r in ch.rejected]
     return out
 
 

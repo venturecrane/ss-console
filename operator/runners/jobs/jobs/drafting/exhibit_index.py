@@ -279,7 +279,7 @@ def notes(unit_data: Path) -> list[str]:
         return []
     rec = json.loads(p.read_text(encoding="utf-8"))
     out = [
-        "Index of Exhibits: written by code from the exhibit each response produces from; "
+        "Index of Exhibits: built from the exhibit each response produces from; "
         f"{sum(len(e['files']) for e in rec['listed'])} documents in {len(rec['listed'])} exhibits"
     ]
     out += [
