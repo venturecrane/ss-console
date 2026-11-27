@@ -31,8 +31,10 @@ _DATE = rf"(?:(?:{_MONTHS})\.?\s+\d{{1,2}},?\s+\d{{4}}|\d{{1,2}}/\d{{1,2}}/\d{{2
 _PROOF = re.compile(r"(?m)^[ \t|]*PROOF\s+OF\s+(?:ELECTRONIC\s+)?SERVICE\b")
 #: "Dated: March 3, 2026" or "served on 3/3/2026", with a date.
 _DATED = re.compile(rf"(?i)\b(?:dated|served)\b[^\n]{{0,40}}?{_DATE}")
-#: A signature block after the date: "/s/", "By:", or "Attorneys for".
-_SIGNED = re.compile(r"(?i)/s/|^[ \t|]*By:|\bAttorneys?\s+for\b", re.M)
+#: A "By:" signature line and what is written on it ("By: /s/ Jane Example", "By: ____").
+_BY_LINE = re.compile(r"(?im)^[ \t|]*By:(?P<rest>[^\n]*)\n?(?P<next>(?:[ \t|]*\n)?[^\n]*)")
+#: A typed name on its own line: two to four capitalized words, ", Esq." allowed.
+_NAME_LINE = re.compile(r"(?m)^[ \t|]*[A-Z][A-Za-z.'’-]+(?:,?[ \t]+[A-Z][A-Za-z.'’-]*){1,4}[ \t]*$")
 _METHOD = (
     r"BY\s+(?:U\.?S\.?\s+)?(?:FIRST[\s-]+CLASS\s+)?"
     r"(?:MAIL|FAX|FACSIMILE|PERSONAL\s+(?:SERVICE|DELIVERY)|OVERNIGHT|FEDERAL\s+EXPRESS|E[\s-]?MAIL|ELECTRONIC)"
@@ -52,8 +54,6 @@ _SERVED_BY = re.compile(
 _S_SIGNED = re.compile(r"/s/[ \t]*[A-Za-z]")
 #: "Executed on November 17, 2026": a real date, never a blank.
 _EXECUTED = re.compile(rf"(?i)\bExecuted\s+on\s+{_DATE}")
-#: A declarant's typed name on its own line: two to four capitalized words.
-_DECLARANT = re.compile(r"(?m)^[ \t|]*[A-Z][A-Za-z.'’-]+(?:[ \t]+[A-Z][A-Za-z.'’-]*){1,3}[ \t]*$")
 #: A file NAMED as SMD's or the Operator's: "DRAFT ..." first, "for attorney review"
 #: (``ours_written``: never wider than this, 2026-11-24 review).
 _DRAFT_START = re.compile(r"(?i)^\s*DRAFT\b|for\s+attorney\s+review")
@@ -102,7 +102,7 @@ def executed_proof(text: str) -> bool:
         if _MARKED.search(tail) or _SERVED_BY.search(tail) or _S_SIGNED.search(tail):
             return True
         executed = _EXECUTED.search(tail)
-        if executed and _DECLARANT.search(tail, executed.end(), executed.end() + 400):
+        if executed and _NAME_LINE.search(tail, executed.end(), executed.end() + 400):
             return True
     return False
 
@@ -118,7 +118,22 @@ def was_served(name: str, text: str) -> bool:
     if _PROOF.search(text or ""):
         return executed_proof(text)
     dated = _DATED.search(text or "")
-    return bool(dated and _SIGNED.search(text, dated.end()))
+    return bool(dated and signed_after(text, dated.end()))
+
+
+def signed_after(text: str, pos: int) -> bool:
+    """A real signature after ``pos``: "/s/ <name>", or a "By:" line with a name
+    typed on it or on the line under it. A "By: ____" line with nothing else is
+    the template's blank signature (D8, 2026-11-26: a firm's own draft read
+    "Dated: November 17, 2026 / <FIRM> LLP / By: ______" and counted as served)."""
+    if _S_SIGNED.search(text, pos):
+        return True
+    for m in _BY_LINE.finditer(text, pos):
+        if re.search(r"[A-Za-z]", m.group("rest").replace("/s/", "")) or _NAME_LINE.match(
+            m.group("next").split("\n")[-1]
+        ):
+            return True
+    return False
 
 
 def asks_amended(request: str) -> bool:

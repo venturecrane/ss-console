@@ -74,8 +74,29 @@ def test_a_typed_declarant_under_executed_on_a_date_is_service():
 
 def test_a_served_by_statement_and_the_dated_signature_route_still_serve():
     assert served_papers.was_served("r.pdf", "PROOF OF SERVICE\nServed by email on October 30, 2026.\n")
-    assert served_papers.was_served("r.pdf", BODY)  # no proof of service: the dated signature block
+    assert served_papers.was_served("r.pdf", BODY.replace("By: ____", "By: /s/ Jane Example ____"))
     assert not served_papers.was_served("DRAFT r.docx", BODY + proof(marked="BY MAIL."))  # a draft by name never is
+
+
+DATED = "RESPONSE TO SPECIAL INTERROGATORY NO. 1: Gamma Example.\nDated: November 17, 2026\nKAPPA EXAMPLE LLP\n"
+
+
+@pytest.mark.parametrize(
+    "block, served_",
+    [
+        ("By: ________________________________\n", False),  # the firm's draft: a blank signature line
+        ("By: ________________________________\nAttorneys for Plaintiff GAMMA EXAMPLE\n", False),
+        ("By: /s/ ____________\n", False),
+        ("By: /s/ Jane Example\n", True),
+        ("By: Jane Example\nAttorneys for Plaintiff GAMMA EXAMPLE\n", True),
+        ("By: ________________________________\nJANE EXAMPLE, Esq.\nAttorneys for Plaintiff\n", True),
+        ("By: ________________________________\n\nJane Example\n", True),
+    ],
+)
+def test_the_dated_route_needs_a_real_signature_not_a_blank_by_line(block, served_):
+    """D8 addendum (2026-11-26): with no proof of service, the firm's draft still
+    read as served through "Dated: ... / <FIRM> LLP / By: ______"."""
+    assert served_papers.was_served("Resp SROGs.docx", DATED + block) is served_
 
 
 def test_our_response_draft_with_a_blank_template_proof_keeps_its_served_set_to_draft(tmp_path):
@@ -87,6 +108,14 @@ def test_our_response_draft_with_a_blank_template_proof_keeps_its_served_set_to_
     assert got == ["special_interrogatories", "requests_for_production", "form_interrogatories"]
     row = next(r for r in json.loads((jd / served_find.REPORT).read_text())["candidates"] if r["id"] == "r1")
     assert not row["kept"] and "not served" in row["why"]
+
+
+def test_our_draft_with_a_blank_by_line_and_no_proof_keeps_its_served_set_to_draft(tmp_path):
+    docs = [*three_docs(), {"id": "r1", "name": "Resp SROGs.docx", "ext": ".docx", "text": BODY,
+                            "created": "2026-11-17T09:00:00"}]  # fmt: skip
+    data, jd = matter(tmp_path, docs)
+    run(data, jd, Fake(THREE))
+    assert len(served.read(jd, [CLIENT])) == 3
 
 
 def test_the_same_draft_with_its_proof_executed_answers_the_set(tmp_path):
